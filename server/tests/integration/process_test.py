@@ -219,7 +219,7 @@ class Server:
         else:
             self.conn.sendall(hello)
         ack = wait_msg(self.conn, 2)
-        assert ack[1] == 2 and ack[3].decode() == self.ready["instance"]
+        assert ack[1] == 3 and ack[3].decode() == self.ready["instance"]
         return self.conn
 
     # 请求退出并确保旧端口不再监听；stdin 保持打开以覆盖阻塞读取取消。
@@ -403,7 +403,7 @@ def slow_reader(args):
         conn.connect(("127.0.0.1", srv.ready["port"]))
         srv.conn = conn
         conn.sendall(srv.hello())
-        assert wait_msg(conn, 2)[1] == 2
+        assert wait_msg(conn, 2)[1] == 3
         enter_game(conn)
         seq = 0
         for _ in range(10):
@@ -590,6 +590,7 @@ def combat_rounds(args):
                     assert snap["phase"] == expected, snap
                     break
                 player = next(item for item in snap["entities"] if item["kind"] == "player")
+                assert all(item["cfg_id"] == "1" for item in snap["entities"])
                 enemies = [item for item in snap["entities"]
                            if item["kind"] == "enemy" and item["alive"]]
                 assert enemies
@@ -777,7 +778,7 @@ for i = 1, 10000 do
     work = work + 1
 end
 assert(work == 10000)
-net.emit('ack', json.encode({v=2, seq=item.seq, match_id=item.match_id,
+net.emit('ack', json.encode({v=3, seq=item.seq, match_id=item.match_id,
     applied_tick=item.applied_tick}))
 return true"""
     srv = Server(args, source=script_fixture(folder, "bounded_dispatch", event=event))
@@ -824,7 +825,8 @@ def main():
     assert fields(bytes.fromhex("08011001")) == {1: 1, 2: 1}
     for index in range(10):
         round_trip(args, index)
-    for override in ({"protocol_version": 1}, {"content_version": "wrong"},
+    for override in ({"protocol_version": 1}, {"protocol_version": 2},
+                     {"content_version": "wrong"},
                      {"instance": "wrong"}, {"token": "wrong"}):
         rejection(args, override=override)
     for payload in (input_frame(1, 1), b"\0\0\0\0", struct.pack("!I", 65537),

@@ -20,7 +20,7 @@ void check(bool ok, const char* detail)
 // 返回覆盖有符号坐标与全部字段的合法实体投影。
 nlohmann::json entity()
 {
-    return {{"id", "1"}, {"kind", "player"}, {"x", -100}, {"y", 20},
+    return {{"id", "1"}, {"cfg_id", "2147483647"}, {"kind", "player"}, {"x", -100}, {"y", 20},
         {"vx", -30}, {"vy", 0}, {"hp", 100}, {"max_hp", 100}, {"ammo", 6},
         {"reserve", 30}, {"reload_ticks", 0}, {"grounded", true}, {"alive", true},
         {"facing", -1}, {"ai", "idle"}};
@@ -30,7 +30,7 @@ nlohmann::json entity()
 void rejects(const Str& kind, const nlohmann::json& value, const hunter::Cfg& cfg)
 {
     const Vec<hunter::ScriptOut> out{
-        {"ack", R"({"v":2,"seq":"1","match_id":"1","applied_tick":"1"})"},
+        {"ack", R"({"v":3,"seq":"1","match_id":"1","applied_tick":"1"})"},
         {kind, value.dump()}};
     check(!hunter::script_frames(out, cfg), "invalid output rejects entire batch");
 }
@@ -38,18 +38,18 @@ void rejects(const Str& kind, const nlohmann::json& value, const hunter::Cfg& cf
 // 验证全部输出投影及最重要的精度、字段与容器边界。
 void outputs(const hunter::Cfg& cfg)
 {
-    const nlohmann::json ack = {{"v", 2}, {"seq", "18446744073709551615"},
+    const nlohmann::json ack = {{"v", 3}, {"seq", "18446744073709551615"},
         {"match_id", "18446744073709551615"}, {"applied_tick", "9223372036854775807"}};
-    const nlohmann::json snapshot = {{"v", 2}, {"tick_id", "9223372036854775807"},
+    const nlohmann::json snapshot = {{"v", 3}, {"tick_id", "9223372036854775807"},
         {"seq", "18446744073709551615"}, {"match_id", "1"}, {"phase", "Playing"},
         {"entities", nlohmann::json::array({entity()})}};
     const Vec<hunter::ScriptOut> good{
         {"ack", ack.dump()}, {"snapshot", snapshot.dump()},
-        {"login", R"({"v":2,"req_id":"l","player_id":"1","match_id":"0","phase":"Lobby"})"},
-        {"start", R"({"v":2,"req_id":"s","match_id":"1","phase":"Playing"})"},
-        {"event", R"({"v":2,"match_id":"1","event_id":"2","tick_id":"3","kind":"hit",)"
+        {"login", R"({"v":3,"req_id":"l","player_id":"1","match_id":"0","phase":"Lobby"})"},
+        {"start", R"({"v":3,"req_id":"s","match_id":"1","phase":"Playing"})"},
+        {"event", R"({"v":3,"match_id":"1","event_id":"2","tick_id":"3","kind":"hit",)"
             R"("actor_id":"1","target_id":"2","x":-100,"y":0,"amount":20})"},
-        {"error", R"({"v":2,"code":"stale_input","detail":"","req_id":"","seq":"9",)"
+        {"error", R"({"v":3,"code":"stale_input","detail":"","req_id":"","seq":"9",)"
             R"("match_id":"1"})"}};
     const auto frames = hunter::script_frames(good, cfg);
     check(frames && frames->size() == good.size(), "all output kinds encode");
@@ -59,6 +59,7 @@ void outputs(const hunter::Cfg& cfg)
     const auto s = hunter::decode_frame(frames->at(1).bytes.substr(4), cfg.max_frame_bytes);
     check(s && s->snapshot().entities_size() == 1 && s->snapshot().entities(0).x() == -100
         && s->snapshot().entities(0).facing() == -1, "signed entity fields");
+    check(s->snapshot().entities(0).cfg_id() == 2147483647U, "configuration ID projection");
     check(frames->at(1).snapshot && !frames->at(4).snapshot, "only snapshots coalesce");
     check(hunter::decode_frame(frames->at(2).bytes.substr(4), 65536)->login_rsp().req_id() == "l",
         "login projection");
@@ -88,7 +89,7 @@ void outputs(const hunter::Cfg& cfg)
     bad["applied_tick"] = "9223372036854775808";
     rejects("ack", bad, cfg);
     bad = ack;
-    bad["v"] = 2.0;
+    bad["v"] = 3.0;
     rejects("ack", bad, cfg);
     bad = ack;
     bad["v"] = true;
@@ -107,6 +108,20 @@ void outputs(const hunter::Cfg& cfg)
         rejects("snapshot", bad, cfg);
     }
 
+    for (const nlohmann::json cfg_id : {nlohmann::json("0"), nlohmann::json("2147483648"),
+        nlohmann::json("01"), nlohmann::json(1), nlohmann::json(true)})
+    {
+        bad = snapshot;
+        bad["entities"][0]["cfg_id"] = cfg_id;
+        rejects("snapshot", bad, cfg);
+    }
+
+    bad = snapshot;
+    bad["entities"][0].erase("cfg_id");
+    rejects("snapshot", bad, cfg);
+    bad = snapshot;
+    bad["v"] = 2;
+    rejects("snapshot", bad, cfg);
     bad = snapshot;
     bad["entities"][0]["alive"] = 1;
     rejects("snapshot", bad, cfg);
@@ -160,7 +175,7 @@ int main()
         const auto frame = encode_frame(msg, 65536);
         check(frame.has_value(), "encode input");
         check(frame->bytes == Str("\0\0\0\x0b\x3a\x09\x08\1\x18\1\x20\1\x28\xd0\x0f", 15),
-            "v2 protobuf golden frame");
+            "unchanged protobuf input golden frame");
         const auto decoded = decode_frame(frame->bytes.substr(4), 65536);
         check(decoded && decoded->input().move_x() == -1, "decode signed input");
         check(!decode_frame("", 65536), "empty protobuf");

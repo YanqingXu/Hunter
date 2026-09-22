@@ -26,10 +26,11 @@ Script 不可复制；所有入口拒绝错误线程与同步重入。普通 tab
 
 `Script::open/event/tick` 返回拥有字符串的 ScriptOut 数组；export_state 返回 JSON 字符串。
 脚本 init/on_event/tick/import_state/validate_state/shutdown 返回 true，export_state 返回 string。
-Host `net.emit(kind,payload)` 接受契约列明的 v2 登录、开局、确认、快照、事件和错误 JSON；
+Host `net.emit(kind,payload)` 接受契约列明的 v3 登录、开局、确认、快照、事件和错误 JSON；
 ID、seq/tick_id 为十进制字符串，
 字段集合、数值范围以 `lua/contract.json` 为权威；构建时生成共享 schema 常量，Script 和
 Protocol 使用同一解码器，拒绝 Ack 零序号、非法实体、有符号范围外 Tick 和多余字段。
+实体投影必须携带 cfg_id 十进制字符串，范围为 1～2147483647，转换为 Protobuf uint32。
 `cfg.get()` 返回初始化上下文的副本；`diagnostics.log()` 缓冲有限诊断。
 拥有线程在入口返回后通过 `take_logs()` 移交日志；宿主再通过有界队列交给输出线程。
 事件类型 event_id 与 Tick ID 使用 Luax integer，超出 i64 范围时明确拒绝。

@@ -52,22 +52,18 @@ return function(deps)
         return type(value) == "integer" and value >= low and value <= high
     end
 
-    -- 检查对象恰好包含约定字段。
+    -- 检查对象恰好包含约定字段；名字列表由模块内无重复的字段常量构造。
     function api.fields(value, names)
         if type(value) ~= "table" then
             return false
         end
-        local count = 0
-        for key, item in pairs(value) do
-            local found = false
-            for _, name in ipairs(names) do
-                if key == name then
-                    found = true
-                end
-            end
-            if not found then
+        for _, name in ipairs(names) do
+            if value[name] == nil then
                 return false
             end
+        end
+        local count = 0
+        for key, item in pairs(value) do
             count = count + 1
         end
         return count == #names

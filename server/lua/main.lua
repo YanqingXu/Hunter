@@ -3,7 +3,8 @@ return function(deps)
     local state = deps["framework.state"]
     local world_api = deps["game.world"]
     local movement = deps["game.movement"]
-    local combat = deps["game.combat"]
+    local weapon = deps["game.weapon"]
+    local snapshot_api = deps["game.snapshot"]
     local ai = deps["game.ai"]
     local api = {}
     local world = nil
@@ -12,30 +13,30 @@ return function(deps)
 
     -- 发送统一业务拒绝，不把正常操作错误升级为脚本故障。
     local function reject(code, req_id, seq)
-        net.emit("error", json.encode({v = 2, code = code, detail = "",
+        net.emit("error", json.encode({v = 3, code = code, detail = "",
             req_id = req_id or "", seq = seq or "0", match_id = world.match_id}))
     end
 
     -- 返回当前局的完整权威快照。
     local function snapshot()
-        net.emit("snapshot", json.encode(world_api.snapshot(world)))
+        net.emit("snapshot", json.encode(snapshot_api.make(world)))
     end
 
     -- 本机令牌握手后显式建立玩家，重复登录保持同一身份和当前局。
     local function login(payload)
-        assert(state.fields(payload, {"v", "req_id"}) and payload.v == 2
+        assert(state.fields(payload, {"v", "req_id"}) and payload.v == 3
             and state.req(payload.req_id), "invalid login contract")
         if world.phase == "Unauthenticated" then
             world.player_id = "1"
             world.phase = "Lobby"
         end
-        net.emit("login", json.encode({v = 2, req_id = payload.req_id,
+        net.emit("login", json.encode({v = 3, req_id = payload.req_id,
             player_id = world.player_id, match_id = world.match_id, phase = world.phase}))
     end
 
     -- 只从大厅或终态开局，重复成功请求返回原局而不重置实体。
     local function start(payload)
-        assert(state.fields(payload, {"v", "req_id", "after_match_id"}) and payload.v == 2
+        assert(state.fields(payload, {"v", "req_id", "after_match_id"}) and payload.v == 3
             and state.req(payload.req_id) and state.is_id(payload.after_match_id),
             "invalid start contract")
         if world.phase == "Unauthenticated" then
@@ -57,7 +58,7 @@ return function(deps)
         else
             world_api.start(world, content, payload)
         end
-        net.emit("start", json.encode({v = 2, req_id = payload.req_id,
+        net.emit("start", json.encode({v = 3, req_id = payload.req_id,
             match_id = world.match_id, phase = world.phase}))
         snapshot()
     end
@@ -65,7 +66,7 @@ return function(deps)
     -- 消费连接单调序号并锁存输入意图；真实动作只在下一次 Tick 裁定。
     local function input(payload)
         assert(state.fields(payload, {"v", "seq", "match_id", "applied_tick", "move_x",
-            "aim_x", "aim_y", "jump", "fire", "reload"}) and payload.v == 2
+            "aim_x", "aim_y", "jump", "fire", "reload"}) and payload.v == 3
             and state.is_id(payload.seq) and payload.seq ~= "0"
             and state.is_id(payload.match_id) and state.is_tick(payload.applied_tick)
             and state.integer(payload.move_x, -1, 1)
@@ -90,7 +91,7 @@ return function(deps)
             return
         end
         assert(payload.applied_tick == state.next_id(world.tick_id), "invalid applied tick")
-        local controls = world.controls
+        local controls = world_api.find(world, world.player_entity_id).controls
         controls.move_x = payload.move_x
         controls.aim_x = payload.aim_x
         controls.aim_y = payload.aim_y
@@ -98,7 +99,7 @@ return function(deps)
         controls.fire = payload.fire
         controls.fire_once = controls.fire_once or payload.fire
         controls.reload = controls.reload or payload.reload
-        net.emit("ack", json.encode({v = 2, seq = world.seq, match_id = world.match_id,
+        net.emit("ack", json.encode({v = 3, seq = world.seq, match_id = world.match_id,
             applied_tick = payload.applied_tick}))
     end
 
@@ -106,11 +107,11 @@ return function(deps)
     function api.init(ctx_json)
         assert(world == nil, "session already initialized")
         local ctx = json.decode(ctx_json)
-        assert(state.fields(ctx, {"v", "snapshot_every", "content"}) and ctx.v == 2
+        assert(state.fields(ctx, {"v", "snapshot_every", "content"}) and ctx.v == 3
             and state.integer(ctx.snapshot_every, 1, 3600), "invalid context")
         assert(json.encode(ctx) == json.encode(json.decode(cfg.get())), "context mismatch")
         content = ctx.content
-        assert(type(content) == "table" and content.v == 1 and content.tick_hz == 60,
+        assert(type(content) == "table" and content.v == 2 and content.tick_hz == 60,
             "invalid content")
         snapshot_every = ctx.snapshot_every
         world = world_api.new(content)
@@ -130,7 +131,7 @@ return function(deps)
         elseif event_id == 3 then
             start(payload)
         elseif event_id == 4 then
-            assert(state.fields(payload, {"v", "paused"}) and payload.v == 2
+            assert(state.fields(payload, {"v", "paused"}) and payload.v == 3
                 and type(payload.paused) == "boolean", "invalid pause contract")
             world.paused = payload.paused
             world_api.clear_input(world)
@@ -151,15 +152,18 @@ return function(deps)
         world.tick_id = tick_text
         local previous_phase = world.phase
         if world.phase == "Playing" and not world.paused then
-            movement.step(world.entities[1], content.player, content,
-                world.controls.move_x, world.controls.jump)
+            local player = world_api.find(world, world.player_entity_id)
+            local controls = player.controls
+            movement.step(player, content.players[player.cfg_id], content,
+                controls.move_x, controls.jump)
             ai.move(world, content)
-            combat.step(world, content)
+            weapon.step(world, content)
             ai.attack(world, content)
+            world_api.flush(world)
             world_api.finish(world)
-            world.controls.jump = false
-            world.controls.fire_once = false
-            world.controls.reload = false
+            player.controls.jump = false
+            player.controls.fire_once = false
+            player.controls.reload = false
         end
         if world.phase ~= previous_phase or tick_id % snapshot_every == 0 then
             snapshot()

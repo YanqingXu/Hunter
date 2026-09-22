@@ -37,7 +37,7 @@ def integer(value, minimum, maximum, name):
     return value
 
 
-# 校验有界正十进制 ID，并在全内容范围拒绝重复实体或障碍标识。
+# 校验有界正十进制 ID，并在各自命名空间拒绝重复标识。
 def identity(value, seen, name):
     if (type(value) is not str or not re.fullmatch(r"[1-9][0-9]{0,9}", value)
             or int(value) > 2147483647 or value in seen):
@@ -106,36 +106,49 @@ def patrol(enemy, cfg, map_cfg, boxes):
         raise ValueError("enemy: patrol crosses unsupported space")
 
 
-# 检查所有值域、几何边界和跨对象关系，返回唯一可发布的配置对象。
+# 验证配置表的独立 ID 空间，不允许空表、非法键或隐式数值别名。
+def cfg_table(value, name):
+    if type(value) is not dict or not value:
+        raise ValueError(f"{name}: expected nonempty configuration table")
+    seen = set()
+    for key in value:
+        identity(key, seen, name + ".id")
+
+
+# 检查所有值域、配置引用及实际体型对应的出生和巡逻几何。
 def validate(doc):
-    fields(doc, "v tick_hz map player weapon enemy", "content")
-    integer(doc["v"], 1, 1, "v")
+    fields(doc, "v tick_hz map players weapons monsters", "content")
+    integer(doc["v"], 2, 2, "v")
     integer(doc["tick_hz"], 60, 60, "tick_hz")
-    actor(doc["player"], "jump_speed gravity", "player")
-    integer(doc["player"]["jump_speed"], 1, 1000, "player.jump_speed")
-    integer(doc["player"]["gravity"], 1, 1000, "player.gravity")
-    actor(doc["enemy"], "detect_range attack_range damage attack_ticks", "enemy")
-    integer(doc["enemy"]["detect_range"], 1, 100000, "enemy.detect_range")
-    integer(doc["enemy"]["attack_range"], 1, doc["enemy"]["detect_range"], "enemy.attack_range")
-    integer(doc["enemy"]["damage"], 1, 1000000, "enemy.damage")
-    integer(doc["enemy"]["attack_ticks"], 1, 3600, "enemy.attack_ticks")
-    weapon = doc["weapon"]
-    fields(weapon, "range damage magazine reserve fire_ticks reload_ticks", "weapon")
-    integer(weapon["range"], 1, 100000, "weapon.range")
-    integer(weapon["damage"], 1, 1000000, "weapon.damage")
-    integer(weapon["magazine"], 1, 1000, "weapon.magazine")
-    integer(weapon["reserve"], 0, 100000, "weapon.reserve")
-    for key in ("fire_ticks", "reload_ticks"):
-        integer(weapon[key], 1, 3600, "weapon." + key)
+    for name in ("players", "monsters", "weapons"):
+        cfg_table(doc[name], name)
+    for cfg in doc["players"].values():
+        actor(cfg, "jump_speed", "player")
+        integer(cfg["jump_speed"], 1, 1000, "player.jump_speed")
+    for cfg in doc["monsters"].values():
+        actor(cfg, "detect_range attack_range damage attack_ticks", "monster")
+        integer(cfg["detect_range"], 1, 100000, "monster.detect_range")
+        integer(cfg["attack_range"], 1, cfg["detect_range"], "monster.attack_range")
+        integer(cfg["damage"], 1, 1000000, "monster.damage")
+        integer(cfg["attack_ticks"], 1, 3600, "monster.attack_ticks")
+    for weapon in doc["weapons"].values():
+        fields(weapon, "range damage magazine reserve fire_ticks reload_ticks", "weapon")
+        integer(weapon["range"], 1, 100000, "weapon.range")
+        integer(weapon["damage"], 1, 1000000, "weapon.damage")
+        integer(weapon["magazine"], 1, 1000, "weapon.magazine")
+        integer(weapon["reserve"], 0, 100000, "weapon.reserve")
+        for key in ("fire_ticks", "reload_ticks"):
+            integer(weapon[key], 1, 3600, "weapon." + key)
     map_cfg = doc["map"]
-    fields(map_cfg, "width height solids spawn enemies", "map")
+    fields(map_cfg, "width height gravity solids spawn enemies", "map")
+    integer(map_cfg["gravity"], 1, 1000, "map.gravity")
     for key in ("width", "height"):
         integer(map_cfg[key], 1000, 100000, "map." + key)
     if type(map_cfg["solids"]) is not list or not 0 <= len(map_cfg["solids"]) <= 128:
         raise ValueError("map.solids: expected at most 128 rectangles")
     if type(map_cfg["enemies"]) is not list or not 1 <= len(map_cfg["enemies"]) <= 32:
         raise ValueError("map.enemies: expected 1..32 enemies")
-    seen, boxes = {"1"}, []
+    seen, boxes = set(), []
     for solid in map_cfg["solids"]:
         fields(solid, "id x y w h", "solid")
         identity(solid["id"], seen, "solid.id")
@@ -148,17 +161,30 @@ def validate(doc):
         if any(overlap(box, other) for other in boxes):
             raise ValueError("solid rectangles overlap")
         boxes.append(box)
-    fields(map_cfg["spawn"], "x y", "map.spawn")
-    spawns = [spawn(map_cfg["spawn"], doc["player"], map_cfg, boxes, "map.spawn")]
+    pos = map_cfg["spawn"]
+    fields(pos, "x y cfg_id weapon_cfg_id", "map.spawn")
+    player_cfg = ref(doc["players"], pos["cfg_id"], "map.spawn.cfg_id")
+    ref(doc["weapons"], pos["weapon_cfg_id"], "map.spawn.weapon_cfg_id")
+    spawns = [spawn(pos, player_cfg, map_cfg, boxes, "map.spawn")]
+    seen = set()
     for enemy in map_cfg["enemies"]:
-        fields(enemy, "id x y patrol_min patrol_max", "enemy spawn")
-        identity(enemy["id"], seen, "enemy.id")
-        box = spawn(enemy, doc["enemy"], map_cfg, boxes, "enemy spawn")
+        fields(enemy, "spawn_id cfg_id x y patrol_min patrol_max", "enemy spawn")
+        identity(enemy["spawn_id"], seen, "enemy.spawn_id")
+        cfg = ref(doc["monsters"], enemy["cfg_id"], "enemy.cfg_id")
+        box = spawn(enemy, cfg, map_cfg, boxes, "enemy spawn")
         if any(overlap(box, other) for other in spawns):
             raise ValueError("actor spawn rectangles overlap")
         spawns.append(box)
-        patrol(enemy, doc["enemy"], map_cfg, boxes)
+        patrol(enemy, cfg, map_cfg, boxes)
     return doc
+
+
+# 严格解析配置引用，禁止把数值、空 ID 或不存在的键当作默认配置。
+def ref(table, cfg_id, name):
+    identity(cfg_id, set(), name)
+    if cfg_id not in table:
+        raise ValueError(f"{name}: unknown configuration {cfg_id}")
+    return table[cfg_id]
 
 
 # 规范化对象键与空白；数组顺序属于内容语义，保持策划源中的既定顺序。
@@ -172,7 +198,7 @@ def canonical(doc):
 # 从规范字节派生版本并生成可直接嵌入宿主的只读常量。
 def artifacts(doc):
     data = canonical(doc)
-    version = "combat-v1:" + hashlib.sha256(data.encode("utf-8")).hexdigest()
+    version = "combat-v2:" + hashlib.sha256(data.encode("utf-8")).hexdigest()
     header = ("// 从 design/combat_demo.json 校验生成的共享内容及身份；禁止手工修改。\n"
               "#pragma once\n\n#include <string_view>\n\nnamespace hunter::content\n{\n"
               f'inline constexpr std::string_view version = "{version}";\n'

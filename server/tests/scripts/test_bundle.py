@@ -35,16 +35,20 @@ class BundleContract(unittest.TestCase):
         cls.pub = cls.root / "public.key"
         cls.policy = cls.root / "policy.json"
         cls.artifact = cls.root / "game.luxb"
+        cls.entities = cls.root / "entities.luxb"
         cls.seed.write_bytes(SEED)
         cls.pub.write_bytes(PUBLIC)
         cls.doc = bundle.write_policy(OPTIONS.luax_root, cls.pub, cls.policy)
         bundle.build(OPTIONS.luaxc, OPTIONS.bundle_tool, OPTIONS.source,
                      cls.policy, cls.seed, cls.artifact)
+        bundle.build(OPTIONS.luaxc, OPTIONS.bundle_tool, OPTIONS.entity_source,
+                     cls.policy, cls.seed, cls.entities)
 
     # 保留可供后续 Runtime 测试消费的已签名样本，删除临时中间目录。
     @classmethod
     def tearDownClass(cls):
-        paths = (cls.artifact, cls.policy, cls.pub, cls.policy.with_suffix(".provenance.json"))
+        paths = (cls.artifact, cls.entities, cls.policy, cls.pub,
+                 cls.policy.with_suffix(".provenance.json"))
         files = [(OPTIONS.output_dir / path.name, path.read_bytes()) for path in paths]
         publish.publish_files(files)
 
@@ -264,6 +268,7 @@ def main():
     parser.add_argument("--luaxc", type=Path, required=True)
     parser.add_argument("--bundle-tool", type=Path, required=True)
     parser.add_argument("--source", type=Path, required=True)
+    parser.add_argument("--entity-source", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     OPTIONS = parser.parse_args()
     unittest.main(argv=[__file__], verbosity=2)

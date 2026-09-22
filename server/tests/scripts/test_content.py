@@ -24,34 +24,34 @@ class ContentTest(unittest.TestCase):
     # 规范内容与生成头必须使用完全相同的字节与哈希，键顺序不改变身份。
     def test_canonical_identity(self):
         data, header = CONTENT.artifacts(self.doc)
-        expected = b"combat-v1:" + hashlib.sha256(data).hexdigest().encode("ascii")
+        expected = b"combat-v2:" + hashlib.sha256(data).hexdigest().encode("ascii")
         self.assertIn(expected, header)
         self.assertIn(b'R"CONTENT(' + data + b')CONTENT"', header)
         self.assertNotIn(b"\n", data)
         self.assertEqual(json.loads(data), self.doc)
         reordered = dict(reversed(list(self.doc.items())))
         self.assertEqual(CONTENT.artifacts(reordered), (data, header))
-        reordered["weapon"] = dict(reordered["weapon"], damage=21)
+        reordered["weapons"]["1"] = dict(reordered["weapons"]["1"], damage=21)
         self.assertNotEqual(CONTENT.artifacts(reordered), (data, header))
 
     # 未知字段、缺失字段、布尔、浮点、越界和非固定步长均拒绝。
     def test_exact_fields_and_numbers(self):
-        cases = [("v", True), ("v", 1.0), ("tick_hz", 30), ("extra", 1)]
+        cases = [("v", True), ("v", 1), ("v", 2.0), ("tick_hz", 30), ("extra", 1)]
         for key, value in cases:
             doc = copy.deepcopy(self.doc)
             doc[key] = value
             with self.subTest(key=key, value=value), self.assertRaises(ValueError):
                 CONTENT.validate(doc)
         for group, key, value in (("player", "width", 601), ("player", "hp", 0),
-                                  ("player", "gravity", True), ("enemy", "speed", 0),
+                                  ("enemy", "speed", 0),
                                   ("weapon", "magazine", 1001), ("weapon", "reserve", -1),
                                   ("weapon", "fire_ticks", 0), ("weapon", "damage", 1.0),
                                   ("enemy", "attack_range", 6001)):
             doc = copy.deepcopy(self.doc)
-            doc[group][key] = value
+            doc[{"player": "players", "enemy": "monsters", "weapon": "weapons"}[group]]["1"][key] = value
             with self.subTest(group=group, key=key), self.assertRaises(ValueError):
                 CONTENT.validate(doc)
-        del self.doc["player"]["hp"]
+        del self.doc["players"]["1"]["hp"]
         with self.assertRaises(ValueError):
             CONTENT.validate(self.doc)
 
@@ -66,13 +66,16 @@ class ContentTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             CONTENT.validate(self.doc)
 
-    # 标识在玩家、普通怪和静态障碍之间保持全局唯一，且不存在数值别名。
+    # 出生标识只在出生记录内唯一，拒绝数值别名和越界。
     def test_duplicate_and_invalid_ids(self):
-        for value in ("1", "2", "101", "02", "0", 4, "2147483648"):
+        for value in ("2", "02", "0", 4, "2147483648"):
             doc = copy.deepcopy(self.doc)
-            doc["map"]["enemies"][1]["id"] = value
+            doc["map"]["enemies"][1]["spawn_id"] = value
             with self.subTest(value=value), self.assertRaises(ValueError):
                 CONTENT.validate(doc)
+        self.doc["map"]["solids"][1]["id"] = self.doc["map"]["solids"][0]["id"]
+        with self.assertRaises(ValueError):
+            CONTENT.validate(self.doc)
 
     # 出生检查使用完整角色矩形，边缘接触合法，悬空和穿透均失败。
     def test_spawn_geometry(self):
@@ -80,10 +83,10 @@ class ContentTest(unittest.TestCase):
                     {"x": 5500, "y": 1400}, {"x": 2000, "y": 10000},
                     {"x": 12000, "y": 0}):
             doc = copy.deepcopy(self.doc)
-            doc["map"]["spawn"] = pos
+            doc["map"]["spawn"].update(pos)
             with self.subTest(pos=pos), self.assertRaises(ValueError):
                 CONTENT.validate(doc)
-        self.doc["map"]["spawn"] = {"x": 5500, "y": 1500}
+        self.doc["map"]["spawn"].update(x=5500, y=1500)
         CONTENT.validate(self.doc)
 
     # 巡逻区必须包含出生点、有宽度且不能越界、穿墙或经过没有支撑的空隙。
@@ -109,6 +112,37 @@ class ContentTest(unittest.TestCase):
             doc["map"][key] = values
             with self.subTest(key=key, count=len(values)), self.assertRaises(ValueError):
                 CONTENT.validate(doc)
+
+    # 配置引用按各自命名空间解析，出生几何必须使用实际引用的角色体型。
+    def test_cfg_references_and_shapes(self):
+        doc = copy.deepcopy(self.doc)
+        doc["monsters"]["2"] = dict(doc["monsters"]["1"], width=2400, hp=120)
+        doc["map"]["enemies"][1]["cfg_id"] = "2"
+        CONTENT.validate(doc)
+        doc["map"]["enemies"][1]["patrol_max"] = 23000
+        with self.assertRaises(ValueError):
+            CONTENT.validate(doc)
+        for path in (("map", "spawn", "cfg_id"), ("map", "spawn", "weapon_cfg_id"),
+                     ("map", "enemies", 0, "cfg_id")):
+            doc = copy.deepcopy(self.doc)
+            node = doc
+            for key in path[:-1]:
+                node = node[key]
+            node[path[-1]] = "99"
+            with self.subTest(path=path), self.assertRaises(ValueError):
+                CONTENT.validate(doc)
+        for group in ("players", "monsters", "weapons"):
+            for key in ("01", "0", "2147483648"):
+                doc = copy.deepcopy(self.doc)
+                doc[group][key] = doc[group].pop("1")
+                with self.subTest(group=group, key=key), self.assertRaises(ValueError):
+                    CONTENT.validate(doc)
+        doc = copy.deepcopy(self.doc)
+        doc["map"]["enemies"][0]["spawn_id"] = "101"
+        CONTENT.validate(doc)
+        doc["map"]["gravity"] = True
+        with self.assertRaises(ValueError):
+            CONTENT.validate(doc)
 
     # 成功导出使用正式来源，且输出 JSON 可以再次严格校验。
     def test_export(self):

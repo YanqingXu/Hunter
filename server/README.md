@@ -6,6 +6,9 @@
 当前交付 Windows 基础战斗切片：本机 TCP 鉴权、会话登录、开局、权威跑跳／碰撞、
 射线枪械／换弹、普通怪 AI、死亡与清怪重开，以及暂停恢复、有界背压和资源收尾。
 全部玩法由 Luax 维护；不包含撤离结算、SQLite、热更新、Unity 接入或 Android Service。
+基础对象已拆为 Entity/Unit/Player/Monster 的纯数据构造与 Weapon/Damage 功能模块；
+实体按 ID 管理，玩家输入和枪械状态与怪物 AI 分离，支持不同配置怪物共存。
+默认灰盒数值保持不变；多配置、实体增删及分配边界由真实 Luax 契约验证。
 设计见 [规划](plan.md)，契约见 [intents](intents/README.md)，实际结果见 [验证记录](VERIFICATION.md)。
 
 ## 构建与测试
@@ -62,6 +65,8 @@ Start 成功返回 `type=Ready`，包含 `port/instance/token/protocol_version/c
 客户端连接 `127.0.0.1:<port>`；每帧为四字节大端正文长度加 Protobuf `hunter.wire.Envelope`。
 第一次消息必须为 Hello，逐项回传 Ready 的版本、实例和令牌，5 秒内完成握手。
 正式定义位于根目录 `protobuf/hunter.proto`，不能另建私有协议来源。
+当前协议与桥接为 v3，内容为 v2；快照新增 `cfg_id`，客户端按 `kind/cfg_id` 选择配置。
+旧 v2 客户端握手拒绝，旧 v2 内部世界状态拒绝导入，不提供双版本兼容或状态迁移。
 
 协议为 v2，Hello 后发送 LoginReq，再发送 StartReq 才进入游戏。StartReq 携带上局 ID，
 首局为 0；重复请求不重置活动世界。清怪或死亡后可在同一连接重开。旧计数协议不再提供。
@@ -108,6 +113,7 @@ Ready 的完整 JSON；握手成功后逐行发送以下命令。客户端持续
 ## 生产 Bundle 模式
 
 开发 CTest 的 `hunter_bundle_contract` 会生成公开测试向量签名的测试制品；只用于验证。
+其中 `game.luxb` 是正式游戏模块，`entities.luxb` 包装实体测试入口；后者不用于游戏运行或发行。
 使用它们验证生产 Runtime：
 
 ```powershell
@@ -115,6 +121,7 @@ $devBuild = (Resolve-Path build/win-dev).Path
 cmake --preset win-bundle -A x64 -DFETCHCONTENT_SOURCE_DIR_LUAX=G:/github/luax `
     "-DHUNTER_HOST_PROTOC=$devBuild/_deps/protobuf-build/Release/protoc.exe" `
     "-DHUNTER_TEST_BUNDLE=$devBuild/bundle-test/game.luxb" `
+    "-DHUNTER_TEST_ENTITY_BUNDLE=$devBuild/bundle-test/entities.luxb" `
     "-DHUNTER_TEST_POLICY=$devBuild/bundle-test/policy.json"
 cmake --build --preset win-bundle --parallel 8
 ctest --preset win-bundle
@@ -123,6 +130,7 @@ ctest --preset win-bundle
 ```
 
 生产模式编译链接 `Luax::Runtime`，拒绝源码加载；不能用运行参数切换到开发 Runtime。
+未显式指定实体测试 Bundle 时，默认从游戏测试 Bundle 同目录读取 `entities.luxb`。
 CTest 检查真实链接参数不含 Compiler、AST、DevelopmentRuntime，并验证错误公钥、身份和篡改拒绝。
 生产运行时仅接受可信交付的公钥 policy 和签名 Bundle。正式离线签名步骤见
 [工具说明](tools/README.md)；私钥不进入可执行文件、运行资源或仓库。

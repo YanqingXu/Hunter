@@ -14,6 +14,7 @@ void encode_entity(const nlohmann::json& obj, wire::Entity& entity)
 {
     entity.set_id(obj.at("id").get<u64>());
     entity.set_kind(obj.at("kind").get<Str>());
+    entity.set_cfg_id(obj.at("cfg_id").get<u32>());
     entity.set_x(obj.at("x").get<i32>());
     entity.set_y(obj.at("y").get<i32>());
     entity.set_vx(obj.at("vx").get<i32>());

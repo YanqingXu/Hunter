@@ -145,7 +145,8 @@ Json entity(const hunter::wire::Entity& value)
         {"y", value.y()}, {"vx", value.vx()}, {"vy", value.vy()}, {"hp", value.hp()},
         {"max_hp", value.max_hp()}, {"ammo", value.ammo()}, {"reserve", value.reserve()},
         {"reload_ticks", value.reload_ticks()}, {"grounded", value.grounded()},
-        {"alive", value.alive()}, {"facing", value.facing()}, {"ai", value.ai()}};
+        {"alive", value.alive()}, {"facing", value.facing()}, {"ai", value.ai()},
+        {"cfg_id", std::to_string(value.cfg_id())}};
 }
 
 // 把服务端消息转换成一行 JSON；64 位标识统一保持规范十进制字符串。
@@ -515,7 +516,7 @@ void Client::commands()
 void Client::connect(const Json& ready)
 {
     if (!ready.is_object() || ready.at("type") != "Ready"
-        || number(ready.at("protocol_version"), 2, 2) != 2
+        || number(ready.at("protocol_version"), 3, 3) != 3
         || ready.at("content_version").get<Str>() != hunter::content::version)
     {
         throw std::runtime_error("ready_identity_mismatch");
@@ -531,7 +532,7 @@ void Client::connect(const Json& ready)
 
     hunter::wire::Envelope msg;
     auto* hello = msg.mutable_hello();
-    hello->set_protocol_version(2);
+    hello->set_protocol_version(3);
     hello->set_content_version(Str(hunter::content::version));
     hello->set_instance(instance_);
     hello->set_token(token);
@@ -654,7 +655,7 @@ void Client::read_body(usize size)
 
         if (!authed_)
         {
-            if (!msg->has_hello_ack() || msg->hello_ack().protocol_version() != 2
+            if (!msg->has_hello_ack() || msg->hello_ack().protocol_version() != 3
                 || msg->hello_ack().content_version() != hunter::content::version
                 || msg->hello_ack().instance() != instance_)
             {

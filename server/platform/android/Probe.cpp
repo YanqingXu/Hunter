@@ -42,7 +42,7 @@ int main(int argc, char** argv)
     cfg.bundle_path = argv[1];
     cfg.policy_path = argv[2];
     hunter::Script script;
-    const nlohmann::json ctx = {{"v", 2}, {"snapshot_every", 3},
+    const nlohmann::json ctx = {{"v", 3}, {"snapshot_every", 3},
         {"content", nlohmann::json::parse(hunter::content::json_text)}};
     auto opened = script.open(cfg, ctx.dump());
     if (!opened)
@@ -52,9 +52,9 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    auto login = script.event(2, R"({"v":2,"req_id":"login"})");
+    auto login = script.event(2, R"({"v":3,"req_id":"login"})");
     auto start = login ? script.event(3,
-        R"({"v":2,"req_id":"start","after_match_id":"0"})") : login;
+        R"({"v":3,"req_id":"start","after_match_id":"0"})") : login;
 
     if (!login || !start)
     {
@@ -62,7 +62,7 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    const nlohmann::json move = {{"v", 2}, {"seq", "1"}, {"match_id", "1"},
+    const nlohmann::json move = {{"v", 3}, {"seq", "1"}, {"match_id", "1"},
         {"applied_tick", "1"}, {"move_x", 1}, {"aim_x", 1000}, {"aim_y", 0},
         {"jump", false}, {"fire", false}, {"reload", false}};
     auto input = script.event(1, move.dump());

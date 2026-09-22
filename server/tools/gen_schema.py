@@ -16,7 +16,7 @@ FIELDS = {
               "target_id", "x", "y", "amount"},
     "error": {"v", "code", "detail", "req_id", "seq", "match_id"},
 }
-ENTITY_FIELDS = {"id", "kind", "x", "y", "vx", "vy", "hp", "max_hp", "ammo", "reserve",
+ENTITY_FIELDS = {"id", "cfg_id", "kind", "x", "y", "vx", "vy", "hp", "max_hp", "ammo", "reserve",
                  "reload_ticks", "grounded", "alive", "facing", "ai"}
 
 
@@ -82,13 +82,22 @@ def validate_node(node, depth=0):
 
 # 校验冻结消息形状并生成唯一原生描述，合法边界改动会直接反映到产物。
 def generate(doc):
-    if not isinstance(doc, dict) or type(doc.get("version")) is not int or doc["version"] != 2:
+    if not isinstance(doc, dict) or type(doc.get("version")) is not int or doc["version"] != 3:
         raise ValueError("unsupported contract version")
-    if not isinstance(doc.get("state"), dict) or doc["state"].get("v") != 2:
-        raise ValueError("state schema must declare version 2")
+    state = doc.get("state")
+    if not isinstance(state, dict) or type(state.get("v")) is not int or state["v"] != 3:
+        raise ValueError("state schema must declare version 3")
     effect = doc.get("effect")
-    if not isinstance(effect, dict) or type(effect.get("v")) is not int or effect["v"] != 2:
-        raise ValueError("effect schema must declare version 2")
+    if not isinstance(effect, dict) or type(effect.get("v")) is not int or effect["v"] != 3:
+        raise ValueError("effect schema must declare version 3")
+    host = doc.get("host_api")
+    ctx = host.get("ctx") if isinstance(host, dict) else None
+    if not isinstance(ctx, dict) or type(ctx.get("v")) is not int or ctx["v"] != 3:
+        raise ValueError("context schema must declare version 3")
+    input_spec = effect.get("input", {})
+    if not isinstance(input_spec, dict) or type(input_spec.get("v")) is not int \
+            or input_spec["v"] != 3:
+        raise ValueError("input schema must declare version 3")
     schemas = effect.get("schemas")
     kinds = effect.get("kinds")
     if not isinstance(kinds, list) or len(kinds) != len(KINDS) or set(kinds) != KINDS:
@@ -99,8 +108,8 @@ def generate(doc):
         validate_node(node)
         if node["type"] != "object" or set(node["fields"]) != FIELDS[name]:
             raise ValueError("unsupported message fields")
-        if node["fields"]["v"] != {"type": "int", "min": 2, "max": 2}:
-            raise ValueError("all messages require integer version 2")
+        if node["fields"]["v"] != {"type": "int", "min": 3, "max": 3}:
+            raise ValueError("all messages require integer version 3")
         for field, spec in node["fields"].items():
             expected = ("id" if (field.endswith("_id") and field != "req_id")
                         or field in {"seq", "applied_tick"} else
@@ -114,10 +123,13 @@ def generate(doc):
     if set(entity["item"]["fields"]) != ENTITY_FIELDS:
         raise ValueError("unsupported entity fields")
     for field, spec in entity["item"]["fields"].items():
-        expected = ("id" if field == "id" else "string" if field in {"kind", "ai"}
+        expected = ("id" if field in {"id", "cfg_id"} else "string" if field in {"kind", "ai"}
                     else "bool" if field in {"grounded", "alive"} else "int")
         if spec["type"] != expected:
             raise ValueError("entity field cannot change its wire type")
+    cfg_id = entity["item"]["fields"]["cfg_id"]
+    if int(cfg_id["min"]) < 1 or int(cfg_id["max"]) > 2147483647:
+        raise ValueError("configuration ID exceeds uint32 content range")
     for name, node in schemas.items():
         for field, spec in node["fields"].items():
             if field in {"tick_id", "applied_tick"}:
@@ -131,7 +143,7 @@ def generate(doc):
             "#pragma once\n\n"
             '#include "common/Types.h"\n\n'
             "namespace hunter::schema\n{\n"
-            "inline constexpr i32 version = 2;\n"
+            "inline constexpr i32 version = 3;\n"
             'inline constexpr const char* outputs = R"SCHEMA(' + payload + ')SCHEMA";\n'
             "}\n")
 

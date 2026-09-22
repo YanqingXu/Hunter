@@ -2,11 +2,107 @@
   "version": 1,
   "entry": "main",
   "modules": [
-    {"name": "framework.state", "file": "framework/state.lua", "deps": []},
-    {"name": "game.movement", "file": "game/movement.lua", "deps": []},
-    {"name": "game.world", "file": "game/world.lua", "deps": ["framework.state", "game.movement"]},
-    {"name": "game.combat", "file": "game/combat.lua", "deps": ["framework.state", "game.world"]},
-    {"name": "game.ai", "file": "game/ai.lua", "deps": ["game.world", "game.movement", "game.combat"]},
-    {"name": "main", "file": "main.lua", "deps": ["framework.state", "game.world", "game.movement", "game.combat", "game.ai"]}
+    {
+      "name": "framework.state",
+      "file": "framework/state.lua",
+      "deps": []
+    },
+    {
+      "name": "game.movement",
+      "file": "game/movement.lua",
+      "deps": []
+    },
+    {
+      "name": "game.combat",
+      "file": "game/combat.lua",
+      "deps": []
+    },
+    {
+      "name": "game.snapshot",
+      "file": "game/snapshot.lua",
+      "deps": []
+    },
+    {
+      "name": "game.entity",
+      "file": "game/entity.lua",
+      "deps": [
+        "framework.state"
+      ]
+    },
+    {
+      "name": "game.unit",
+      "file": "game/unit.lua",
+      "deps": [
+        "framework.state",
+        "game.entity",
+        "game.movement"
+      ]
+    },
+    {
+      "name": "game.player",
+      "file": "game/player.lua",
+      "deps": [
+        "framework.state",
+        "game.unit"
+      ]
+    },
+    {
+      "name": "game.monster",
+      "file": "game/monster.lua",
+      "deps": [
+        "framework.state",
+        "game.unit"
+      ]
+    },
+    {
+      "name": "game.world",
+      "file": "game/world.lua",
+      "deps": [
+        "framework.state",
+        "game.player",
+        "game.monster"
+      ]
+    },
+    {
+      "name": "game.damage",
+      "file": "game/damage.lua",
+      "deps": [
+        "game.world",
+        "game.player"
+      ]
+    },
+    {
+      "name": "game.weapon",
+      "file": "game/weapon.lua",
+      "deps": [
+        "framework.state",
+        "game.world",
+        "game.combat",
+        "game.damage"
+      ]
+    },
+    {
+      "name": "game.ai",
+      "file": "game/ai.lua",
+      "deps": [
+        "game.movement",
+        "game.combat",
+        "game.world",
+        "game.monster",
+        "game.damage"
+      ]
+    },
+    {
+      "name": "main",
+      "file": "main.lua",
+      "deps": [
+        "framework.state",
+        "game.world",
+        "game.movement",
+        "game.weapon",
+        "game.snapshot",
+        "game.ai"
+      ]
+    }
   ]
 }

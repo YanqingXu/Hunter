@@ -15,21 +15,43 @@ add_executable(hunter_game_contract tests/contract/GameContract.cpp)
 hunter_target(hunter_game_contract)
 target_link_libraries(hunter_game_contract PRIVATE hunter_script)
 add_dependencies(hunter_game_contract hunter_scripts hunter_content)
+add_custom_command(OUTPUT "${HUNTER_GEN}/entities.lua" "${HUNTER_GEN}/entities.map.json"
+    COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tests/scripts/assemble_entities.py"
+        --manifest "${CMAKE_CURRENT_SOURCE_DIR}/lua/modules.json"
+        --fixture "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/entities.lua"
+        --output "${HUNTER_GEN}/entities.lua" --map "${HUNTER_GEN}/entities.map.json"
+    DEPENDS ${HUNTER_LUA} lua/modules.json tests/fixtures/entities.lua
+        tests/scripts/assemble_entities.py tools/assemble.py tools/publish.py VERBATIM)
+add_custom_target(hunter_entity_scripts DEPENDS "${HUNTER_GEN}/entities.lua")
+add_executable(hunter_entity_contract tests/contract/EntityContract.cpp)
+hunter_target(hunter_entity_contract)
+target_link_libraries(hunter_entity_contract PRIVATE hunter_script)
+add_dependencies(hunter_entity_contract hunter_entity_scripts hunter_content)
 if(HUNTER_PRODUCTION)
     set(HUNTER_TEST_BUNDLE "" CACHE FILEPATH "仅供测试的已签名 Bundle")
     set(HUNTER_TEST_POLICY "" CACHE FILEPATH "仅供测试的 Bundle 公钥和身份策略")
     if(NOT EXISTS "${HUNTER_TEST_BUNDLE}" OR NOT EXISTS "${HUNTER_TEST_POLICY}")
         message(FATAL_ERROR "Production tests require HUNTER_TEST_BUNDLE and HUNTER_TEST_POLICY")
     endif()
+    get_filename_component(hunter_test_bundle_dir "${HUNTER_TEST_BUNDLE}" DIRECTORY)
+    set(HUNTER_TEST_ENTITY_BUNDLE "${hunter_test_bundle_dir}/entities.luxb" CACHE FILEPATH
+        "仅供实体生命周期验证的已签名隔离夹具")
+    if(NOT EXISTS "${HUNTER_TEST_ENTITY_BUNDLE}")
+        message(FATAL_ERROR "Production tests require the signed entity fixture Bundle")
+    endif()
     add_test(NAME hunter_script_contract COMMAND hunter_script_contract
         "${HUNTER_TEST_BUNDLE}" "${HUNTER_TEST_POLICY}")
     add_test(NAME hunter_game_contract COMMAND hunter_game_contract
         "${HUNTER_TEST_BUNDLE}" "${HUNTER_GEN}/content.json" "${HUNTER_TEST_POLICY}")
+    add_test(NAME hunter_entity_contract COMMAND hunter_entity_contract
+        "${HUNTER_TEST_ENTITY_BUNDLE}" "${HUNTER_GEN}/content.json" "${HUNTER_TEST_POLICY}")
     set(process_args --bundle "${HUNTER_TEST_BUNDLE}" --policy "${HUNTER_TEST_POLICY}")
 else()
     add_test(NAME hunter_script_contract COMMAND hunter_script_contract "${HUNTER_GEN}/game.lua")
     add_test(NAME hunter_game_contract COMMAND hunter_game_contract
         "${HUNTER_GEN}/game.lua" "${HUNTER_GEN}/content.json")
+    add_test(NAME hunter_entity_contract COMMAND hunter_entity_contract
+        "${HUNTER_GEN}/entities.lua" "${HUNTER_GEN}/content.json")
     add_executable(hunter_async_contract tests/contract/AsyncContract.cpp)
     hunter_target(hunter_async_contract)
     target_link_libraries(hunter_async_contract PRIVATE hunter_script)
@@ -59,6 +81,7 @@ if(HUNTER_BUILD_TOOLS)
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/scripts/test_bundle.py"
         --luax-root "${luax_SOURCE_DIR}" --luaxc $<TARGET_FILE:luax_compiler_tool>
         --bundle-tool $<TARGET_FILE:luax_bundle_tool> --source "${HUNTER_GEN}/game.lua"
+        --entity-source "${HUNTER_GEN}/entities.lua"
         --output-dir "${CMAKE_CURRENT_BINARY_DIR}/bundle-test")
     set_tests_properties(hunter_bundle_contract PROPERTIES TIMEOUT 60)
     add_dependencies(hunter_script_contract hunter_tools)

@@ -2,9 +2,9 @@
 name: server
 on:
   push:
-    paths: ["server/**", "protobuf/**", ".github/workflows/server.yml"]
+    paths: ["server/**", "protobuf/**", "design/**", "export/**", ".github/workflows/server.yml"]
   pull_request:
-    paths: ["server/**", "protobuf/**", ".github/workflows/server.yml"]
+    paths: ["server/**", "protobuf/**", "design/**", "export/**", ".github/workflows/server.yml"]
 permissions:
   contents: read
 jobs:
@@ -39,6 +39,7 @@ jobs:
           "-DFETCHCONTENT_SOURCE_DIR_LUAX=${{ github.workspace }}/.deps/luax"
           "-DHUNTER_HOST_PROTOC=${{ github.workspace }}/server/build/win-dev/_deps/protobuf-build/Release/protoc.exe"
           "-DHUNTER_TEST_BUNDLE=${{ github.workspace }}/server/build/win-dev/bundle-test/game.luxb"
+          "-DHUNTER_TEST_ENTITY_BUNDLE=${{ github.workspace }}/server/build/win-dev/bundle-test/entities.luxb"
           "-DHUNTER_TEST_POLICY=${{ github.workspace }}/server/build/win-dev/bundle-test/policy.json"
       - name: 构建并验证生产运行时
         working-directory: server

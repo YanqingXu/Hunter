@@ -6,7 +6,8 @@
 构建与运行见 [README.md](README.md)，验证范围见 [VERIFICATION.md](VERIFICATION.md)。
 
 - `.gitkeep` 仅用于保留空目录。
-- `lua/main.lua` 组装会话、世界、移动、战斗和 AI；未列入清单的掉落与结算文件仍是占位。
+- `lua/main.lua` 组装会话、世界、移动、枪械、AI 和快照；实体构造与伤害由独立模块承担。
+  未列入清单的掉落与结算文件仍是占位；`tests/fixtures` 的实体夹具不属于生产模块清单。
 - `lua/modules.json` 定义正式构建清单，桥接与状态 schema 见 `lua/contract.json`。
 - 不因目录和文件已经存在，就将相应阶段、模块或测试标记为完成。
 

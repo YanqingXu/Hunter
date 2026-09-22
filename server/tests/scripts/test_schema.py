@@ -23,11 +23,12 @@ class SchemaTest(unittest.TestCase):
     # 输出消息及实体的全部字段和 ID 极值来自唯一正式描述。
     def test_current_contract(self):
         header = SCHEMA.generate(self.doc)
-        self.assertIn("version = 2", header)
+        self.assertIn("version = 3", header)
         self.assertIn('"max":"18446744073709551615"', header)
         self.assertIn('"max":"9223372036854775807"', header)
         self.assertIn('"max":64,"type":"array"', header)
         self.assertIn('"reload_ticks"', header)
+        self.assertIn('"cfg_id":{"max":"2147483647","min":"1","type":"id"}', header)
         for kind in SCHEMA.KINDS:
             self.assertIn('"' + kind + '":', header)
 
@@ -47,7 +48,7 @@ class SchemaTest(unittest.TestCase):
             (("effect", "schemas", "ack", "fields", "seq", "min"), "01"),
             (("effect", "schemas", "ack", "fields", "applied_tick", "max"),
              "9223372036854775808"),
-            (("effect", "schemas", "ack", "fields", "v", "max"), 3),
+            (("effect", "schemas", "ack", "fields", "v", "max"), 4),
             (("effect", "schemas", "ack", "fields", "v", "min"), True),
             (("effect", "schemas", "ack", "fields", "seq"), {"type": "bool"}),
             (("effect", "schemas", "snapshot", "fields", "entities", "max"), 65),
@@ -57,6 +58,12 @@ class SchemaTest(unittest.TestCase):
             (("effect", "schemas", "event", "fields", "x", "min"), 2147483648),
             (("effect", "schemas", "login", "fields", "req_id"), {"type": "bool"}),
             (("effect", "schemas", "start", "fields", "phase", "values"), ["Playing", "Playing"]),
+            (("effect", "schemas", "snapshot", "fields", "entities", "item", "fields",
+              "cfg_id", "max"), "2147483648"),
+            (("state", "v"), 2),
+            (("state", "v"), 3.0),
+            (("host_api", "ctx", "v"), 2),
+            (("effect", "input", "v"), 2),
             (("effect", "kinds"), ["ack"]),
             (("effect", "v"), True),
             (("version",), 1),

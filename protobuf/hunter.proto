@@ -49,6 +49,7 @@ message Entity {
   bool alive = 13;
   sint32 facing = 14;
   string ai = 15;
+  uint32 cfg_id = 16;
 }
 message Snapshot {
   uint64 tick_id = 1;

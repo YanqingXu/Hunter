@@ -1,113 +1,162 @@
--- 管理本机玩家、局次与可导出的唯一世界，提供严格校验和可靠玩法事件。
+-- 持有唯一局内实体集合、稳定遍历索引与会话状态，集中管理生命周期及严格导入校验。
 return function(deps)
     local state = deps["framework.state"]
-    local movement = deps["game.movement"]
+    local player_api = deps["game.player"]
+    local monster_api = deps["game.monster"]
     local api = {}
-    local entity_fields = {"id", "kind", "x", "y", "vx", "vy", "hp", "max_hp", "ammo",
-        "reserve", "reload_ticks", "grounded", "alive", "facing", "ai"}
-    local saved_fields = {"id", "kind", "x", "y", "vx", "vy", "hp", "max_hp", "ammo",
-        "reserve", "reload_ticks", "grounded", "alive", "facing", "ai", "shot_ticks",
-        "attack_ticks"}
 
-    -- 创建中立输入，暂停和新局都使用同一清理规则。
+    -- 按身份查找可参与模拟的实体，待移除对象立即停止参与玩法。
+    function api.find(world, id)
+        local entity = world.entities[id]
+        if entity ~= nil and not entity.pending_remove then
+            return entity
+        end
+        return nil
+    end
+
+    -- 跨处理阶段的引用必须同时匹配局次，旧局身份不能命中新局对象。
+    function api.resolve(world, ref)
+        if not state.fields(ref, {"match_id", "entity_id"})
+            or not state.is_id(ref.match_id) or ref.match_id == "0"
+            or not state.is_id(ref.entity_id) or ref.entity_id == "0"
+            or ref.match_id ~= world.match_id then
+            return nil
+        end
+        return api.find(world, ref.entity_id)
+    end
+
+    -- 清除局内玩家的持续及边沿意图；大厅没有需要清理的角色。
     function api.clear_input(world)
-        world.controls = {move_x = 0, aim_x = 1000, aim_y = 0, jump = false,
-            fire = false, fire_once = false, reload = false}
+        local player = api.find(world, world.player_entity_id)
+        if player ~= nil then
+            player_api.clear_input(player)
+        end
     end
 
-    -- 创建等待本机会话登录的纯数据世界。
+    -- 创建没有活动对局的纯数据会话，配置只保留内容身份。
     function api.new(content)
-        local world = {v = 2, tick_id = "0", seq = "0", match_id = "0",
-            player_id = "0", event_id = "0", phase = "Unauthenticated", paused = false,
-            content_key = json.encode(content), entities = json.array(),
+        return {v = 3, tick_id = "0", seq = "0", match_id = "0", player_id = "0",
+            event_id = "0", phase = "Unauthenticated", paused = false,
+            content_key = json.encode(content), entities = {}, entity_ids = json.array(),
+            player_entity_id = "0", last_entity_id = "0",
             last_start = {req_id = "", after_match_id = "0", match_id = "0"}}
-        api.clear_input(world)
-        return world
     end
 
-    -- 创建一名具有完整网络字段与局内冷却的角色。
-    local function actor(id, kind, spawn, shape, content)
-        local entity = {id = id, kind = kind, x = spawn.x, y = spawn.y, vx = 0, vy = 0,
-            hp = shape.hp, max_hp = shape.hp, ammo = 0, reserve = 0, reload_ticks = 0,
-            grounded = false, alive = true, facing = 1, ai = "patrol", shot_ticks = 0,
-            attack_ticks = 0}
-        entity.grounded = movement.grounded(entity, shape, content.map)
+    -- 校验创建条件后才分配身份并发布实例；失败保持集合和分配器不变。
+    function api.spawn(world, content, kind, spawn_id)
+        if world.phase ~= "Playing" or world.paused then
+            return nil, "invalid_state"
+        end
+        if #world.entity_ids >= 64 then
+            return nil, "entity_capacity"
+        end
+        if world.last_entity_id == "18446744073709551615" then
+            return nil, "entity_id_exhausted"
+        end
+        local spawn = nil
         if kind == "player" then
-            entity.ammo = content.weapon.magazine
-            entity.reserve = content.weapon.reserve
-            entity.ai = "idle"
+            if world.player_entity_id ~= "0" or spawn_id ~= nil then
+                return nil, "invalid_player"
+            end
+            spawn = content.map.spawn
+            if content.players[spawn.cfg_id] == nil
+                or content.weapons[spawn.weapon_cfg_id] == nil then
+                return nil, "invalid_cfg"
+            end
+        elseif kind == "monster" then
+            spawn = monster_api.spawn_cfg(content, spawn_id)
+            if spawn == nil or content.monsters[spawn.cfg_id] == nil then
+                return nil, "invalid_spawn"
+            end
+        else
+            return nil, "invalid_kind"
+        end
+        local id = state.next_id(world.last_entity_id)
+        local entity = nil
+        if kind == "player" then
+            entity = player_api.new(id, world.player_id, content)
+            if not player_api.valid(entity, content) then
+                return nil, "invalid_player"
+            end
+        else
+            entity = monster_api.new(id, spawn, content)
+            if not monster_api.valid(entity, content) then
+                return nil, "invalid_monster"
+            end
+        end
+        world.entities[id] = entity
+        world.entity_ids[#world.entity_ids + 1] = id
+        world.last_entity_id = id
+        if kind == "player" then
+            world.player_entity_id = id
         end
         return entity
     end
 
-    -- 重建局内实体，保留连接输入序号和全局 Tick。
+    -- 只标记活动局怪物，未知、重复或玩家移除请求无副作用。
+    function api.remove(world, id)
+        local entity = api.find(world, id)
+        if world.phase ~= "Playing" or world.paused or entity == nil
+            or entity.kind ~= "monster" then
+            return false
+        end
+        entity.pending_remove = true
+        return true
+    end
+
+    -- 在固定模拟边界移除已标记实例，压紧索引而不改变其余实体顺序。
+    function api.flush(world)
+        local ids = json.array()
+        for _, id in ipairs(world.entity_ids) do
+            if world.entities[id].pending_remove then
+                world.entities[id] = nil
+            else
+                ids[#ids + 1] = id
+            end
+        end
+        world.entity_ids = ids
+    end
+
+    -- 重建局内身份，保留连接输入序号、事件序号与全局 Tick。
     function api.start(world, content, request)
         world.match_id = state.next_id(world.match_id)
         world.phase = "Playing"
-        world.entities = json.array()
-        world.entities[1] = actor("1", "player", content.map.spawn, content.player, content)
+        world.entities = {}
+        world.entity_ids = json.array()
+        world.player_entity_id = "0"
+        world.last_entity_id = "0"
+        assert(api.spawn(world, content, "player") ~= nil, "player spawn failed")
         for _, spawn in ipairs(content.map.enemies) do
-            world.entities[#world.entities + 1] = actor(spawn.id, "enemy", spawn,
-                content.enemy, content)
+            assert(api.spawn(world, content, "monster", spawn.spawn_id) ~= nil,
+                "monster spawn failed")
         end
-        api.clear_input(world)
         world.last_start = {req_id = request.req_id, after_match_id = request.after_match_id,
             match_id = world.match_id}
     end
 
-    -- 仅投影协议字段，不把内部输入或冷却实现泄漏给客户端。
-    function api.snapshot(world)
-        local entities = json.array()
-        for _, entity in ipairs(world.entities) do
-            local copy = {}
-            for _, key in ipairs(entity_fields) do
-                copy[key] = entity[key]
-            end
-            entities[#entities + 1] = copy
-        end
-        return {v = 2, tick_id = world.tick_id, seq = world.seq, match_id = world.match_id,
-            phase = world.phase, entities = entities}
-    end
-
-    -- 输出有单调标识的局内事件，宿主会在入口成功后统一提交。
+    -- 输出有单调标识的可靠事件，由宿主在整个入口成功后提交。
     function api.emit(world, kind, actor_id, target_id, x, y, amount)
         world.event_id = state.next_id(world.event_id)
-        net.emit("event", json.encode({v = 2, match_id = world.match_id,
+        net.emit("event", json.encode({v = 3, match_id = world.match_id,
             event_id = world.event_id, tick_id = world.tick_id, kind = kind,
             actor_id = actor_id, target_id = target_id, x = x, y = y, amount = amount}))
     end
 
-    -- 结算一次伤害与死亡，死亡实体保留稳定位置和标识。
-    function api.damage(world, source, target, damage)
-        if not target.alive then
-            return
-        end
-        local amount = math.min(damage, target.hp)
-        target.hp = target.hp - amount
-        api.emit(world, "hit", source.id, target.id, target.x, target.y, amount)
-        if target.hp == 0 then
-            target.alive = false
-            target.ai = "dead"
-            target.vx = 0
-            target.vy = 0
-            target.reload_ticks = 0
-            target.shot_ticks = 0
-            target.attack_ticks = 0
-            api.emit(world, "death", source.id, target.id, target.x, target.y, 0)
-        end
-    end
-
-    -- 在唯一位置裁定玩家死亡或清怪终态，并冻结全部动作。
+    -- 在实体收尾后裁定死亡或清怪终态，冻结动作但不删除尸体。
     function api.finish(world)
         if world.phase ~= "Playing" then
             return
         end
-        if not world.entities[1].alive then
+        local player = api.find(world, world.player_entity_id)
+        if not player.health.alive then
             world.phase = "Dead"
         else
             local alive = false
-            for i = 2, #world.entities do
-                alive = alive or world.entities[i].alive
+            for _, id in ipairs(world.entity_ids) do
+                local entity = api.find(world, id)
+                if entity ~= nil and entity.kind == "monster" and entity.health.alive then
+                    alive = true
+                end
             end
             if not alive then
                 world.phase = "Cleared"
@@ -115,82 +164,69 @@ return function(deps)
         end
         if world.phase ~= "Playing" then
             api.clear_input(world)
-            for _, entity in ipairs(world.entities) do
-                entity.vx = 0
-                entity.vy = 0
+            for _, id in ipairs(world.entity_ids) do
+                world.entities[id].motion.vx = 0
+                world.entities[id].motion.vy = 0
             end
-            local player = world.entities[1]
-            api.emit(world, "end", player.id, "0", player.x, player.y, 0)
+            api.emit(world, "end", player.id, "0", player.pose.x, player.pose.y, 0)
         end
     end
 
-    -- 检查一名角色的完整字段、配置边界和生死关系。
-    local function valid_actor(entity, index, content)
-        if not state.fields(entity, saved_fields) then
-            return false
+    -- 检查身份索引与组件，并返回玩家以及参与终态判断的存活怪物数。
+    local function valid_entities(world, content)
+        if type(world.entities) ~= "table" or not state.array(world.entity_ids, 0, 64) then
+            return nil, 0
         end
-        local player = index == 1
-        local shape = player and content.player or content.enemy
-        local id = player and "1" or content.map.enemies[index - 1].id
-        if entity.id ~= id or entity.kind ~= (player and "player" or "enemy")
-            or not state.integer(entity.x, shape.width // 2, content.map.width - shape.width // 2)
-            or not state.integer(entity.y, 0, content.map.height - shape.height)
-            or not state.integer(entity.vx, -shape.speed, shape.speed)
-            or not state.integer(entity.vy, -1000, content.player.jump_speed)
-            or not state.integer(entity.max_hp, shape.hp, shape.hp)
-            or not state.integer(entity.hp, 0, shape.hp)
-            or type(entity.alive) ~= "boolean" or entity.alive ~= (entity.hp > 0)
-            or type(entity.grounded) ~= "boolean" or (entity.grounded and entity.vy ~= 0)
-            or not state.integer(entity.facing, -1, 1) or entity.facing == 0 then
-            return false
-        end
-        if entity.grounded ~= movement.grounded(entity, shape, content.map) then
-            return false
-        end
-        for _, solid in ipairs(content.map.solids) do
-            if entity.x - shape.width // 2 < solid.x + solid.w
-                and entity.x + shape.width // 2 > solid.x
-                and entity.y < solid.y + solid.h and entity.y + shape.height > solid.y then
-                return false
+        local seen = {}
+        local player = nil
+        local alive = 0
+        for _, id in ipairs(world.entity_ids) do
+            local entity = world.entities[id]
+            if not state.is_id(id) or id == "0" or seen[id] or type(entity) ~= "table"
+                or entity.id ~= id or state.newer(id, world.last_entity_id) then
+                return nil, 0
+            end
+            seen[id] = true
+            if entity.kind == "player" then
+                if player ~= nil or not player_api.valid(entity, content)
+                    or entity.id ~= world.player_entity_id
+                    or entity.player_id ~= world.player_id then
+                    return nil, 0
+                end
+                player = entity
+            elseif entity.kind == "monster" then
+                if not monster_api.valid(entity, content) then
+                    return nil, 0
+                end
+                if entity.health.alive and not entity.pending_remove then
+                    alive = alive + 1
+                end
+            else
+                return nil, 0
+            end
+            if world.phase ~= "Playing"
+                and (entity.motion.vx ~= 0 or entity.motion.vy ~= 0) then
+                return nil, 0
             end
         end
-        if not state.integer(entity.ammo, 0, player and content.weapon.magazine or 0)
-            or not state.integer(entity.reserve, 0, player and content.weapon.reserve or 0)
-            or not state.integer(entity.reload_ticks, 0,
-                player and content.weapon.reload_ticks or 0)
-            or not state.integer(entity.shot_ticks, 0, player and content.weapon.fire_ticks or 0)
-            or not state.integer(entity.attack_ticks, 0,
-                player and 0 or content.enemy.attack_ticks) then
-            return false
+        for id, entity in pairs(world.entities) do
+            if not seen[id] then
+                return nil, 0
+            end
         end
-        if not entity.alive then
-            return entity.ai == "dead" and entity.vx == 0 and entity.vy == 0
-                and entity.reload_ticks == 0 and entity.shot_ticks == 0 and entity.attack_ticks == 0
-        end
-        if player then
-            return entity.ai == "idle"
-        end
-        return entity.ai == "patrol" or entity.ai == "chase" or entity.ai == "attack"
+        return player, alive
     end
 
-    -- 完整检查导入状态，内容身份、实体顺序与阶段都不得漂移。
+    -- 完整验证候选世界；只读取候选数据，不修复或替换活动状态。
     function api.valid(world, content)
         if not state.fields(world, {"v", "tick_id", "seq", "match_id", "player_id",
-            "event_id", "phase", "paused", "content_key", "entities", "controls", "last_start"})
-            or not state.integer(world.v, 2, 2) or world.content_key ~= json.encode(content)
+            "event_id", "phase", "paused", "content_key", "entities", "entity_ids",
+            "player_entity_id", "last_entity_id", "last_start"})
+            or not state.integer(world.v, 3, 3) or world.content_key ~= json.encode(content)
             or not state.is_tick(world.tick_id) or not state.is_id(world.seq)
             or not state.is_id(world.match_id) or not state.is_id(world.event_id)
+            or not state.is_id(world.player_entity_id) or not state.is_id(world.last_entity_id)
             or type(world.paused) ~= "boolean" then
-            return false
-        end
-        local input = world.controls
-        if not state.fields(input, {"move_x", "aim_x", "aim_y", "jump", "fire", "fire_once",
-            "reload"}) or not state.integer(input.move_x, -1, 1)
-            or not state.integer(input.aim_x, -1000, 1000)
-            or not state.integer(input.aim_y, -1000, 1000)
-            or (input.aim_x == 0 and input.aim_y == 0)
-            or type(input.jump) ~= "boolean" or type(input.fire) ~= "boolean"
-            or type(input.fire_once) ~= "boolean" or type(input.reload) ~= "boolean" then
             return false
         end
         local last = world.last_start
@@ -199,14 +235,12 @@ return function(deps)
             or not state.is_id(last.after_match_id) or not state.is_id(last.match_id) then
             return false
         end
-        if (world.paused or world.phase ~= "Playing") and (input.move_x ~= 0 or input.jump
-            or input.fire or input.fire_once or input.reload) then
-            return false
-        end
         if world.phase == "Unauthenticated" or world.phase == "Lobby" then
             return world.player_id == (world.phase == "Lobby" and "1" or "0")
-                and world.match_id == "0" and state.array(world.entities, 0, 0)
-                and last.req_id == "" and last.after_match_id == "0" and last.match_id == "0"
+                and world.match_id == "0" and state.fields(world.entities, {})
+                and state.array(world.entity_ids, 0, 0) and world.player_entity_id == "0"
+                and world.last_entity_id == "0" and last.req_id == ""
+                and last.after_match_id == "0" and last.match_id == "0"
         end
         if world.phase ~= "Playing" and world.phase ~= "Dead" and world.phase ~= "Cleared" then
             return false
@@ -214,26 +248,21 @@ return function(deps)
         if world.player_id ~= "1" or world.match_id == "0" or last.req_id == ""
             or last.match_id ~= world.match_id
             or not state.newer(world.match_id, last.after_match_id)
-            or state.next_id(last.after_match_id) ~= world.match_id
-            or not state.array(world.entities,
-                #content.map.enemies + 1, #content.map.enemies + 1) then
+            or state.next_id(last.after_match_id) ~= world.match_id then
             return false
         end
-        local alive = 0
-        for index, entity in ipairs(world.entities) do
-            if not valid_actor(entity, index, content) then
-                return false
-            end
-            if world.phase ~= "Playing" and (entity.vx ~= 0 or entity.vy ~= 0) then
-                return false
-            end
-            if index > 1 and entity.alive then
-                alive = alive + 1
-            end
+        local player, alive = valid_entities(world, content)
+        if player == nil then
+            return false
         end
-        return (world.phase == "Dead" and not world.entities[1].alive)
-            or (world.phase == "Cleared" and world.entities[1].alive and alive == 0)
-            or (world.phase == "Playing" and world.entities[1].alive and alive > 0)
+        local input = player.controls
+        if (world.paused or world.phase ~= "Playing") and (input.move_x ~= 0 or input.jump
+            or input.fire or input.fire_once or input.reload) then
+            return false
+        end
+        return (world.phase == "Dead" and not player.health.alive)
+            or (world.phase == "Cleared" and player.health.alive and alive == 0)
+            or (world.phase == "Playing" and player.health.alive and alive > 0)
     end
 
     return api

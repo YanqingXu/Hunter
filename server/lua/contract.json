@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "host_api": {
     "net.emit": {
       "args": [
@@ -41,7 +41,7 @@
     },
     "entry_returns": "boolean true except export_state returns string",
     "ctx": {
-      "v": 2,
+      "v": 3,
       "snapshot_every": "integer [1,3600]",
       "content": "validated exported content object"
     }
@@ -58,7 +58,7 @@
     "net_commit": "validated successful call output batch"
   },
   "state": {
-    "v": 2,
+    "v": 3,
     "tick_id": "canonical decimal string [0,9223372036854775807]",
     "seq": "canonical decimal string [0,18446744073709551615]",
     "match_id": "canonical decimal string [0,18446744073709551615]",
@@ -69,28 +69,82 @@
     "content_key": "canonical JSON encoding of complete immutable content; exact import match",
     "entities": {
       "max": 64,
-      "wire_fields": "effect.schemas.snapshot.fields.entities.item.fields",
-      "shot_ticks": "nonnegative integer",
-      "attack_ticks": "nonnegative integer"
-    },
-    "controls": {
-      "move_x": "integer [-1,1]",
-      "aim_x": "integer [-1000,1000]",
-      "aim_y": "integer [-1000,1000]",
-      "jump": "boolean",
-      "fire": "boolean",
-      "fire_once": "boolean",
-      "reload": "boolean"
+      "key": "positive canonical uint64 string, exactly matches instance id",
+      "common": {
+        "id": "positive canonical uint64 string <= last_entity_id",
+        "kind": "player|monster",
+        "cfg_id": "canonical decimal string [1,2147483647], resolves by kind",
+        "pose": {
+          "x": "integer millimeters, inside map by referenced body",
+          "y": "integer millimeters, inside map by referenced body",
+          "facing": "integer -1|1"
+        },
+        "pending_remove": "boolean; only monsters may be marked",
+        "motion": {
+          "vx": "integer within referenced speed",
+          "vy": "integer [-1000, own jump_speed or 0]",
+          "grounded": "boolean, agrees with geometry"
+        },
+        "health": {
+          "hp": "integer [0,max_hp]",
+          "max_hp": "integer equal to referenced hp",
+          "alive": "boolean, equals hp > 0"
+        }
+      },
+      "player": {
+        "player_id": "same as world.player_id",
+        "controls": {
+          "move_x": "integer [-1,1]",
+          "aim_x": "integer [-1000,1000]",
+          "aim_y": "integer [-1000,1000]",
+          "jump": "boolean",
+          "fire": "boolean",
+          "fire_once": "boolean",
+          "reload": "boolean"
+        },
+        "reserve": "integer [0,weapon cfg reserve]",
+        "weapon": {
+          "cfg_id": "map.spawn.weapon_cfg_id",
+          "ammo": "integer [0,cfg.magazine]",
+          "shot_ticks": "integer [0,cfg.fire_ticks]",
+          "reload_ticks": "integer [0,cfg.reload_ticks]"
+        }
+      },
+      "monster": {
+        "spawn_id": "positive canonical cfg-range string; resolves to map.enemies spawn_id and matching cfg_id",
+        "ai": {
+          "state": "patrol|chase|attack|dead",
+          "attack_ticks": "integer [0,cfg.attack_ticks]"
+        }
+      },
+      "extra_fields": false
     },
     "last_start": {
       "req_id": "string [0,128] bytes",
       "after_match_id": "canonical uint64 decimal string",
       "match_id": "canonical uint64 decimal string"
     },
-    "extra_fields": false
+    "extra_fields": false,
+    "player_entity_id": "canonical uint64 decimal string; 0 before first match; references sole player",
+    "last_entity_id": "canonical uint64 decimal string; per-match high water, never reused",
+    "entity_ids": {
+      "max": 64,
+      "item": "positive canonical uint64 string",
+      "unique": true,
+      "order": "stable spawn order; removal preserves survivors"
+    },
+    "invariants": [
+      "entity_ids and entities form a bijection; no entity object aliases",
+      "sole player resolves from player_entity_id and matches initial player and weapon cfg",
+      "death zeros motion and own cooldowns; monster ai becomes dead",
+      "paused or terminal player controls are neutral; terminal motion is zero",
+      "Dead requires dead player; Cleared requires live player and no active live monsters; Playing requires live player and active live monsters",
+      "inactive phases have empty entities and indices and zero allocator and player entity id",
+      "match_id is last_start.after_match_id + 1; existing request and sequence invariants retained"
+    ]
   },
   "effect": {
-    "v": 2,
+    "v": 3,
     "events": {
       "input": 1,
       "login": 2,
@@ -98,7 +152,7 @@
       "pause": 4
     },
     "input": {
-      "v": 2,
+      "v": 3,
       "seq": "positive uint64 decimal string",
       "match_id": "positive uint64 decimal string",
       "applied_tick": "nonnegative i64 decimal string",
@@ -123,8 +177,8 @@
         "fields": {
           "v": {
             "type": "int",
-            "min": 2,
-            "max": 2
+            "min": 3,
+            "max": 3
           },
           "seq": {
             "type": "id",
@@ -148,8 +202,8 @@
         "fields": {
           "v": {
             "type": "int",
-            "min": 2,
-            "max": 2
+            "min": 3,
+            "max": 3
           },
           "tick_id": {
             "type": "id",
@@ -269,6 +323,11 @@
                     "attack",
                     "dead"
                   ]
+                },
+                "cfg_id": {
+                  "type": "id",
+                  "min": "1",
+                  "max": "2147483647"
                 }
               }
             }
@@ -280,8 +339,8 @@
         "fields": {
           "v": {
             "type": "int",
-            "min": 2,
-            "max": 2
+            "min": 3,
+            "max": 3
           },
           "req_id": {
             "type": "string",
@@ -317,8 +376,8 @@
         "fields": {
           "v": {
             "type": "int",
-            "min": 2,
-            "max": 2
+            "min": 3,
+            "max": 3
           },
           "req_id": {
             "type": "string",
@@ -349,8 +408,8 @@
         "fields": {
           "v": {
             "type": "int",
-            "min": 2,
-            "max": 2
+            "min": 3,
+            "max": 3
           },
           "match_id": {
             "type": "id",
@@ -411,8 +470,8 @@
         "fields": {
           "v": {
             "type": "int",
-            "min": 2,
-            "max": 2
+            "min": 3,
+            "max": 3
           },
           "code": {
             "type": "string",

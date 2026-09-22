@@ -47,9 +47,10 @@ Json read_content(const Str& path)
 Json arena(Json content, i64 enemy_x = 5000)
 {
     content["map"]["solids"] = Json::array();
-    content["map"]["spawn"] = {{"x", 2000}, {"y", 0}};
+    content["map"]["spawn"]["x"] = 2000;
+    content["map"]["spawn"]["y"] = 0;
     content["map"]["enemies"] = Json::array({
-        {{"id", "2"}, {"x", enemy_x}, {"y", 0},
+        {{"spawn_id", "2"}, {"cfg_id", "1"}, {"x", enemy_x}, {"y", 0},
             {"patrol_min", enemy_x - 500}, {"patrol_max", enemy_x + 500}}});
     return content;
 }
@@ -66,14 +67,14 @@ struct Game
     Game(const hunter::Cfg& cfg, Json data) : content(std::move(data))
     {
         const auto output = take(script.open(cfg,
-            Json{{"v", 2}, {"snapshot_every", 3}, {"content", content}}.dump()));
+            Json{{"v", 3}, {"snapshot_every", 3}, {"content", content}}.dump()));
         check(output.empty(), "init must not send network output");
     }
 
     // 通过正式事件入口提交有版本的请求。
     Vec<hunter::ScriptOut> event(i64 id, Json payload)
     {
-        payload["v"] = 2;
+        payload["v"] = 3;
         return take(script.event(id, payload.dump()));
     }
 
@@ -174,7 +175,7 @@ void session(const hunter::Cfg& cfg, const Json& content)
     reply = game.event(1, request);
     check(message(reply, "ack")["applied_tick"] == "1", "ack reports simulation tick");
     game.steps();
-    check(game.state()["entities"][0]["x"] == 2100, "movement uses server tick");
+    check(game.state()["entities"]["1"]["pose"]["x"] == 2100, "movement uses server tick");
     reply = game.event(1, request);
     check(message(reply, "error")["code"] == "stale_input", "duplicate sequence rejected");
     reply = game.event(3, {{"req_id", "start"}, {"after_match_id", "0"}});
@@ -201,38 +202,41 @@ void movement(const hunter::Cfg& cfg, const Json& base)
     jump.start();
     jump.event(1, jump.input(1, true));
     jump.steps();
-    check(jump.state()["entities"][0]["y"] == 228, "jump uses integer fixed step");
+    check(jump.state()["entities"]["1"]["pose"]["y"] == 228, "jump uses integer fixed step");
     jump.event(1, jump.input(1, true));
     jump.steps();
-    check(jump.state()["entities"][0]["vy"] == 216, "airborne jump does not add impulse");
+    check(jump.state()["entities"]["1"]["motion"]["vy"] == 216,
+        "airborne jump does not add impulse");
     jump.steps(32);
-    auto player = jump.state()["entities"][0];
-    check(player["y"] == 1300 && player["grounded"] == true, "jump lands on platform");
+    auto player = jump.state()["entities"]["1"];
+    check(player["pose"]["y"] == 1300 && player["motion"]["grounded"] == true,
+        "jump lands on platform");
 
     auto saved = jump.state();
-    saved["entities"][0]["x"] = 5000;
-    saved["entities"][0]["y"] = 3000;
-    saved["entities"][0]["vy"] = -1000;
-    saved["entities"][0]["grounded"] = false;
-    saved["controls"]["move_x"] = 0;
+    saved["entities"]["1"]["pose"]["x"] = 5000;
+    saved["entities"]["1"]["pose"]["y"] = 3000;
+    saved["entities"]["1"]["motion"]["vy"] = -1000;
+    saved["entities"]["1"]["motion"]["grounded"] = false;
+    saved["entities"]["1"]["controls"]["move_x"] = 0;
     jump.restore(saved);
     jump.steps(2);
-    check(jump.state()["entities"][0]["y"] == 1300, "fast fall cannot tunnel platform");
+    check(jump.state()["entities"]["1"]["pose"]["y"] == 1300, "fast fall cannot tunnel platform");
 
     saved = jump.state();
-    saved["entities"][0]["x"] = 3700;
-    saved["entities"][0]["y"] = 0;
-    saved["entities"][0]["vy"] = 0;
+    saved["entities"]["1"]["pose"]["x"] = 3700;
+    saved["entities"]["1"]["pose"]["y"] = 0;
+    saved["entities"]["1"]["motion"]["vy"] = 0;
     jump.restore(saved);
     jump.event(1, jump.input(1));
     jump.steps(4);
-    check(jump.state()["entities"][0]["x"] == 3700, "solid side prevents walking through");
+    check(jump.state()["entities"]["1"]["pose"]["x"] == 3700,
+        "solid side prevents walking through");
     saved = jump.state();
-    saved["entities"][0]["x"] = 300;
+    saved["entities"]["1"]["pose"]["x"] = 300;
     jump.restore(saved);
     jump.event(1, jump.input(-1));
     jump.steps();
-    check(jump.state()["entities"][0]["x"] == 300, "map clamps body extent");
+    check(jump.state()["entities"]["1"]["pose"]["x"] == 300, "map clamps body extent");
 
     content["map"]["solids"] = Json::array({
         {{"id", "101"}, {"x", 1000}, {"y", 1800}, {"w", 2500}, {"h", 100}}});
@@ -240,40 +244,43 @@ void movement(const hunter::Cfg& cfg, const Json& base)
     ceiling.start();
     ceiling.event(1, ceiling.input(0, true));
     ceiling.steps();
-    player = ceiling.state()["entities"][0];
-    check(player["y"] == 200 && player["vy"] == 0, "head sweep stops at ceiling");
+    player = ceiling.state()["entities"]["1"];
+    check(player["pose"]["y"] == 200 && player["motion"]["vy"] == 0, "head sweep stops at ceiling");
 }
 
 // 验证近目标优先、遮挡、射速、空弹、换弹和暂停时输入清除。
 void weapons(const hunter::Cfg& cfg, const Json& base)
 {
     auto content = arena(base, 8000);
-    content["enemy"]["hp"] = 1000;
+    content["monsters"]["1"]["hp"] = 1000;
     Game game(cfg, content);
     game.start();
     const auto first = game.input(0, false, true);
     game.event(1, first);
     auto reply = game.steps();
     check(events(reply, "shot") == 1 && events(reply, "hit") == 1, "real shot damages enemy");
-    check(game.state()["entities"][1]["hp"] == 980, "configured damage applied");
+    check(game.state()["entities"]["2"]["health"]["hp"] == 980, "configured damage applied");
     game.event(1, first);
     game.steps(9);
-    check(game.state()["entities"][0]["ammo"] == 5, "duplicate and held input obey fire rate");
+    check(game.state()["entities"]["1"]["weapon"]["ammo"] == 5,
+        "duplicate and held input obey fire rate");
     game.steps();
-    check(game.state()["entities"][0]["ammo"] == 4, "next shot occurs at exact cooldown");
+    check(game.state()["entities"]["1"]["weapon"]["ammo"] == 4,
+        "next shot occurs at exact cooldown");
     game.steps(40);
-    check(game.state()["entities"][0]["ammo"] == 0, "magazine limits held fire");
+    check(game.state()["entities"]["1"]["weapon"]["ammo"] == 0, "magazine limits held fire");
     reply = game.steps(12);
     check(events(reply, "shot") == 0, "empty gun cannot fire");
     game.event(1, game.input(0, false, false, true));
     reply = game.steps();
     check(events(reply, "reload") == 1, "reload start emitted once");
     game.steps(89);
-    auto player = game.state()["entities"][0];
-    check(player["ammo"] == 0 && player["reload_ticks"] == 1, "reload does not finish early");
+    auto player = game.state()["entities"]["1"];
+    check(player["weapon"]["ammo"] == 0 && player["weapon"]["reload_ticks"] == 1,
+        "reload does not finish early");
     reply = game.steps();
-    player = game.state()["entities"][0];
-    check(player["ammo"] == 6 && player["reserve"] == 24 && events(reply, "reload") == 1,
+    player = game.state()["entities"]["1"];
+    check(player["weapon"]["ammo"] == 6 && player["reserve"] == 24 && events(reply, "reload") == 1,
         "reload transfers exact reserve after duration");
 
     game.event(1, game.input(1, true, true));
@@ -283,9 +290,10 @@ void weapons(const hunter::Cfg& cfg, const Json& base)
     check(game.state()["entities"] == paused, "pause freezes movement ammo and AI");
     game.event(4, {{"paused", false}});
     reply = game.steps();
-    check(events(reply, "shot") == 0 && game.state()["entities"][0]["x"] == paused[0]["x"],
+    check(events(reply,
+        "shot") == 0 && game.state()["entities"]["1"]["pose"]["x"] == paused["1"]["pose"]["x"],
         "resume does not replay held fire move or jump");
-    check(game.state()["entities"][0]["y"] == paused[0]["y"],
+    check(game.state()["entities"]["1"]["pose"]["y"] == paused["1"]["pose"]["y"],
         "pause discards a jump accepted before the boundary");
 
     content = arena(base, 2800);
@@ -297,35 +305,41 @@ void weapons(const hunter::Cfg& cfg, const Json& base)
     reply = wall.steps();
     check(events(reply, "shot") == 1 && events(reply, "hit") == 0,
         "wall blocks both gun and close enemy melee");
-    check(wall.state()["entities"][1]["hp"] == 60, "wall protects enemy behind it");
+    check(wall.state()["entities"]["2"]["health"]["hp"] == 60, "wall protects enemy behind it");
 
     content = arena(base, 5000);
-    content["map"]["enemies"].push_back({{"id", "3"}, {"x", 8000}, {"y", 0},
+    content["map"]["enemies"].push_back({{"spawn_id", "3"}, {"cfg_id", "1"}, {"x", 8000}, {"y", 0},
         {"patrol_min", 7500}, {"patrol_max", 8500}});
     Game nearest(cfg, content);
     nearest.start();
     nearest.event(1, nearest.input(0, false, true));
     nearest.steps();
-    check(nearest.state()["entities"][1]["hp"] == 40
-        && nearest.state()["entities"][2]["hp"] == 60, "only nearest live target takes damage");
+    check(nearest.state()["entities"]["2"]["health"]["hp"] == 40
+        && nearest.state()["entities"]["3"]["health"]["hp"] == 60,
+        "only nearest live target takes damage");
 
     Game endpoint(cfg, arena(base, 20265));
     endpoint.start();
     endpoint.event(1, endpoint.input(0, false, true));
     endpoint.steps();
-    check(endpoint.state()["entities"][1]["hp"] == 40, "shot includes exact range endpoint");
+    check(endpoint.state()["entities"]["2"]["health"]["hp"] == 40,
+        "shot includes exact range endpoint");
 
     content = arena(base, 5000);
-    content["map"]["enemies"][0]["id"] = "3";
+    content["map"]["enemies"][0]["spawn_id"] = "3";
     auto same_place = content["map"]["enemies"][0];
-    same_place["id"] = "2";
+    same_place["spawn_id"] = "2";
     content["map"]["enemies"].push_back(same_place);
     Game tied(cfg, content);
     tied.start();
+    auto reversed = tied.state();
+    reversed["entity_ids"] = Json::array({"3", "1", "2"});
+    tied.restore(reversed);
     tied.event(1, tied.input(0, false, true));
     tied.steps();
-    check(tied.state()["entities"][1]["hp"] == 60
-        && tied.state()["entities"][2]["hp"] == 40, "equal distance uses numeric entity id");
+    check(tied.state()["entities"]["2"]["health"]["hp"] == 40
+        && tied.state()["entities"]["3"]["health"]["hp"] == 60,
+        "equal distance uses numeric entity id");
 
     Game tap(cfg, arena(base, 8000));
     tap.start();
@@ -343,59 +357,59 @@ void enemies(const hunter::Cfg& cfg, const Json& base)
     Game patrol(cfg, arena(base, 18000));
     patrol.start();
     patrol.steps();
-    check(patrol.state()["entities"][1]["ai"] == "patrol"
-        && patrol.state()["entities"][1]["x"] == 18035, "distant enemy patrols");
+    check(patrol.state()["entities"]["2"]["ai"]["state"] == "patrol"
+        && patrol.state()["entities"]["2"]["pose"]["x"] == 18035, "distant enemy patrols");
     Game chase(cfg, arena(base, 5000));
     chase.start();
     chase.steps();
-    check(chase.state()["entities"][1]["ai"] == "chase"
-        && chase.state()["entities"][1]["x"] == 4965, "near enemy chases player");
+    check(chase.state()["entities"]["2"]["ai"]["state"] == "chase"
+        && chase.state()["entities"]["2"]["pose"]["x"] == 4965, "near enemy chases player");
     chase.steps(20);
-    check(chase.state()["entities"][1]["x"].get<i64>() < 4500,
+    check(chase.state()["entities"]["2"]["pose"]["x"].get<i64>() < 4500,
         "chasing enemy may leave patrol interval");
 
     auto narrow_content = arena(base, 18000);
-    narrow_content["enemy"]["speed"] = 1000;
+    narrow_content["monsters"]["1"]["speed"] = 1000;
     narrow_content["map"]["enemies"][0]["patrol_min"] = 17997;
     narrow_content["map"]["enemies"][0]["patrol_max"] = 18005;
     Game narrow(cfg, narrow_content);
     narrow.start();
     narrow.steps();
-    check(narrow.state()["entities"][1]["x"] == 18005,
+    check(narrow.state()["entities"]["2"]["pose"]["x"] == 18005,
         "patrol step stops exactly at right endpoint");
     narrow.steps();
-    check(narrow.state()["entities"][1]["x"] == 17997,
+    check(narrow.state()["entities"]["2"]["pose"]["x"] == 17997,
         "patrol step stops exactly at left endpoint");
 
     for (u32 index = 0; index < 10; ++index)
     {
         narrow.steps();
-        const auto x = narrow.state()["entities"][1]["x"].get<i64>();
+        const auto x = narrow.state()["entities"]["2"]["pose"]["x"].get<i64>();
         check(x >= 17997 && x <= 18005, "fast patrol remains inside narrow interval");
     }
 
     auto outside = narrow.state();
-    outside["entities"][1]["x"] = 15000;
-    outside["entities"][1]["ai"] = "chase";
+    outside["entities"]["2"]["pose"]["x"] = 15000;
+    outside["entities"]["2"]["ai"]["state"] = "chase";
     narrow.restore(outside);
     narrow.steps();
-    check(narrow.state()["entities"][1]["x"] == 16000,
+    check(narrow.state()["entities"]["2"]["pose"]["x"] == 16000,
         "enemy returning from chase does not teleport to patrol interval");
     narrow.steps(2);
-    check(narrow.state()["entities"][1]["x"] == 17997,
+    check(narrow.state()["entities"]["2"]["pose"]["x"] == 17997,
         "returning enemy stops at nearest patrol endpoint");
 
     Game attack(cfg, arena(base, 2800));
     attack.start();
     attack.steps();
-    check(attack.state()["entities"][0]["hp"] == 90, "enemy applies melee damage");
+    check(attack.state()["entities"]["1"]["health"]["hp"] == 90, "enemy applies melee damage");
     attack.steps(59);
-    check(attack.state()["entities"][0]["hp"] == 90, "melee respects attack cooldown");
+    check(attack.state()["entities"]["1"]["health"]["hp"] == 90, "melee respects attack cooldown");
     attack.steps();
-    check(attack.state()["entities"][0]["hp"] == 80, "melee resumes at exact cooldown");
+    check(attack.state()["entities"]["1"]["health"]["hp"] == 80, "melee resumes at exact cooldown");
 
     auto content = arena(base, 2800);
-    content["player"]["hp"] = 10;
+    content["players"]["1"]["hp"] = 10;
     Game death(cfg, content);
     death.start();
     death.event(1, death.input());
@@ -408,39 +422,140 @@ void enemies(const hunter::Cfg& cfg, const Json& base)
     check(reply.size() <= 4 && death.state()["entities"] == final_entities,
         "dead match freezes simulation");
     auto moving_dead = death.state();
-    moving_dead["entities"][1]["vx"] = 1;
+    moving_dead["entities"]["2"]["motion"]["vx"] = 1;
     Game invalid_dead(cfg, content);
     check(!invalid_dead.script.import_state(moving_dead.dump()),
         "Dead state rejects a living enemy with nonzero horizontal velocity");
     reply = death.event(3, {{"req_id", "restart"}, {"after_match_id", "1"}});
     check(message(reply, "start")["match_id"] == "2" && death.state()["seq"] == "1",
         "restart allocates match while preserving input high water");
-    check(death.state()["entities"][0]["hp"] == 10
-        && death.state()["entities"][0]["ammo"] == 6, "restart restores health and ammo");
+    check(death.state()["entities"]["1"]["health"]["hp"] == 10
+        && death.state()["entities"]["1"]["weapon"]["ammo"] == 6,
+        "restart restores health and ammo");
     reply = death.event(3, {{"req_id", "start"}, {"after_match_id", "0"}});
     check(message(reply, "error")["code"] == "stale_match",
         "old start retry cannot reset new match");
 
     content = arena(base, 2800);
-    content["enemy"]["hp"] = 20;
+    content["monsters"]["1"]["hp"] = 20;
     Game clear(cfg, content);
     clear.start();
     clear.event(1, clear.input(0, false, true));
     reply = clear.steps();
-    check(clear.state()["phase"] == "Cleared" && clear.state()["entities"][0]["hp"] == 100,
+    check(clear.state()["phase"] == "Cleared"
+        && clear.state()["entities"]["1"]["health"]["hp"] == 100,
         "player shot kills enemy before its same tick attack");
     check(events(reply, "death") == 1 && events(reply, "end") == 1,
         "last enemy emits exactly one death and end");
     auto moving_clear = clear.state();
-    moving_clear["entities"][0]["y"] = 10;
-    moving_clear["entities"][0]["grounded"] = false;
-    moving_clear["entities"][0]["vy"] = 1;
+    moving_clear["entities"]["1"]["pose"]["y"] = 10;
+    moving_clear["entities"]["1"]["motion"]["grounded"] = false;
+    moving_clear["entities"]["1"]["motion"]["vy"] = 1;
     Game invalid_clear(cfg, content);
     check(!invalid_clear.script.import_state(moving_clear.dump()),
         "Cleared state rejects a living airborne player with nonzero vertical velocity");
     clear.event(3, {{"req_id", "clear-restart"}, {"after_match_id", "1"}});
-    check(clear.state()["phase"] == "Playing" && clear.state()["entities"][1]["alive"] == true,
+    check(clear.state()["phase"] == "Playing"
+        && clear.state()["entities"]["2"]["health"]["alive"] == true,
         "clear terminal permits fresh living enemies");
+}
+
+// 同局怪物按各自配置运动、感知、碰撞和攻击，枪械及玩家配置也可独立选择。
+void configs(const hunter::Cfg& cfg, const Json& base)
+{
+    auto content = arena(base, 5000);
+    content["monsters"]["2"] = content["monsters"]["1"];
+    content["monsters"]["2"].update({{"hp", 120}, {"speed", 70}, {"width", 1000},
+        {"height", 600}, {"detect_range", 1000}, {"attack_range", 700},
+        {"damage", 7}, {"attack_ticks", 15}});
+    content["map"]["enemies"].push_back({{"spawn_id", "77"}, {"cfg_id", "2"},
+        {"x", 8000}, {"y", 0}, {"patrol_min", 7500}, {"patrol_max", 8500}});
+    Game mixed(cfg, content);
+    mixed.start();
+    mixed.steps();
+    auto saved = mixed.state();
+    check(saved["entities"]["2"]["pose"]["x"] == 4965
+        && saved["entities"]["2"]["ai"]["state"] == "chase", "first monster uses own senses");
+    check(saved["entities"]["3"]["pose"]["x"] == 8070
+        && saved["entities"]["3"]["ai"]["state"] == "patrol"
+        && saved["entities"]["3"]["health"]["hp"] == 120, "second monster uses own cfg");
+    const auto snap = message(mixed.steps(2), "snapshot");
+    check(snap["entities"][2]["cfg_id"] == "2" && snap["entities"][2]["ammo"] == 0,
+        "snapshot carries cfg identity and neutral monster weapon fields");
+
+    content["map"]["enemies"][0]["cfg_id"] = "2";
+    content["map"]["enemies"][1]["cfg_id"] = "1";
+    Game bodies(cfg, content);
+    bodies.start();
+    bodies.event(1, bodies.input(0, false, true));
+    bodies.steps();
+    check(bodies.state()["entities"]["2"]["health"]["hp"] == 120
+        && bodies.state()["entities"]["3"]["health"]["hp"] == 40,
+        "ray passes above short monster and hits farther tall body");
+
+    content["map"]["enemies"][0].update({{"x", 2600}, {"patrol_min", 2500},
+        {"patrol_max", 2700}});
+    content["map"]["enemies"][1].update({{"x", 2800}, {"patrol_min", 2700},
+        {"patrol_max", 2900}});
+    Game melee(cfg, content);
+    melee.start();
+    melee.steps();
+    check(melee.state()["entities"]["1"]["health"]["hp"] == 83,
+        "different melee damage applies in same tick");
+    const auto attacking = melee.state();
+    Game resumed(cfg, content);
+    resumed.restore(attacking);
+    melee.steps(14);
+    resumed.steps(14);
+    check(melee.state()["entities"]["1"]["health"]["hp"] == 83,
+        "short cooldown does not finish early");
+    melee.steps();
+    resumed.steps();
+    check(melee.state()["entities"]["1"]["health"]["hp"] == 76
+        && melee.state() == resumed.state(), "independent melee cooldown survives restore");
+
+    content = arena(base, 5000);
+    content["weapons"]["2"] = {{"range", 2000}, {"damage", 35}, {"magazine", 2},
+        {"reserve", 5}, {"fire_ticks", 3}, {"reload_ticks", 4}};
+    content["map"]["spawn"]["weapon_cfg_id"] = "2";
+    Game gun(cfg, content);
+    gun.start();
+    gun.event(1, gun.input(0, false, true));
+    gun.steps();
+    check(gun.state()["entities"]["1"]["weapon"]["ammo"] == 1, "alternate first shot");
+    gun.steps(2);
+    check(gun.state()["entities"]["1"]["weapon"]["ammo"] == 1,
+        "alternate fire cooldown does not finish early");
+    gun.steps();
+    check(gun.state()["entities"]["1"]["weapon"]["ammo"] == 0
+        && gun.state()["entities"]["2"]["health"]["hp"] == 60,
+        "alternate magazine fire interval and range apply");
+    gun.event(1, gun.input(0, false, false, true));
+    gun.steps(4);
+    check(gun.state()["entities"]["1"]["weapon"]["reload_ticks"] == 1,
+        "alternate reload duration is exact");
+    gun.steps();
+    check(gun.state()["entities"]["1"]["weapon"]["ammo"] == 2
+        && gun.state()["entities"]["1"]["reserve"] == 3, "alternate ammo transfer");
+    content["weapons"]["2"]["range"] = 18000;
+    Game hit(cfg, content);
+    hit.start();
+    hit.event(1, hit.input(0, false, true));
+    hit.steps();
+    check(hit.state()["entities"]["2"]["health"]["hp"] == 25,
+        "alternate damage comes from weapon cfg");
+
+    content["players"]["2"] = content["players"]["1"];
+    content["players"]["2"].update({{"hp", 150}, {"speed", 60}, {"jump_speed", 120}});
+    content["map"]["spawn"]["cfg_id"] = "2";
+    Game player(cfg, content);
+    player.start();
+    player.event(1, player.input(1, true));
+    player.steps();
+    check(player.state()["entities"]["1"]["pose"]["x"] == 2060
+        && player.state()["entities"]["1"]["pose"]["y"] == 108
+        && player.state()["entities"]["1"]["health"]["hp"] == 150,
+        "player cfg is independent of shared map gravity");
 }
 
 // 验证完整状态往返的后续演化与非法状态拒绝。
@@ -459,12 +574,20 @@ void persistence(const hunter::Cfg& cfg, const Json& base)
 
     for (u32 index = 0; index < 25; ++index)
     {
-        first.steps();
-        second.steps();
+        const auto expected = first.steps();
+        const auto actual = second.steps();
+        check(expected.size() == actual.size(), "restored output count matches");
+
+        for (usize item = 0; item < expected.size(); ++item)
+        {
+            check(expected[item].kind == actual[item].kind
+                && expected[item].payload == actual[item].payload, "restored events match");
+        }
+
         check(first.state() == second.state(), "restored world must replay identically");
     }
 
-    for (u32 sample = 0; sample < 9; ++sample)
+    for (u32 sample = 0; sample < 19; ++sample)
     {
         Game invalid(cfg, content);
         auto corrupt = saved;
@@ -475,11 +598,11 @@ void persistence(const hunter::Cfg& cfg, const Json& base)
         }
         else if (sample == 1)
         {
-            corrupt["entities"][0]["ammo"] = -1;
+            corrupt["entities"]["1"]["weapon"]["ammo"] = -1;
         }
         else if (sample == 2)
         {
-            corrupt["entities"][0]["hp"] = 0;
+            corrupt["entities"]["1"]["health"]["hp"] = 0;
         }
         else if (sample == 3)
         {
@@ -495,16 +618,56 @@ void persistence(const hunter::Cfg& cfg, const Json& base)
         }
         else if (sample == 6)
         {
-            corrupt["entities"][1]["id"] = "1";
+            corrupt["entities"]["2"]["id"] = "1";
         }
         else if (sample == 7)
         {
-            corrupt["entities"][0]["x"] = 2000.5;
+            corrupt["entities"]["1"]["pose"]["x"] = 2000.5;
+        }
+        else if (sample == 8)
+        {
+            corrupt["paused"] = true;
+            corrupt["entities"]["1"]["controls"]["fire"] = true;
+        }
+        else if (sample == 9)
+        {
+            corrupt["v"] = 2;
+        }
+        else if (sample == 10)
+        {
+            corrupt["last_entity_id"] = "1";
+        }
+        else if (sample == 11)
+        {
+            corrupt["player_entity_id"] = "2";
+        }
+        else if (sample == 12)
+        {
+            corrupt["entities"]["2"]["cfg_id"] = "99";
+        }
+        else if (sample == 13)
+        {
+            corrupt["entities"]["2"]["spawn_id"] = "99";
+        }
+        else if (sample == 14)
+        {
+            corrupt["entity_ids"] = Json::array({"1", "1"});
+        }
+        else if (sample == 15)
+        {
+            corrupt["entity_ids"] = Json::array({"1"});
+        }
+        else if (sample == 16)
+        {
+            corrupt["entities"]["2"]["ammo"] = 0;
+        }
+        else if (sample == 17)
+        {
+            corrupt["entities"]["1"]["pending_remove"] = true;
         }
         else
         {
-            corrupt["paused"] = true;
-            corrupt["controls"]["fire"] = true;
+            corrupt["entities"]["1"]["weapon"]["cfg_id"] = "99";
         }
 
         check(!invalid.script.import_state(corrupt.dump()), "corrupt state must be rejected");
@@ -536,6 +699,7 @@ int main(int argc, char** argv)
         cfg.source_path = argv[1];
 #endif
         const auto content = read_content(argv[2]);
+        configs(cfg, content);
         session(cfg, content);
         movement(cfg, content);
         weapons(cfg, content);

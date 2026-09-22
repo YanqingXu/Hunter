@@ -292,7 +292,7 @@ struct Runtime::Loop
                     return;
                 }
 
-                if (!commit(script->event(4, R"({"v":2,"paused":true})")))
+                if (!commit(script->event(4, R"({"v":3,"paused":true})")))
                 {
                     return;
                 }
@@ -314,7 +314,7 @@ struct Runtime::Loop
 
                 if (was_paused)
                 {
-                    if (!commit(script->event(4, R"({"v":2,"paused":false})")))
+                    if (!commit(script->event(4, R"({"v":3,"paused":false})")))
                     {
                         return;
                     }
@@ -362,7 +362,7 @@ struct Runtime::Loop
             instance = random_hex(16);
             token = random_hex(32);
             script = std::make_unique<Script>();
-            const nlohmann::json ctx = {{"v", 2},
+            const nlohmann::json ctx = {{"v", 3},
                 {"snapshot_every", cfg.tick_hz / cfg.snapshot_hz},
                 {"content", nlohmann::json::parse(content::json_text)}};
             auto out = script->open(cfg, ctx.dump());
@@ -408,7 +408,7 @@ struct Runtime::Loop
         evt["port"] = port;
         evt["instance"] = instance;
         evt["token"] = token;
-        evt["protocol_version"] = 2;
+        evt["protocol_version"] = 3;
         evt["content_version"] = content::version;
         emit(std::move(evt));
     }
@@ -419,7 +419,7 @@ struct Runtime::Loop
         if (!authenticated)
         {
             const auto& hello = msg.hello();
-            if (!msg.has_hello() || hello.protocol_version() != 2
+            if (!msg.has_hello() || hello.protocol_version() != 3
                 || hello.content_version() != content::version
                 || hello.instance() != instance || hello.token() != token)
             {
@@ -431,7 +431,7 @@ struct Runtime::Loop
             net->authenticate();
             wire::Envelope reply;
             auto* ack = reply.mutable_hello_ack();
-            ack->set_protocol_version(2);
+            ack->set_protocol_version(3);
             ack->set_content_version(Str(content::version));
             ack->set_instance(instance);
 
@@ -681,7 +681,7 @@ struct Runtime::Loop
                 break;
             }
 
-            nlohmann::json payload = {{"v", 2}};
+            nlohmann::json payload = {{"v", 3}};
             i64 event_id = 1;
 
             if (input->has_input())

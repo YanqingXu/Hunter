@@ -4,7 +4,7 @@
 C# 文件位于 `server/build/win-dev/generated/csharp/`，不手改或提交生成产物。
 
 每个 TCP 帧由四字节大端无符号长度和 Envelope 的 Protobuf 字节组成。长度不能为零，默认
-不超过 64 KiB。只监听回环地址；一个连接对应一个会话。协议版本为 2，内容版本来自导出数据摘要。
+不超过 64 KiB。只监听回环地址；一个连接对应一个会话。协议版本为 3，内容版本来自导出数据摘要。
 客户端先逐项回传 Ready 中的协议版本、内容版本、实例和临时令牌，完成 Hello 后进行本机登录。
 
 | Envelope 字段 | 方向 | 含义 |
@@ -19,7 +19,7 @@ C# 文件位于 `server/build/win-dev/generated/csharp/`，不手改或提交生
 | event = 14 | 服务端 → 客户端 | shot/hit/death/reload/end 一次性战斗事件 |
 | pause = 15 | 服务端 → 客户端 | 暂停状态及已作废输入序号高水位 |
 
-旧计数探针的 Envelope 编号 3、4、5 已保留，v1 客户端在握手时拒绝，不转换为玩法输入。
+旧计数探针的 Envelope 编号 3、4、5 已保留，v1/v2 客户端在握手时拒绝，不转换为玩法输入。
 `FrameInput.value=2`、`InputAck.count=2`、`Snapshot.count=3` 的编号和名称均保留。
 输入 `seq=1,match_id=1,move_x=-1,aim_x=1000`
 的完整帧黄金样例为 `0000000b3a0908011801200128d00f`。
@@ -29,6 +29,12 @@ C# 文件位于 `server/build/win-dev/generated/csharp/`，不手改或提交生
 客户端不能提交权威位置、伤害或命中目标。
 坐标为整数毫米，以脚底中心为实体原点、X 向右、Y 向上；快照速度使用毫米每 Tick。
 玩法以 60 Hz 模拟、20 Hz 发送快照。
+
+`Entity.cfg_id = 16` 是新增的 `uint32` 配置 ID，合法范围为 1～2147483647；
+客户端按 `kind=player` 查询内容 `players[cfg_id]`，按 `kind=enemy` 查询 `monsters[cfg_id]`。
+`Entity.id` 是局内动态身份，不能用来推断出生点或配置；数组顺序也不表示玩家身份。
+没有枪械的怪物继续输出零值 `ammo/reserve/reload_ticks`。其余字段编号、含义及输入黄金帧不变。
+协议客户端 JSON 的 `cfg_id` 和脚本桥接一样使用十进制字符串，C# 生成字段为 `uint`。
 
 移动与开火保持到下一条输入改变；跳跃／换弹按每次输入的按下事件处理。
 同 Tick 移动／瞄准取最后输入，跳跃／换弹和短按开火锁存一次，仍由落地、冷却和弹药限制。
@@ -45,5 +51,6 @@ Unauthenticated/Lobby/Playing/Dead/Cleared。Dead/Cleared 允许重开。
 断连或致命框架错误中止当前会话，需重新启动服务进程；没有账号注册、远程登录或断线续局。
 
 网络使用 Protobuf，进程内 Luax 桥接使用 `server/lua/contract.json` 的严格 JSON schema。
-桥接版本为 2，所有 ID、Tick、序号使用规范十进制字符串，完整 uint64 不经浮点转换。
+桥接版本为 3，所有 ID、Tick、序号使用规范十进制字符串，完整 uint64 不经浮点转换。
+内部世界状态也升级为 v3，但组件结构不等于网络快照；旧内部快照拒绝导入，不提供迁移。
 C++/脚本契约测试覆盖这些边界，生成 C# 类型不等于已完成 Unity 联调。

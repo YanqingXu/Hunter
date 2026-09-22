@@ -35,10 +35,15 @@ verification: ["hunter_assemble_contract", "hunter_script_contract", "tools:hunt
 `export_state()`、`import_state(snapshot_json)`、`validate_state()`、`shutdown(reason)`。
 除导出返回 JSON 字符串外均返回 `true`；失败抛出脚本错误。
 
-初始化上下文为 `{v:2,snapshot_every:3,content:共享配置}`；内容在会话中只读。
+初始化上下文为 `{v:3,snapshot_every:3,content:共享配置}`；内容 v2 在会话中只读。
 事件 1～4 分别处理动作、登录、开局和宿主暂停；字段以 SRV-009 和脚本契约为准。
 每 `snapshot_every` Tick 输出权威快照，开局和终态立即补充快照。
 内部导出状态还包括动作锁存、冷却、AI、请求去重与分配器；导入先完整验证再替换。
+内部状态 v3 独立描述实体组件、ID 字典和遍历索引，不引用网络字段作为内部 schema。
+校验实体 ID 唯一性、索引完整性、配置/出生引用、玩家引用、分配高水位及阶段关系。
+实体引用不保存对象别名；旧 v2 快照明确拒绝，无状态迁移。网络投影由 snapshot 模块完成。
+Hunter 契约、上下文、输入、输出和状态版本分别检查；本轮均升级为 3，清单仍为 1。
+签名 identity 从更新后的契约重新派生，不修改固定 Luax 的兼容版本常量。
 宿主提供只读 `net.emit(kind,payload_json)`、`cfg.get()`、`diagnostics.log(message)`。
 
 ## 失败、取消与退出
