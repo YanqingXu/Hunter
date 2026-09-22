@@ -3,3 +3,4 @@
 /server/CMakeUserPresets.json
 __pycache__/
 *.pyc
+/export/导出结果.log
