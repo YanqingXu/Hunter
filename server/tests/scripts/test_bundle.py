@@ -36,6 +36,8 @@ class BundleContract(unittest.TestCase):
         cls.policy = cls.root / "policy.json"
         cls.artifact = cls.root / "game.luxb"
         cls.entities = cls.root / "entities.luxb"
+        cls.old_policy = cls.root / "host-v3.json"
+        cls.old_artifact = cls.root / "host-v3.luxb"
         cls.seed.write_bytes(SEED)
         cls.pub.write_bytes(PUBLIC)
         cls.doc = bundle.write_policy(OPTIONS.luax_root, cls.pub, cls.policy)
@@ -43,11 +45,19 @@ class BundleContract(unittest.TestCase):
                      cls.policy, cls.seed, cls.artifact)
         bundle.build(OPTIONS.luaxc, OPTIONS.bundle_tool, OPTIONS.entity_source,
                      cls.policy, cls.seed, cls.entities)
+        evidence = json.loads(cls.policy.with_suffix(".provenance.json").read_text("utf-8"))
+        old = json.loads(cls.policy.read_text("utf-8"))
+        for name in bundle.KEYS[5:]:
+            evidence[name]["contract_version"] = 3
+            old["identities"][name] = bundle.digest({"identity": name, "source": evidence[name]})
+        cls.old_policy.write_text(json.dumps(old), encoding="utf-8")
+        bundle.build(OPTIONS.luaxc, OPTIONS.bundle_tool, OPTIONS.source,
+                     cls.old_policy, cls.seed, cls.old_artifact)
 
     # 保留可供后续 Runtime 测试消费的已签名样本，删除临时中间目录。
     @classmethod
     def tearDownClass(cls):
-        paths = (cls.artifact, cls.entities, cls.policy, cls.pub,
+        paths = (cls.artifact, cls.entities, cls.policy, cls.pub, cls.old_policy, cls.old_artifact,
                  cls.policy.with_suffix(".provenance.json"))
         files = [(OPTIONS.output_dir / path.name, path.read_bytes()) for path in paths]
         publish.publish_files(files)
@@ -77,6 +87,12 @@ class BundleContract(unittest.TestCase):
             path.write_text(json.dumps(doc), encoding="utf-8")
             with self.subTest(key=key), self.assertRaises(ValueError):
                 bundle.verify(OPTIONS.bundle_tool, self.artifact, path)
+
+    # 旧 Host 身份的一致签名与策略仍有效，但不可混用当前宿主策略。
+    def test_old_host_contract(self):
+        bundle.verify(OPTIONS.bundle_tool, self.old_artifact, self.old_policy)
+        with self.assertRaisesRegex(ValueError, "identity mismatch"):
+            bundle.verify(OPTIONS.bundle_tool, self.old_artifact, self.policy)
 
     # 签名、清单和字节码任一修改均不得通过公钥验证。
     def test_tampering(self):

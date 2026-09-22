@@ -8,15 +8,17 @@ return function(deps)
 
     -- 扣弹并沿当前瞄准方向命中最近目标；同距时墙优先、实体按稳定顺序。
     local function shoot(world, content)
-        local player = world_api.find(world, world.player_entity_id)
+        local player = world_api.find(world, World.get_player_entity_id(world))
         local gun = player.weapon
-        local cfg = content.weapons[gun.cfg_id]
+        local cfg = content.weapons[Weapon.get_cfg_id(gun)]
         local input = player.controls
-        local length = math.sqrt(input.aim_x * input.aim_x + input.aim_y * input.aim_y)
-        local dx = input.aim_x / length
-        local dy = input.aim_y / length
-        local x = player.pose.x
-        local y = player.pose.y + content.players[player.cfg_id].height // 2
+        local aim_x = Player.get_aim_x(input)
+        local aim_y = Player.get_aim_y(input)
+        local length = math.sqrt(aim_x * aim_x + aim_y * aim_y)
+        local dx = aim_x / length
+        local dy = aim_y / length
+        local x = Entity.get_x(player.pose)
+        local y = Entity.get_y(player.pose) + content.players[player.cfg_id].height // 2
         local nearest = cfg.range
         local target = nil
         local blocked = false
@@ -27,12 +29,12 @@ return function(deps)
                 blocked = true
             end
         end
-        for _, id in ipairs(world.entity_ids) do
+        for _, id in ipairs(world_api.ids(world)) do
             local enemy = world_api.find(world, id)
-            if enemy ~= nil and enemy.kind == "monster" and enemy.health.alive then
+            if enemy ~= nil and enemy.kind == "monster" and Unit.get_alive(enemy.health) then
                 local shape = content.monsters[enemy.cfg_id]
                 local distance = combat.ray(x, y, dx, dy, nearest,
-                    enemy.pose.x - shape.width // 2, enemy.pose.y,
+                    Entity.get_x(enemy.pose) - shape.width // 2, Entity.get_y(enemy.pose),
                     shape.width, shape.height)
                 if distance ~= nil and (distance < nearest or (distance == nearest
                     and not blocked and (target == nil or state.newer(target.id, enemy.id)))) then
@@ -42,10 +44,10 @@ return function(deps)
                 end
             end
         end
-        gun.ammo = gun.ammo - 1
-        gun.shot_ticks = cfg.fire_ticks
-        if input.aim_x ~= 0 then
-            player.pose.facing = input.aim_x > 0 and 1 or -1
+        Weapon.set_ammo(gun, Weapon.get_ammo(gun) - 1)
+        Weapon.set_shot_ticks(gun, cfg.fire_ticks)
+        if aim_x ~= 0 then
+            Entity.set_facing(player.pose, aim_x > 0 and 1 or -1)
         end
         local hit_x = integer.create(math.floor(x + dx * nearest + 0.5))
         local hit_y = integer.create(math.floor(y + dy * nearest + 0.5))
@@ -57,32 +59,35 @@ return function(deps)
 
     -- 先完成旧冷却和换弹，再处理当前换弹与射击意图。
     function api.step(world, content)
-        local player = world_api.find(world, world.player_entity_id)
+        local player = world_api.find(world, World.get_player_entity_id(world))
         local gun = player.weapon
-        local cfg = content.weapons[gun.cfg_id]
-        if not player.health.alive then
+        local cfg = content.weapons[Weapon.get_cfg_id(gun)]
+        if not Unit.get_alive(player.health) then
             return
         end
-        if gun.shot_ticks > 0 then
-            gun.shot_ticks = gun.shot_ticks - 1
+        if Weapon.get_shot_ticks(gun) > 0 then
+            Weapon.set_shot_ticks(gun, Weapon.get_shot_ticks(gun) - 1)
         end
-        if gun.reload_ticks > 0 then
-            gun.reload_ticks = gun.reload_ticks - 1
-            if gun.reload_ticks == 0 then
-                local amount = math.min(cfg.magazine - gun.ammo, player.reserve)
-                gun.ammo = gun.ammo + amount
-                player.reserve = player.reserve - amount
+        if Weapon.get_reload_ticks(gun) > 0 then
+            Weapon.set_reload_ticks(gun, Weapon.get_reload_ticks(gun) - 1)
+            if Weapon.get_reload_ticks(gun) == 0 then
+                local amount = math.min(cfg.magazine - Weapon.get_ammo(gun),
+                    Player.get_reserve(player.controls))
+                Weapon.set_ammo(gun, Weapon.get_ammo(gun) + amount)
+                Player.set_reserve(player.controls, Player.get_reserve(player.controls) - amount)
                 world_api.emit(world, "reload", player.id, "0",
-                    player.pose.x, player.pose.y, amount)
+                    Entity.get_x(player.pose), Entity.get_y(player.pose), amount)
             end
         end
-        if player.controls.reload and gun.reload_ticks == 0 and player.reserve > 0
-            and gun.ammo < cfg.magazine then
-            gun.reload_ticks = cfg.reload_ticks
-            world_api.emit(world, "reload", player.id, "0", player.pose.x, player.pose.y, 0)
+        if Player.get_reload(player.controls) and Weapon.get_reload_ticks(gun) == 0
+            and Player.get_reserve(player.controls) > 0 and Weapon.get_ammo(gun) < cfg.magazine then
+            Weapon.set_reload_ticks(gun, cfg.reload_ticks)
+            world_api.emit(world, "reload", player.id, "0",
+                Entity.get_x(player.pose), Entity.get_y(player.pose), 0)
         end
-        if (player.controls.fire or player.controls.fire_once) and gun.reload_ticks == 0
-            and gun.shot_ticks == 0 and gun.ammo > 0 then
+        if (Player.get_fire(player.controls) or Player.get_fire_once(player.controls))
+            and Weapon.get_reload_ticks(gun) == 0 and Weapon.get_shot_ticks(gun) == 0
+            and Weapon.get_ammo(gun) > 0 then
             shoot(world, content)
         end
     end

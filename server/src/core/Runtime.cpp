@@ -292,7 +292,7 @@ struct Runtime::Loop
                     return;
                 }
 
-                if (!commit(script->event(4, R"({"v":3,"paused":true})")))
+                if (!commit(script->event(4, R"({"v":4,"paused":true})")))
                 {
                     return;
                 }
@@ -314,7 +314,7 @@ struct Runtime::Loop
 
                 if (was_paused)
                 {
-                    if (!commit(script->event(4, R"({"v":3,"paused":false})")))
+                    if (!commit(script->event(4, R"({"v":4,"paused":false})")))
                     {
                         return;
                     }
@@ -362,7 +362,7 @@ struct Runtime::Loop
             instance = random_hex(16);
             token = random_hex(32);
             script = std::make_unique<Script>();
-            const nlohmann::json ctx = {{"v", 3},
+            const nlohmann::json ctx = {{"v", 4},
                 {"snapshot_every", cfg.tick_hz / cfg.snapshot_hz},
                 {"content", nlohmann::json::parse(content::json_text)}};
             auto out = script->open(cfg, ctx.dump());
@@ -508,7 +508,7 @@ struct Runtime::Loop
         enqueue(std::move(msg));
     }
 
-    // 只缓存拥有数据的协议命令，在逻辑 Tick 边界进入脚本。
+    // 缓存拥有数据的协议命令，在逻辑 Tick 边界处理输入或低频脚本控制。
     void enqueue(wire::Envelope msg)
     {
         const auto bytes = msg.ByteSizeLong();
@@ -681,21 +681,21 @@ struct Runtime::Loop
                 break;
             }
 
-            nlohmann::json payload = {{"v", 3}};
-            i64 event_id = 1;
-
             if (input->has_input())
             {
                 const auto& cmd = input->input();
                 pending_seqs.erase(cmd.seq());
-                payload.update({{"seq", std::to_string(cmd.seq())},
-                    {"match_id", std::to_string(cmd.match_id())},
-                    {"applied_tick", std::to_string(tick_id + 1)},
-                    {"move_x", cmd.move_x()}, {"aim_x", cmd.aim_x()},
-                    {"aim_y", cmd.aim_y()}, {"jump", cmd.jump()},
-                    {"fire", cmd.fire()}, {"reload", cmd.reload()}});
+                if (!commit(script->input(cmd, tick_id + 1)))
+                {
+                    return;
+                }
+
+                continue;
             }
-            else if (input->has_login_req())
+
+            nlohmann::json payload = {{"v", 4}};
+            i64 event_id = 2;
+            if (input->has_login_req())
             {
                 event_id = 2;
                 payload["req_id"] = input->login_req().req_id();

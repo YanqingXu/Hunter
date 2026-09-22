@@ -3,6 +3,90 @@
 日期：2026-09-22。结果来自本轮实现与审查修复后的本机工作区验证。
 本记录区分实现、实际运行结果和后续平台验收；active intent 不等于完整路线阶段完成。
 
+## 原生对象与小写 Lua 配对（2026-09-22）
+
+本节是 SRV-010 的当前验证结果；后续各节保留为迁移前的历史记录，不代表当前状态归属。
+C++ World 统一保存 Entity、Unit、Player、Monster、Item、Weapon 数据和生命周期；Lua
+保留玩法规则及代际句柄。Host、上下文及内部状态为 v4，网络仍为 v3，内容仍为 v2。
+
+| 命令／检查 | 结果 |
+| --- | --- |
+| `cmake --build --preset win-dev --parallel 8` | 成功，生成原生 schema、七类绑定及开发工具 |
+| `ctest --preset win-dev --output-on-failure` | **15/15 通过，59.31 秒** |
+| `cmake --build --preset win-bundle --parallel 8` | 成功，保持 compiler-free Runtime |
+| `ctest --preset win-bundle --output-on-failure` | **14/14 通过，44.76 秒**；生产链接检查通过 |
+| `hunter_endurance_contract` | 两种 Runtime 各运行默认和 64 实体场景 1,800 Tick，通过 |
+| `test_assemble.py` | 20 项通过；包含文件、模块和依赖引用的小写约束 |
+| 最终原生输入积压暂停回归 | 开发／生产进程套件均补跑通过，31.05／30.15 秒 |
+| 关闭后重开原生会话的补验 | 两种配置重建成功；相关开发 7/7、生产 5/5 通过 |
+
+开发套件生成签名制品后由生产套件消费。开发测试期间另有生产构建并行，测试总时间仅为
+本次运行记录；下方最终性能采样在构建及 CTest 全部结束后单独执行。
+
+新增和保留的实际覆盖：
+
+- 真实 ClassBuilder 注册七类，显式访问组合组件；Lua 修改直接反映到原生序列化和快照。
+  错误类型、只读身份、删除、导入替换、重开后的陈旧句柄均被拒绝；线程及关闭边界受控。
+  同一 Script 关闭后重新打开会得到新的空 World，重新登录／开局／关闭在两种模式均通过。
+- Item 默认集合为空，最多 64 个实例；创建、查找、数量修改、销毁、完整状态往返及
+  非法候选拒绝通过。数量为 1～2147483647，配置 ID 只校验规范十进制及正 int32 范围。
+  实体及 Item 的容量／uint64 ID 耗尽不消费新 ID；局内删除后不复用身份。
+- C++ 独立候选验证完整 v4 状态后才替换，旧 v3 状态拒绝；原有混合怪物、枪械、运动碰撞、
+  输入锁存、伤害、死亡、暂停恢复、终态及重开回归通过。
+- FrameInput 原生锁存并生成 Ack，快照直接从 World 生成，net.event 使用六个标量参数；
+  script_frames 直接校验和编码 Protobuf。正式高频路径不构造／解析 JSON。
+  JSON 适配器仍供低频控制与边界夹具使用，output_json 仅用于诊断和测试。
+- 调用失败丢弃暂存输出并中止会话；新增真实签名夹具验证先暂存合法事件，再由 pcall
+  捕获非法原生事件时，仍不能提交先前事件。快照合并、可靠消息顺序与真实慢读背压保留。
+- 编译时冻结四项 Hunter 契约摘要；合法签名且旧 Host 元数据与旧 policy 互相匹配的制品，
+  仍在进入脚本前以 host_contract_mismatch 拒绝。该夹具复用当前源码，仅改契约元数据，
+  验证宿主的身份检查独立于 Lua 自身的版本断言。
+
+### 性能实测
+
+Windows x64 Release，同一固定 Luax 提交。默认场景为 1 玩家＋2 怪物；64 实体场景复制
+第一种出生配置为 63 个不同 spawn_id，玩家不发送输入，Item 为空。每组 600 Tick，
+统计 Script.tick 加输出校验／Protobuf 编码的合计耗时，不含初始化、登录、开局和状态导出。
+字节数包括四字节帧头，不含 TCP/IP 开销；两种模式均使用实际协议编码，未使用网络模拟计数。
+基线在迁移前采样，使用更宽松的指令／原生工作和截止时间预算；最终样本使用默认 Cfg，
+因此这是本机同场景的参考比较，不是严格隔离变量的性能结论。
+
+| 场景／模式 | p50（µs） | p95（µs） | 最大（µs） | 帧数 | 编码字节 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 默认，迁移前开发版 | 138.9 | 277.5 | 736.6 | 200 | 26,916 |
+| 默认，当前开发版 | 277.4 | 321.5 | 740.2 | 200 | 26,916 |
+| 默认，当前生产 Bundle | 283.2 | 329.7 | 692.3 | 200 | 26,916 |
+| 64 实体，迁移前开发版 | 4,206.9 | 6,838.2 | 7,722.3 | 200 | 490,558 |
+| 64 实体，当前开发版 | 5,764.1 | 6,273.3 | 8,117.3 | 200 | 490,558 |
+| 64 实体，当前生产 Bundle | 5,684.2 | 6,220.8 | 6,796.7 | 200 | 490,558 |
+
+网络帧数与字节数保持一致。开发版 p50 在默认场景约增加 100%，64 实体约增加 37%；
+原生绑定调用与回收检查点有成本，本轮不宣称性能提升。固定候选的复杂原生属性读取存在
+运行问题，因此使用显式类方法；运动以一次多标量读取／提交减少调用次数，规则仍在 Lua。
+
+另对两场景各跑 6,000 Tick，均完成且状态有效；64 实体 p50 为 9,968.4 µs、p95 为
+10,870.6 µs、最大 28,336.0 µs，不能据此宣称所有 Tick 都在 16.67 ms 内。两场景 Lua
+峰值内存均为 3,660,111 字节（约 3.49 MiB），完成 GC 周期分别为 84／302。原生状态
+迁移后，固定候选自动 GC 缺少表写入检查点，原始实现会耗尽 16 MiB；当前每 Tick 添加
+128 次有界临时表写入推进自动 GC，保留原内存预算，并通过 endurance 契约防止回归。
+6,000 Tick 样本采于最终生产身份校验与注释整理前，玩法及 GC 路径与最终样本相同。
+
+复现最终样本（在 server 目录）：
+
+```powershell
+build/win-dev/Release/hunter_perf.exe build/win-dev/generated/game.lua `
+    build/win-dev/generated/content.json 600
+build/win-bundle/Release/hunter_perf.exe build/win-dev/bundle-test/game.luxb `
+    build/win-bundle/generated/content.json build/win-dev/bundle-test/policy.json 600
+```
+
+日志和原始数据位于忽略的 build 目录：final-dev-build.log、final-dev-tests.log、
+final-bundle-build.log、final-bundle-tests.log、perf-before.jsonl、perf-final-dev.jsonl、
+perf-final-bundle.jsonl、perf-endurance.jsonl。长期运行可将 600 改为 6000。
+补验日志为 final-dev-process.log、final-bundle-process.log 和 reopen-{dev,bundle}-{build,tests}.log。
+性能测量不提供 Android 性能、发热或硬实时保证。Android 探针仅同步 v4 控制上下文，未编译或运行真机。
+本轮未增加背包、掉落、拾取、存档、物品网络消息或 Android 宿主，未修改固定 Luax 源码。
+
 ## 基础对象与 ID 化验证（2026-09-22）
 
 本节记录 SRV-005／009 的最新基础实现增量，以及 SRV-002／004 的 v3 协议和桥接同步。

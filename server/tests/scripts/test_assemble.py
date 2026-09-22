@@ -78,6 +78,34 @@ class AssembleContract(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "cycle"):
             assemble.assemble(path)
 
+    # 脚本文件必须小写，大小写不敏感文件系统也不能掩盖引用错误。
+    def test_lowercase_files(self):
+        with self.assertRaisesRegex(ValueError, "lowercase"):
+            assemble.assemble(self.manifest([
+                {"name": "main", "file": "Main.lua", "deps": []}]))
+        (self.root / "Upper.lua").write_text("return function() return {} end", encoding="utf-8")
+        with self.assertRaises((ValueError, FileNotFoundError)):
+            assemble.assemble(self.manifest([
+                {"name": "main", "file": "upper.lua", "deps": []}]))
+
+    # 未加载的玩法占位文件也须小写，不允许通过遗漏清单绕开检查。
+    def test_unlisted_uppercase_file(self):
+        path = self.manifest()
+        (self.root / "Item.Lua").write_text("return {}", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "lowercase"):
+            assemble.assemble(path)
+
+    # 模块身份和源码依赖引用使用严格一致的小写名字。
+    def test_dependency_case(self):
+        with self.assertRaisesRegex(ValueError, "module name"):
+            assemble.assemble(self.manifest([
+                {"name": "Main", "file": "main.lua", "deps": []}]))
+        path = self.manifest()
+        (self.root / "main.lua").write_text(
+            'return function(deps) return deps["State"] end', encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "dependency reference"):
+            assemble.assemble(path)
+
     # 非规范路径及符号链接逃逸均不可读取清单目录之外的文件。
     def test_path_escape(self):
         for filename in ("../outside.lua", "/outside.lua", "C:/outside.lua", "a/../main.lua"):

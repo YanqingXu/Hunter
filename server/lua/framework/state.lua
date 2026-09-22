@@ -91,5 +91,13 @@ return function(deps)
         return type(value) == "string" and #value >= 1 and #value <= 128
     end
 
+    -- 固定 Luax 候选在表写入时推进自动 GC，原生状态更新需要有界检查点。
+    function api.gc_step()
+        local checkpoint = {}
+        for index = 1, 128 do
+            checkpoint[index] = index
+        end
+    end
+
     return api
 end

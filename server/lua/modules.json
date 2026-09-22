@@ -25,24 +25,19 @@
     {
       "name": "game.entity",
       "file": "game/entity.lua",
-      "deps": [
-        "framework.state"
-      ]
+      "deps": []
     },
     {
       "name": "game.unit",
       "file": "game/unit.lua",
       "deps": [
-        "framework.state",
-        "game.entity",
-        "game.movement"
+        "game.entity"
       ]
     },
     {
       "name": "game.player",
       "file": "game/player.lua",
       "deps": [
-        "framework.state",
         "game.unit"
       ]
     },
@@ -50,7 +45,6 @@
       "name": "game.monster",
       "file": "game/monster.lua",
       "deps": [
-        "framework.state",
         "game.unit"
       ]
     },
@@ -101,8 +95,14 @@
         "game.movement",
         "game.weapon",
         "game.snapshot",
-        "game.ai"
+        "game.ai",
+        "game.item"
       ]
+    },
+    {
+      "name": "game.item",
+      "file": "game/item.lua",
+      "deps": []
     }
   ]
 }

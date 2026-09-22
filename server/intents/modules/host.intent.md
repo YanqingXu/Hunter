@@ -24,17 +24,20 @@ Script 不可复制；所有入口拒绝错误线程与同步重入。普通 tab
 
 ## 接口与值语义
 
-`Script::open/event/tick` 返回拥有字符串的 ScriptOut 数组；export_state 返回 JSON 字符串。
+`Script::open/event/input/tick` 返回持有原生 Protobuf 消息的 ScriptOut 数组；export_state 返回 JSON 字符串。
+input 在 C++ 处理，Lua on_event 仅处理低频控制；stats 在入口边界提供内存和 GC 指标。
 脚本 init/on_event/tick/import_state/validate_state/shutdown 返回 true，export_state 返回 string。
 Host `net.emit(kind,payload)` 接受契约列明的 v3 登录、开局、确认、快照、事件和错误 JSON；
 ID、seq/tick_id 为十进制字符串，
 字段集合、数值范围以 `lua/contract.json` 为权威；构建时生成共享 schema 常量，Script 和
-Protocol 使用同一解码器，拒绝 Ack 零序号、非法实体、有符号范围外 Tick 和多余字段。
+Protocol 使用同一生成的原生字段校验器，拒绝 Ack 零序号、非法实体、有符号范围外 Tick 和多余字段。
 实体投影必须携带 cfg_id 十进制字符串，范围为 1～2147483647，转换为 Protobuf uint32。
 `cfg.get()` 返回初始化上下文的副本；`diagnostics.log()` 缓冲有限诊断。
 拥有线程在入口返回后通过 `take_logs()` 移交日志；宿主再通过有界队列交给输出线程。
 事件类型 event_id 与 Tick ID 使用 Luax integer，超出 i64 范围时明确拒绝。
-输入序号 seq 位于 JSON 中，以十进制字符串覆盖完整 uint64 范围。
+输入序号在高频路径使用原生 uint64；JSON 状态往返仍使用十进制字符串。
+生产玩法只通过标量 `net.event` 和无参数 `net.snapshot` 请求高频输出；`net.emit` 为低频 JSON 适配器。
+七类 ClassBuilder 对象通过显式方法调用；对象权威状态和生命周期由 SRV-010 定义。
 
 异步操作以 instance/op/generation 标识，启动前预留完成槽。跨线程票据只持有 detached 数据与
 有界收件槽，不持有 VM 句柄。唤醒合并；完成、取消、超时只有一个终态，过期完成明确拒绝。
@@ -48,6 +51,7 @@ Runtime，保留最多 4096 字节的错误。重复关闭返回相同终态，�
 关闭 VM 前由拥有者停止异步适配器；取消所有 timer 与 continuation。
 票据在关闭后拒绝新完成，不能复活旧代次。
 生产构建仅加载独立 policy 指定公钥、epoch 和兼容性 identity 的签名 Bundle。
+四项 Hunter 契约摘要还必须匹配编译时常量，旧制品和旧 policy 成对输入同样拒绝。
 
 ## 验证与证据
 

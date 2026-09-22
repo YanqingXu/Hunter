@@ -15,14 +15,14 @@ verification: ["hunter_game_contract", "hunter_entity_contract", "hunter_content
 
 ## 不变量
 
-Luax 独占世界、玩家、局次及战斗状态；C++ 只维护传输、队列和协议缓存。
+C++ 独占世界、玩家、局次及战斗数据；Lua 通过代际句柄执行玩法规则。
 输入不能携带权威位置、伤害或命中目标。游戏固定 60 Hz，快照 20 Hz。
 地图与数值唯一来源为 design，经 export 校验生成双方可使用的数据及内容摘要。
 脚本输出整批校验成功才提交，普通业务拒绝不导致脚本故障。
 
 ## 线程与所有权
 
-沿用单逻辑线程与有界队列。登录、开局和输入在调度边界调用同步脚本入口。
+沿用单逻辑线程与有界队列。登录、开局在调度边界调用同步脚本入口，输入在同一边界由 C++ 处理。
 没有活动对局时仍调度命令；只有 Playing 推进局内计时。暂停停止定时调度。
 
 ## 接口与值语义
@@ -31,19 +31,20 @@ Luax 独占世界、玩家、局次及战斗状态；C++ 只维护传输、队�
 阶段为 Unauthenticated、Lobby、Playing、Dead、Cleared。重复登录返回同一玩家。
 开局携带 req_id 与 after_match_id；重复成功请求返回同一局，不重置状态。
 输入序号连接内单调递增，重开不归零；旧局或重复输入不得再次执行。
-JSON 的版本为 3，ID、序号和 Tick 用规范十进制字符串；整数毫米、脚底中心、X右Y上。
-脚本事件编号：1 输入，2 登录，3 开局，4 暂停状态。输入带 applied_tick。
+Host 上下文和状态 JSON 为 v4，网络协议及低频输出投影为 v3。ID 在 JSON 中使用规范十进制字符串。
+脚本事件编号为 2 登录、3 开局、4 暂停；输入的 applied_tick 在 C++ 固定调度边界确定。
 上下文为 v、snapshot_every、content；content 为导出的完整只读配置对象。
 
 ## 基础对象与配置契约
 
-Entity/Unit/Player/Monster 是纯数据构造模块，Weapon/Damage 分别负责枪械与伤害。
+Entity/Unit/Player/Monster/Weapon/Item/World 是原生数据类，各有小写 Lua 配对模块。
+Weapon/Damage 的 Lua 模块负责枪械与伤害规则。
 实体公共字段为 id/kind/cfg_id/pose/pending_remove，单位增加 motion/health。
 玩家独占 player_id/controls/weapon/reserve，怪物独占 spawn_id/ai；怪物不保存枪械字段。
-combat 只保留几何计算，snapshot 负责内部组件到网络字段的投影。
+combat 保留几何计算，C++ 生成网络投影，snapshot.lua 只请求即时快照。
 构造模块不依赖 world/weapon/damage；world 持有实例，weapon/ai 依赖 damage。
 
-world.entities 按 ID 保存唯一实例，entity_ids 保存稳定遍历顺序，player_entity_id 定位玩家。
+C++ World 按槽位和代次管理唯一实例；导出 entities 按 ID 保存数据，entity_ids 保存稳定顺序。
 last_entity_id 是局内分配高水位，ID 不复用；跨阶段引用为 match_id/entity_id。
 spawn 在配置、容量和 ID 校验后才加入世界，最多 64 个实体；失败不消耗 ID。
 remove 只标记怪物，重复或未知目标返回 false；find/resolve 不返回待移除实体。
@@ -55,8 +56,8 @@ flush 在怪物攻击后、终态裁定前清理标记，保留其他实体顺�
 ID 均为规范正十进制字符串，配置和出生 ID 最大 2147483647；不与运行时实体 ID 关联。
 地图保存公共 gravity，玩家配置保存 jump_speed。默认地图及数值不变，多配置由测试验收。
 Entity.cfg_id 使用新增 Protobuf 字段 16（uint32），网络怪物 kind 继续为 enemy。
-旧 v2 协议、内部状态及 v1 内容不迁移；输入、暂停、事件和重开语义保持不变。
-本轮不实现物品、装备、技能、撤离、存档或开发热更新。
+旧网络协议、v3 及以前内部状态和 v1 内容不迁移；输入、暂停、事件和重开语义保持不变。
+本轮 Item 仅提供基础实例和状态往返；不实现物品玩法、装备、技能、撤离、存档或热更新。
 
 ## 失败、取消与退出
 

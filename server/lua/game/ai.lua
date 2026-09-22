@@ -1,4 +1,4 @@
--- 用固定巡逻与近距离追击驱动普通怪，不含随机、跳跃或寻路状态。
+-- Lua 决定巡逻、追击和近战规则，以批量读取的局部标量减少原生调用。
 return function(deps)
     local movement = deps["game.movement"]
     local combat = deps["game.combat"]
@@ -7,86 +7,100 @@ return function(deps)
     local damage = deps["game.damage"]
     local api = {}
 
-    -- 巡逻在端点前缩短步长；区外角色以正常速度逐步返回最近端点。
-    local function patrol_move(enemy, spawn, speed)
-        if enemy.pose.x < spawn.patrol_min then
-            return 1, math.min(speed, spawn.patrol_min - enemy.pose.x)
-        elseif enemy.pose.x > spawn.patrol_max then
-            return -1, math.min(speed, enemy.pose.x - spawn.patrol_max)
+    -- 巡逻在端点前缩短步长，区外对象逐步返回巡逻区间。
+    local function patrol_move(x, facing, spawn, speed)
+        if x < spawn.patrol_min then
+            return 1, math.min(speed, spawn.patrol_min - x)
+        elseif x > spawn.patrol_max then
+            return -1, math.min(speed, x - spawn.patrol_max)
         end
-        local direction = enemy.pose.facing
-        if enemy.pose.x == spawn.patrol_min then
+        local direction = facing
+        if x == spawn.patrol_min then
             direction = 1
-        elseif enemy.pose.x == spawn.patrol_max then
+        elseif x == spawn.patrol_max then
             direction = -1
         end
-        local distance = direction > 0 and spawn.patrol_max - enemy.pose.x
-            or enemy.pose.x - spawn.patrol_min
+        local distance = direction > 0 and spawn.patrol_max - x or x - spawn.patrol_min
         return direction, math.min(speed, distance)
     end
 
-    -- 判断近战距离、竖直相交和墙体遮挡是否同时满足。
-    local function can_attack(enemy, player, content)
-        local cfg = content.monsters[enemy.cfg_id]
-        local player_cfg = content.players[player.cfg_id]
-        return math.abs(player.pose.x - enemy.pose.x) <= cfg.attack_range
-            and player.pose.y < enemy.pose.y + cfg.height
-            and player.pose.y + player_cfg.height > enemy.pose.y
-            and combat.visible(content, enemy.pose.x, enemy.pose.y + cfg.height // 2,
-                player.pose.x, player.pose.y + player_cfg.height // 2)
+    -- 纯标量判定近战距离、竖直相交与墙体遮挡。
+    local function can_attack(x, y, px, py, cfg, player_cfg, content)
+        return math.abs(px - x) <= cfg.attack_range and py < y + cfg.height
+            and py + player_cfg.height > y
+            and combat.visible(content, x, y + cfg.height // 2,
+                px, py + player_cfg.height // 2)
     end
 
-    -- 在稳定实体顺序下决定方向并移动，不提前执行攻击。
+    -- 按稳定实体顺序移动，局部计算结果立即写回原生对象。
     function api.move(world, content)
-        local player = world_api.find(world, world.player_entity_id)
-        for _, id in ipairs(world.entity_ids) do
+        local player = world_api.find(world, World.get_player_entity_id(world))
+        local px, py = Unit.read_motion(player.motion)
+        local player_cfg = content.players[player.cfg_id]
+        for _, id in ipairs(world_api.ids(world)) do
             local enemy = world_api.find(world, id)
-            if enemy ~= nil and enemy.kind == "monster" and enemy.health.alive then
-                local cfg = content.monsters[enemy.cfg_id]
-                local spawn = monster_api.spawn_cfg(content, enemy.spawn_id)
-                local direction = enemy.pose.facing
-                local distance = cfg.speed
-                if enemy.ai.attack_ticks > 0 then
-                    enemy.ai.attack_ticks = enemy.ai.attack_ticks - 1
-                end
-                if can_attack(enemy, player, content) then
-                    enemy.ai.state = "attack"
-                    enemy.pose.facing = player.pose.x >= enemy.pose.x and 1 or -1
-                    direction = 0
-                elseif math.abs(player.pose.x - enemy.pose.x) <= cfg.detect_range
-                    and math.abs(player.pose.y - enemy.pose.y) <= cfg.detect_range then
-                    enemy.ai.state = "chase"
-                    direction = player.pose.x >= enemy.pose.x and 1 or -1
-                else
-                    enemy.ai.state = "patrol"
-                    direction, distance = patrol_move(enemy, spawn, cfg.speed)
-                end
-                if direction ~= 0 and enemy.motion.grounded
-                    and not movement.supported(enemy, cfg, content.map,
-                        direction, distance) then
-                    direction = 0
-                    enemy.pose.facing = -enemy.pose.facing
-                end
-                movement.step(enemy, cfg, content, direction, false, distance)
-                if direction ~= 0 and enemy.motion.vx == 0 then
-                    enemy.pose.facing = -direction
+            if enemy ~= nil and enemy.kind == "monster" then
+                local x, y, vx, vy, grounded, facing, alive = Unit.read_motion(enemy.motion)
+                if alive then
+                    local cfg = content.monsters[enemy.cfg_id]
+                    local spawn = monster_api.spawn_cfg(content, enemy.spawn_id)
+                    local direction = facing
+                    local distance = cfg.speed
+                    local attack_ticks = Monster.get_attack_ticks(enemy.ai)
+                    if attack_ticks > 0 then
+                        Monster.set_attack_ticks(enemy.ai, attack_ticks - 1)
+                    end
+                    local state = "patrol"
+                    if can_attack(x, y, px, py, cfg, player_cfg, content) then
+                        state = "attack"
+                        facing = px >= x and 1 or -1
+                        direction = 0
+                    elseif math.abs(px - x) <= cfg.detect_range
+                        and math.abs(py - y) <= cfg.detect_range then
+                        state = "chase"
+                        direction = px >= x and 1 or -1
+                    else
+                        direction, distance = patrol_move(x, facing, spawn, cfg.speed)
+                    end
+                    Monster.set_state(enemy.ai, state)
+                    if direction ~= 0 and grounded and not movement.supported(enemy, cfg,
+                        content.map, direction, distance) then
+                        direction = 0
+                        facing = -facing
+                    end
+                    Entity.set_facing(enemy.pose, facing)
+                    local moved = movement.step(enemy, cfg, content, direction, false, distance)
+                    if direction ~= 0 and moved == 0 then
+                        Entity.set_facing(enemy.pose, -direction)
+                    end
                 end
             end
         end
     end
 
-    -- 玩家射击之后才执行仍然存活的普通怪近战。
+    -- 玩家射击之后才执行仍然存活的怪物近战，玩家死亡后停止后续攻击。
     function api.attack(world, content)
-        local player = world_api.find(world, world.player_entity_id)
-        for _, id in ipairs(world.entity_ids) do
+        local player = world_api.find(world, World.get_player_entity_id(world))
+        if not Unit.get_alive(player.health) then
+            return
+        end
+        local px, py = Unit.read_motion(player.motion)
+        local player_cfg = content.players[player.cfg_id]
+        for _, id in ipairs(world_api.ids(world)) do
             local enemy = world_api.find(world, id)
-            if enemy ~= nil and enemy.kind == "monster" and player.health.alive
-                and enemy.health.alive and enemy.ai.attack_ticks == 0
-                and can_attack(enemy, player, content) then
-                local cfg = content.monsters[enemy.cfg_id]
-                enemy.ai.state = "attack"
-                enemy.ai.attack_ticks = cfg.attack_ticks
-                damage.apply(world, enemy, player, cfg.damage)
+            if enemy ~= nil and enemy.kind == "monster" then
+                local x, y, vx, vy, grounded, facing, alive = Unit.read_motion(enemy.motion)
+                if alive and Monster.get_attack_ticks(enemy.ai) == 0 then
+                    local cfg = content.monsters[enemy.cfg_id]
+                    if can_attack(x, y, px, py, cfg, player_cfg, content) then
+                        Monster.set_state(enemy.ai, "attack")
+                        Monster.set_attack_ticks(enemy.ai, cfg.attack_ticks)
+                        damage.apply(world, enemy, player, cfg.damage)
+                        if not Unit.get_alive(player.health) then
+                            return
+                        end
+                    end
+                end
             end
         end
     end

@@ -3,16 +3,31 @@
 
 #include "common/Types.h"
 #include "core/Cfg.h"
+#include "hunter.pb.h"
 
 #include <expected>
 
 namespace hunter
 {
 
+struct ScriptStats
+{
+    usize live_bytes = 0;
+    usize peak_bytes = 0;
+    u64 gc_cycles = 0;
+};
+
 struct ScriptOut
 {
     Str kind;
-    Str payload;
+    wire::Envelope message;
+    Str error;
+
+    // 接收原生协议输出，消息独占自身数据。
+    explicit ScriptOut(wire::Envelope value);
+
+    // 在低频 JSON 边界立即校验和转换，不保留 JSON 载荷。
+    ScriptOut(Str name, const Str& json);
 };
 
 class Script
@@ -33,8 +48,11 @@ public:
     // 注册只读能力并加载源码或签名 Bundle，成功后调用 init。
     std::expected<Vec<ScriptOut>, Str> open(const Cfg& cfg, const Str& ctx_json);
 
-    // 在 Tick 边界执行一个已校验输入，失败时中止当前会话。
+    // 在 Tick 边界执行低频 JSON 控制，失败时中止当前会话。
     std::expected<Vec<ScriptOut>, Str> event(i64 event_id, const Str& payload_json);
+
+    // 在 Tick 边界原生处理输入及确认，不执行 Lua 或 JSON 编解码。
+    std::expected<Vec<ScriptOut>, Str> input(const wire::FrameInput& input, u64 applied_tick);
 
     // 使用精确整数 Tick 和固定秒数步长推进一次脚本。
     std::expected<Vec<ScriptOut>, Str> tick(u64 tick_id, f64 dt_seconds);
@@ -47,6 +65,9 @@ public:
 
     // 在禁止输出的能力下检查当前状态。
     std::expected<void, Str> validate_state();
+
+    // 在拥有线程的入口边界读取原生内存和回收指标，供验证与诊断使用。
+    std::expected<ScriptStats, Str> stats() const;
 
     // 拥有线程在入口返回后提取日志；其他线程或同步重入返回空集合。
     Vec<Str> take_logs() noexcept;

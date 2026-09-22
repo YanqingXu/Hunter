@@ -2,6 +2,7 @@
 #include "common/Types.h"
 #include "core/Cfg.h"
 #include "script/Script.h"
+#include "script/Schema.h"
 #include "ContentSpec.h"
 
 #include <filesystem>
@@ -127,7 +128,8 @@ void failures(hunter::Cfg cfg)
 // 校验真实 Host 输出事务拒绝正式 schema 的边界违规，并接受极值。
 void output_schema(hunter::Cfg cfg)
 {
-    const Vec<hunter::ScriptOut> bad{
+    struct JsonOut { Str kind; Str payload; };
+    const Vec<JsonOut> bad{
         {"ack", R"({"v":3,"seq":"0","match_id":"1","applied_tick":"1"})"},
         {"ack", R"({"v":3,"seq":"01","match_id":"1","applied_tick":"1"})"},
         {"ack", R"({"v":3,"seq":1,"match_id":"1","applied_tick":"1"})"},
@@ -149,7 +151,7 @@ void output_schema(hunter::Cfg cfg)
         check(!script.tick(1, 0.01), "invalid output terminates the script session");
     }
 
-    const Vec<hunter::ScriptOut> good{
+    const Vec<JsonOut> good{
         {"ack", R"({"v":3,"seq":"18446744073709551615","match_id":"1",)"
             R"("applied_tick":"9223372036854775807"})"},
         {"snapshot", R"({"v":3,"seq":"0","tick_id":"0","match_id":"0","phase":"Lobby",)"
@@ -163,7 +165,9 @@ void output_schema(hunter::Cfg cfg)
         hunter::Script script;
         take(script.open(cfg, "{}"));
         const auto out = take(script.event(1, item.payload));
-        check(out.size() == 1 && out[0].payload == item.payload, "valid schema bounds preserved");
+        check(out.size() == 1
+            && hunter::output_json(out[0]) == nlohmann::json::parse(item.payload),
+            "valid schema bounds preserved");
     }
 
     std::filesystem::remove(cfg.source_path);
@@ -234,6 +238,15 @@ struct TmpFile
 // 通过生产 Runtime 验证授权策略与 Bundle 篡改拒绝，不能只依赖制品 CLI。
 void bundle_failures(hunter::Cfg cfg)
 {
+    auto old_cfg = cfg;
+    const auto dir = std::filesystem::path(cfg.bundle_path).parent_path();
+    old_cfg.bundle_path = (dir / "host-v3.luxb").string();
+    old_cfg.policy_path = (dir / "host-v3.json").string();
+    hunter::Script old_host;
+    const auto rejected = old_host.open(old_cfg, "{}");
+    check(!rejected && rejected.error().find("host_contract_mismatch") != Str::npos,
+        "compiled host rejects a consistently signed old contract and policy pair");
+
     std::ifstream policy_file(cfg.policy_path);
     const auto trusted = nlohmann::json::parse(policy_file);
     TmpFile changed_policy(".json");
@@ -310,27 +323,30 @@ int main(int argc, char** argv)
         cfg.source_path = argv[1];
 #endif
         hunter::Script script;
-        const nlohmann::json ctx = {{"v", 3}, {"snapshot_every", 3},
+        const nlohmann::json ctx = {{"v", 4}, {"snapshot_every", 3},
             {"content", nlohmann::json::parse(hunter::content::json_text)}};
         take(script.open(cfg, ctx.dump()));
         const auto logs = script.take_logs();
         check(!logs.empty(), "script diagnostics are observable after the entry returns");
         check(script.take_logs().empty(), "diagnostic extraction drains the bounded buffer");
-        auto out = take(script.event(2, R"({"v":3,"req_id":"login"})"));
+        auto out = take(script.event(2, R"({"v":4,"req_id":"login"})"));
         check(out.size() == 1 && out[0].kind == "login", "local session login");
-        out = take(script.event(3, R"({"v":3,"req_id":"start","after_match_id":"0"})"));
+        out = take(script.event(3, R"({"v":4,"req_id":"start","after_match_id":"0"})"));
         check(out.size() == 2 && out[0].kind == "start" && out[1].kind == "snapshot",
             "start produces response and initial snapshot");
-        out = take(script.event(1,
-            R"({"v":3,"seq":"1","match_id":"1","applied_tick":"1","move_x":1,)"
-            R"("aim_x":1000,"aim_y":0,"jump":false,"fire":false,"reload":false})"));
+        hunter::wire::FrameInput input;
+        input.set_seq(1);
+        input.set_match_id(1);
+        input.set_move_x(1);
+        input.set_aim_x(1000);
+        out = take(script.input(input, 1));
         check(out.size() == 1 && out[0].kind == "ack", "input produces one ack");
-        check(nlohmann::json::parse(out[0].payload)["seq"] == "1", "exact input sequence");
+        check(hunter::output_json(out[0])["seq"] == "1", "exact input sequence");
         take(script.tick(1, 1.0 / 60.0));
         take(script.tick(2, 1.0 / 60.0));
         out = take(script.tick(3, 1.0 / 60.0));
         check(out.size() == 1 && out[0].kind == "snapshot", "snapshot cadence");
-        check(nlohmann::json::parse(out[0].payload)["tick_id"] == "3", "exact Tick ID");
+        check(hunter::output_json(out[0])["tick_id"] == "3", "exact Tick ID");
         auto state = take(script.export_state());
         check(script.validate_state().has_value(), "validate existing state");
         check(script.import_state(state).has_value(), "state roundtrip");
@@ -346,6 +362,14 @@ int main(int argc, char** argv)
         check(script.shutdown("test").has_value(), "normal shutdown releases VM resources");
         check(script.shutdown("test").has_value(), "normal shutdown is idempotent");
         check(!script.tick(5, 0.01), "stopped handle is stale");
+        take(script.open(cfg, ctx.dump()));
+        const auto reopened = nlohmann::json::parse(take(script.export_state()));
+        check(reopened["phase"] == "Unauthenticated" && reopened["tick_id"] == "0"
+            && reopened["entities"].empty() && reopened["items"].empty(),
+            "reopened session owns a fresh native world");
+        take(script.event(2, R"({"v":4,"req_id":"reopen"})"));
+        take(script.event(3, R"({"v":4,"req_id":"start","after_match_id":"0"})"));
+        check(script.shutdown("reopened").has_value(), "reopened native world closes");
 #if !HUNTER_PRODUCTION
         failures(cfg);
         output_schema(cfg);

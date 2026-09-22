@@ -98,13 +98,16 @@ add_custom_command(OUTPUT "${HUNTER_GEN}/SchemaSpec.h"
         --output "${HUNTER_GEN}/SchemaSpec.h"
     DEPENDS lua/contract.json tools/gen_schema.py VERBATIM)
 add_library(hunter_script STATIC src/script/Script.cpp src/script/Async.cpp
+    src/script/Objects.cpp src/game/Value.cpp src/game/Entity.cpp src/game/Unit.cpp
+    src/game/Player.cpp src/game/Monster.cpp src/game/Weapon.cpp src/game/Item.cpp
+    src/game/World.cpp src/game/State.cpp src/game/Snapshot.cpp
     src/script/Schema.cpp "${HUNTER_GEN}/SchemaSpec.h")
 add_dependencies(hunter_script hunter_content)
 hunter_target(hunter_script)
 target_include_directories(hunter_script SYSTEM PUBLIC "${HUNTER_GEN}")
 target_compile_definitions(hunter_script PUBLIC HUNTER_PRODUCTION=$<BOOL:${HUNTER_PRODUCTION}>)
 target_link_libraries(hunter_script PUBLIC hunter_asio nlohmann_json::nlohmann_json
-    Luax::Bind Threads::Threads)
+    Luax::Bind Threads::Threads hunter_protocol)
 if(HUNTER_PRODUCTION)
     target_link_libraries(hunter_script PUBLIC Luax::Runtime)
 else()

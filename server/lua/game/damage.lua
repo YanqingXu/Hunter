@@ -6,29 +6,33 @@ return function(deps)
 
     -- 对仍在世界中的存活目标施加正伤害，死亡仅发生一次。
     function api.apply(world, source, target, damage)
-        if world_api.find(world, source.id) ~= source
-            or world_api.find(world, target.id) ~= target or not source.health.alive
-            or not target.health.alive then
+        assert(Entity.get_id(source.pose) == source.id
+            and Entity.get_id(target.pose) == target.id, "stale identity")
+        if world_api.find(world, source.id) == nil
+            or world_api.find(world, target.id) == nil or not Unit.get_alive(source.health)
+            or not Unit.get_alive(target.health) then
             return
         end
         assert(type(damage) == "integer" and damage > 0, "invalid damage")
         local health = target.health
-        local amount = math.min(damage, health.hp)
-        health.hp = health.hp - amount
-        world_api.emit(world, "hit", source.id, target.id, target.pose.x, target.pose.y, amount)
-        if health.hp == 0 then
-            health.alive = false
-            target.motion.vx = 0
-            target.motion.vy = 0
+        local amount = math.min(damage, Unit.get_hp(health))
+        Unit.set_hp(health, Unit.get_hp(health) - amount)
+        world_api.emit(world, "hit", source.id, target.id,
+            Entity.get_x(target.pose), Entity.get_y(target.pose), amount)
+        if Unit.get_hp(health) == 0 then
+            Unit.set_alive(health, false)
+            Unit.set_vx(target.motion, 0)
+            Unit.set_vy(target.motion, 0)
             if target.kind == "player" then
-                target.weapon.reload_ticks = 0
-                target.weapon.shot_ticks = 0
+                Weapon.set_reload_ticks(target.weapon, 0)
+                Weapon.set_shot_ticks(target.weapon, 0)
                 player_api.clear_input(target)
             else
-                target.ai.state = "dead"
-                target.ai.attack_ticks = 0
+                Monster.set_state(target.ai, "dead")
+                Monster.set_attack_ticks(target.ai, 0)
             end
-            world_api.emit(world, "death", source.id, target.id, target.pose.x, target.pose.y, 0)
+            world_api.emit(world, "death", source.id, target.id,
+                Entity.get_x(target.pose), Entity.get_y(target.pose), 0)
         end
     end
 

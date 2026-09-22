@@ -8,7 +8,7 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 
 from publish import publish_files
 
-NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*\Z")
+NAME = re.compile(r"[a-z_][a-z0-9_]*(?:\.[a-z_][a-z0-9_]*)*\Z")
 ENTRIES = {
     "init": "ctx_json",
     "on_event": "event_id, payload_json",
@@ -24,6 +24,11 @@ ENTRIES = {
 def load_manifest(path):
     path = Path(path).resolve(strict=True)
     root = path.parent
+    for script in root.rglob("*"):
+        if script.is_file() and script.suffix.lower() == ".lua":
+            relative = script.relative_to(root).as_posix()
+            if relative != relative.lower():
+                raise ValueError(f"Lua module path must be lowercase: {relative}")
     doc = json.loads(path.read_text(encoding="utf-8-sig"))
     if not isinstance(doc, dict) or type(doc.get("version")) is not int or doc["version"] != 1:
         raise ValueError("manifest version must be 1")
@@ -38,6 +43,8 @@ def load_manifest(path):
             raise ValueError(f"invalid or duplicate module name: {name}")
         if not isinstance(filename, str) or not filename or "\\" in filename:
             raise ValueError(f"invalid module path: {filename}")
+        if filename != filename.lower():
+            raise ValueError(f"Lua module path must be lowercase: {filename}")
         rel = PurePosixPath(filename)
         win = PureWindowsPath(filename)
         if rel.is_absolute() or win.drive or ".." in rel.parts or rel.suffix != ".lua":
@@ -45,6 +52,11 @@ def load_manifest(path):
         full = (root / filename).resolve(strict=True)
         if not full.is_relative_to(root) or not full.is_file():
             raise ValueError(f"module path escape: {filename}")
+        actual = root
+        for part in rel.parts:
+            if part not in {entry.name for entry in actual.iterdir()}:
+                raise ValueError(f"module path case mismatch: {filename}")
+            actual = actual / part
         if not isinstance(deps, list) or any(not isinstance(dep, str) for dep in deps):
             raise ValueError(f"deps must be module names: {name}")
         if len(set(deps)) != len(deps):
@@ -98,6 +110,9 @@ def assemble(path):
     for name in order:
         item = modules[name]
         text = item["path"].read_text(encoding="utf-8-sig").replace("\r\n", "\n")
+        refs = re.findall(r'''\bdeps\[\s*["']([^"']+)["']\s*\]''', text)
+        if any(ref not in item["deps"] for ref in refs):
+            raise ValueError(f"undeclared or mismatched dependency reference: {name}")
         source = text.splitlines()
         lines += ["do", "    local factory = (function()"]
         start = len(lines) + 1

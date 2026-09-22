@@ -1,5 +1,6 @@
 # 从唯一契约生成闭集输出描述；构建阶段拒绝未知字段、无界容器和无法表示的范围。
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -82,18 +83,18 @@ def validate_node(node, depth=0):
 
 # 校验冻结消息形状并生成唯一原生描述，合法边界改动会直接反映到产物。
 def generate(doc):
-    if not isinstance(doc, dict) or type(doc.get("version")) is not int or doc["version"] != 3:
+    if not isinstance(doc, dict) or type(doc.get("version")) is not int or doc["version"] != 4:
         raise ValueError("unsupported contract version")
     state = doc.get("state")
-    if not isinstance(state, dict) or type(state.get("v")) is not int or state["v"] != 3:
-        raise ValueError("state schema must declare version 3")
+    if not isinstance(state, dict) or type(state.get("v")) is not int or state["v"] != 4:
+        raise ValueError("state schema must declare version 4")
     effect = doc.get("effect")
     if not isinstance(effect, dict) or type(effect.get("v")) is not int or effect["v"] != 3:
         raise ValueError("effect schema must declare version 3")
     host = doc.get("host_api")
     ctx = host.get("ctx") if isinstance(host, dict) else None
-    if not isinstance(ctx, dict) or type(ctx.get("v")) is not int or ctx["v"] != 3:
-        raise ValueError("context schema must declare version 3")
+    if not isinstance(ctx, dict) or type(ctx.get("v")) is not int or ctx["v"] != 4:
+        raise ValueError("context schema must declare version 4")
     input_spec = effect.get("input", {})
     if not isinstance(input_spec, dict) or type(input_spec.get("v")) is not int \
             or input_spec["v"] != 3:
@@ -141,11 +142,68 @@ def generate(doc):
     payload = json.dumps(schemas, sort_keys=True, ensure_ascii=True, separators=(",", ":"))
     return ("// 从 lua/contract.json 生成的闭集输出描述；请修改契约后重新构建。\n"
             "#pragma once\n\n"
-            '#include "common/Types.h"\n\n'
+            '#include "common/Types.h"\n#include "hunter.pb.h"\n\n'
             "namespace hunter::schema\n{\n"
             "inline constexpr i32 version = 3;\n"
             'inline constexpr const char* outputs = R"SCHEMA(' + payload + ')SCHEMA";\n'
-            "}\n")
+            + contract_hashes(doc) + native_checks(schemas) + "}\n")
+
+
+# 与 Bundle 工具使用同一规范摘要，冻结宿主自身可接受的应用契约。
+def contract_hashes(doc):
+    lines = []
+    for name in ("host_api", "capability", "state", "effect"):
+        value = {"identity": name, "source": {
+            "contract_version": doc["version"], "schema": doc[name]}}
+        payload = json.dumps(value, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
+        digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+        lines.append(f'inline constexpr const char* {name}_hash = "{digest}";')
+    return "\n".join(lines) + "\n"
+
+
+# 将冻结的输出字段投影为直接访问 Protobuf 的有界校验代码。
+def native_checks(schemas):
+    mapping = {"ack": "ack", "snapshot": "snapshot", "login": "login_rsp",
+               "start": "start_rsp", "event": "event", "error": "error"}
+    lines = ["// 直接校验原生协议输出，热路径不解析 JSON。",
+             "inline bool valid_output(const wire::Envelope& out)", "{"]
+    for kind, method in mapping.items():
+        lines += [f"    if (out.has_{method}())", "    {",
+                  f"        const auto& msg = out.{method}();"]
+        for field, spec in schemas[kind]["fields"].items():
+            if field == "v":
+                continue
+            if spec["type"] == "array":
+                lines += [f"        if (msg.{field}_size() > {spec['max']})",
+                          "        {", "            return false;", "        }", "",
+                          f"        for (const auto& entity : msg.{field}())", "        {"]
+                for name, node in spec["item"]["fields"].items():
+                    lines += scalar_check(f"entity.{name}()", node, "            ")
+                lines += ["        }"]
+            else:
+                lines += scalar_check(f"msg.{field}()", spec, "        ")
+        lines += ["        return true;", "    }", ""]
+    lines += ["    return false;", "}"]
+    return "\n".join(lines) + "\n"
+
+
+# 为整数、字符串和闭集枚举生成原生条件。
+def scalar_check(expr, spec, indent):
+    kind = spec["type"]
+    checks = []
+    if kind in {"int", "id", "string"}:
+        value = f"{expr}.size()" if kind == "string" else expr
+        suffix = "ULL" if kind == "id" else ""
+        if int(spec["min"]) != 0 or kind == "int":
+            checks.append(f"{value} < {spec['min']}{suffix}")
+        checks.append(f"{value} > {spec['max']}{suffix}")
+    if "values" in spec:
+        values = [json.dumps(v) if isinstance(v, str) else str(v) for v in spec["values"]]
+        checks.append("(" + " && ".join(f"{expr} != {v}" for v in values) + ")")
+    if not checks:
+        return []
+    return [indent + "if (" + " || ".join(checks) + ")", indent + "{",
+            indent + "    return false;", indent + "}", ""]
 
 
 # 完整准备头文件后单次替换，失败保留旧输出并移除本次临时文件。

@@ -769,22 +769,13 @@ def shutdown_results(args, folder):
         srv.cleanup()
 
 
-# 用合法但昂贵的输入验证暂停打断积压，并作废尚未执行的动作。
-def bounded_dispatch(args, folder):
-    event = """if id ~= 1 then return true end
-local item = json.decode(payload)
-local work = 0
-for i = 1, 10000 do
-    work = work + 1
-end
-assert(work == 10000)
-net.emit('ack', json.encode({v=3, seq=item.seq, match_id=item.match_id,
-    applied_tick=item.applied_tick}))
-return true"""
-    srv = Server(args, source=script_fixture(folder, "bounded_dispatch", event=event))
+# 原生输入按 Tick 有界处理，暂停作废尚未执行的积压且恢复后不回放。
+def bounded_dispatch(args):
+    srv = Server(args)
     try:
         srv.start()
         conn = srv.connect()
+        enter_game(conn)
         conn.sendall(b"".join(input_frame(seq, 0) for seq in range(1, 257)))
         assert wait_msg(conn, 8)[1] == 1
         started = time.monotonic()
@@ -801,7 +792,7 @@ return true"""
             if tag == 8:
                 seen.append(body[1])
         assert len(seen) < 256, "one dispatch drained the complete input backlog"
-        assert elapsed < .5, f"pause latency under expensive inputs was {elapsed:.3f}s"
+        assert elapsed < .5, f"pause latency under native input backlog was {elapsed:.3f}s"
         srv.cmd("Resume")
         srv.event("Rsp", "resume")
         conn.sendall(input_frame(257, 0))
@@ -840,11 +831,11 @@ def main():
     client_lifecycle(args)
     host_failures(args)
     numeric_args(args)
+    bounded_dispatch(args)
     if not args.bundle:
         with tempfile.TemporaryDirectory(prefix="hunter-host-contract-") as folder:
             blocked_stderr(args, folder)
             shutdown_results(args, folder)
-            bounded_dispatch(args, folder)
     print("process integration passed: 10 full cycles, framing, auth, pause, limits, "
           "slow TCP reader, pipe cleanup")
 

@@ -1,4 +1,11 @@
 # 注册真实契约、脚本工具与进程集成测试；生产测试使用显式提供的签名制品。
+add_executable(hunter_perf tests/contract/Perf.cpp)
+hunter_target(hunter_perf)
+target_link_libraries(hunter_perf PRIVATE hunter_server_core)
+add_executable(hunter_object_contract tests/contract/ObjectContract.cpp)
+hunter_target(hunter_object_contract)
+target_link_libraries(hunter_object_contract PRIVATE hunter_script)
+add_test(NAME hunter_object_contract COMMAND hunter_object_contract)
 add_executable(hunter_core_contract tests/unit/CoreTest.cpp)
 hunter_target(hunter_core_contract)
 target_link_libraries(hunter_core_contract PRIVATE hunter_server_core)
@@ -46,6 +53,8 @@ if(HUNTER_PRODUCTION)
     add_test(NAME hunter_entity_contract COMMAND hunter_entity_contract
         "${HUNTER_TEST_ENTITY_BUNDLE}" "${HUNTER_GEN}/content.json" "${HUNTER_TEST_POLICY}")
     set(process_args --bundle "${HUNTER_TEST_BUNDLE}" --policy "${HUNTER_TEST_POLICY}")
+    add_test(NAME hunter_endurance_contract COMMAND hunter_perf
+        "${HUNTER_TEST_BUNDLE}" "${HUNTER_GEN}/content.json" "${HUNTER_TEST_POLICY}" 1800)
 else()
     add_test(NAME hunter_script_contract COMMAND hunter_script_contract "${HUNTER_GEN}/game.lua")
     add_test(NAME hunter_game_contract COMMAND hunter_game_contract
@@ -57,7 +66,10 @@ else()
     target_link_libraries(hunter_async_contract PRIVATE hunter_script)
     add_test(NAME hunter_async_contract COMMAND hunter_async_contract)
     set(process_args --source "${HUNTER_GEN}/game.lua")
+    add_test(NAME hunter_endurance_contract COMMAND hunter_perf
+        "${HUNTER_GEN}/game.lua" "${HUNTER_GEN}/content.json" 1800)
 endif()
+set_tests_properties(hunter_endurance_contract PROPERTIES TIMEOUT 90)
 if(TARGET hunter_server_desktop)
     add_test(NAME hunter_process_integration COMMAND ${Python3_EXECUTABLE}
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/process_test.py"

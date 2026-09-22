@@ -5,8 +5,8 @@
 
 当前交付 Windows 基础战斗切片：本机 TCP 鉴权、会话登录、开局、权威跑跳／碰撞、
 射线枪械／换弹、普通怪 AI、死亡与清怪重开，以及暂停恢复、有界背压和资源收尾。
-全部玩法由 Luax 维护；不包含撤离结算、SQLite、热更新、Unity 接入或 Android Service。
-基础对象已拆为 Entity/Unit/Player/Monster 的纯数据构造与 Weapon/Damage 功能模块；
+C++ 持有唯一世界状态和对象生命周期，Luax 编写玩法规则；不包含撤离结算、SQLite、热更新、Unity 接入或 Android Service。
+Entity/Unit/Player/Monster/Item/Weapon/World 各有 C++ 类及同名小写 Lua 模块；
 实体按 ID 管理，玩家输入和枪械状态与怪物 AI 分离，支持不同配置怪物共存。
 默认灰盒数值保持不变；多配置、实体增删及分配边界由真实 Luax 契约验证。
 设计见 [规划](plan.md)，契约见 [intents](intents/README.md)，实际结果见 [验证记录](VERIFICATION.md)。
@@ -65,15 +65,16 @@ Start 成功返回 `type=Ready`，包含 `port/instance/token/protocol_version/c
 客户端连接 `127.0.0.1:<port>`；每帧为四字节大端正文长度加 Protobuf `hunter.wire.Envelope`。
 第一次消息必须为 Hello，逐项回传 Ready 的版本、实例和令牌，5 秒内完成握手。
 正式定义位于根目录 `protobuf/hunter.proto`，不能另建私有协议来源。
-当前协议与桥接为 v3，内容为 v2；快照新增 `cfg_id`，客户端按 `kind/cfg_id` 选择配置。
-旧 v2 客户端握手拒绝，旧 v2 内部世界状态拒绝导入，不提供双版本兼容或状态迁移。
+网络协议保持 v3，Host 契约、上下文和内部状态为 v4，内容为 v2。
+旧协议客户端和旧内部状态拒绝接入／导入，不提供状态迁移；客户端仍按 `kind/cfg_id` 选择配置。
 
-协议为 v2，Hello 后发送 LoginReq，再发送 StartReq 才进入游戏。StartReq 携带上局 ID，
+协议为 v3，Hello 后发送 LoginReq，再发送 StartReq 才进入游戏。StartReq 携带上局 ID，
 首局为 0；重复请求不重置活动世界。清怪或死亡后可在同一连接重开。旧计数协议不再提供。
 FrameInput 携带局 ID、连接内单调的非零 uint64 序号、左右／停止、二维瞄准、跳跃、开火和换弹。
 InputAck 仅确认操作已处理；命中、伤害和死亡以事件与快照为准，客户端不提交这些结果。
 60 Hz 固定模拟、20 Hz 快照；整数毫米坐标，脚底中心，X 向右、Y 向上。
-JSON 桥接和测试客户端中的 ID、序号与 Tick 使用十进制字符串。
+高频输入、确认、事件和快照在 C++ 直接处理；Lua 不编解码这些消息的 JSON。
+低频 JSON 和测试客户端中的 ID、序号与 Tick 使用十进制字符串。
 
 当前只接纳首个 TCP 客户端；额外连接关闭。首次客户端无效握手、超限输入、断连或脚本错误
 都会终止当前会话并关闭监听；需要新进程和新实例重新开始。

@@ -9,131 +9,89 @@ return function(deps)
     local api = {}
     local world = nil
     local content = nil
-    local snapshot_every = 3
 
     -- 发送统一业务拒绝，不把正常操作错误升级为脚本故障。
     local function reject(code, req_id, seq)
         net.emit("error", json.encode({v = 3, code = code, detail = "",
-            req_id = req_id or "", seq = seq or "0", match_id = world.match_id}))
+            req_id = req_id or "", seq = seq or "0", match_id = World.get_match_id(world)}))
     end
 
     -- 返回当前局的完整权威快照。
     local function snapshot()
-        net.emit("snapshot", json.encode(snapshot_api.make(world)))
+        snapshot_api.emit()
     end
 
     -- 本机令牌握手后显式建立玩家，重复登录保持同一身份和当前局。
     local function login(payload)
-        assert(state.fields(payload, {"v", "req_id"}) and payload.v == 3
+        assert(state.fields(payload, {"v", "req_id"}) and payload.v == 4
             and state.req(payload.req_id), "invalid login contract")
-        if world.phase == "Unauthenticated" then
-            world.player_id = "1"
-            world.phase = "Lobby"
+        if World.get_phase(world) == "Unauthenticated" then
+            World.login(world)
         end
         net.emit("login", json.encode({v = 3, req_id = payload.req_id,
-            player_id = world.player_id, match_id = world.match_id, phase = world.phase}))
+            player_id = World.get_player_id(world), match_id = World.get_match_id(world),
+            phase = World.get_phase(world)}))
     end
 
     -- 只从大厅或终态开局，重复成功请求返回原局而不重置实体。
     local function start(payload)
-        assert(state.fields(payload, {"v", "req_id", "after_match_id"}) and payload.v == 3
+        assert(state.fields(payload, {"v", "req_id", "after_match_id"}) and payload.v == 4
             and state.req(payload.req_id) and state.is_id(payload.after_match_id),
             "invalid start contract")
-        if world.phase == "Unauthenticated" then
+        if World.get_phase(world) == "Unauthenticated" then
             reject("not_logged_in", payload.req_id)
             return
         end
-        local last = world.last_start
-        if payload.req_id == last.req_id then
-            if payload.after_match_id ~= last.after_match_id then
+        if payload.req_id == World.get_last_req(world) then
+            if payload.after_match_id ~= World.get_last_after(world) then
                 reject("request_conflict", payload.req_id)
                 return
             end
-        elseif payload.after_match_id ~= world.match_id then
+        elseif payload.after_match_id ~= World.get_match_id(world) then
             reject("stale_match", payload.req_id)
             return
-        elseif world.phase == "Playing" or world.paused then
+        elseif World.get_phase(world) == "Playing" or World.get_paused(world) then
             reject("invalid_state", payload.req_id)
             return
         else
             world_api.start(world, content, payload)
         end
-        net.emit("start", json.encode({v = 3, req_id = payload.req_id,
-            match_id = world.match_id, phase = world.phase}))
+        local req_id = payload.req_id
+        local match_id = World.get_match_id(world)
+        local phase = World.get_phase(world)
+        net.emit("start", json.encode({v = 3, req_id = req_id,
+            match_id = match_id, phase = phase}))
         snapshot()
     end
 
-    -- 消费连接单调序号并锁存输入意图；真实动作只在下一次 Tick 裁定。
-    local function input(payload)
-        assert(state.fields(payload, {"v", "seq", "match_id", "applied_tick", "move_x",
-            "aim_x", "aim_y", "jump", "fire", "reload"}) and payload.v == 3
-            and state.is_id(payload.seq) and payload.seq ~= "0"
-            and state.is_id(payload.match_id) and state.is_tick(payload.applied_tick)
-            and state.integer(payload.move_x, -1, 1)
-            and state.integer(payload.aim_x, -1000, 1000)
-            and state.integer(payload.aim_y, -1000, 1000)
-            and (payload.aim_x ~= 0 or payload.aim_y ~= 0)
-            and type(payload.jump) == "boolean" and type(payload.fire) == "boolean"
-            and type(payload.reload) == "boolean", "invalid input contract")
-        if not state.newer(payload.seq, world.seq) then
-            reject("stale_input", "", payload.seq)
-            return
-        end
-        world.seq = payload.seq
-        if world.phase == "Unauthenticated" then
-            reject("not_logged_in", "", payload.seq)
-            return
-        elseif payload.match_id ~= world.match_id then
-            reject("stale_match", "", payload.seq)
-            return
-        elseif world.phase ~= "Playing" or world.paused then
-            reject("invalid_state", "", payload.seq)
-            return
-        end
-        assert(payload.applied_tick == state.next_id(world.tick_id), "invalid applied tick")
-        local controls = world_api.find(world, world.player_entity_id).controls
-        controls.move_x = payload.move_x
-        controls.aim_x = payload.aim_x
-        controls.aim_y = payload.aim_y
-        controls.jump = controls.jump or payload.jump
-        controls.fire = payload.fire
-        controls.fire_once = controls.fire_once or payload.fire
-        controls.reload = controls.reload or payload.reload
-        net.emit("ack", json.encode({v = 3, seq = world.seq, match_id = world.match_id,
-            applied_tick = payload.applied_tick}))
-    end
-
-    -- 验证只读上下文并初始化无活动局的纯数据世界。
+    -- 验证只读上下文并取得尚无活动局的原生世界。
     function api.init(ctx_json)
         assert(world == nil, "session already initialized")
         local ctx = json.decode(ctx_json)
-        assert(state.fields(ctx, {"v", "snapshot_every", "content"}) and ctx.v == 3
+        assert(state.fields(ctx, {"v", "snapshot_every", "content"}) and ctx.v == 4
             and state.integer(ctx.snapshot_every, 1, 3600), "invalid context")
         assert(json.encode(ctx) == json.encode(json.decode(cfg.get())), "context mismatch")
         content = ctx.content
         assert(type(content) == "table" and content.v == 2 and content.tick_hz == 60,
             "invalid content")
-        snapshot_every = ctx.snapshot_every
         world = world_api.new(content)
         assert(world_api.valid(world, content), "invalid initial state")
         diagnostics.log("combat session initialized")
         return true
     end
 
-    -- 只分发已鉴权宿主送达的输入、登录、开局与暂停事件。
+    -- 分发已鉴权宿主送达的登录、开局与暂停事件。
     function api.on_event(event_id, payload_json)
         assert(world ~= nil, "session not initialized")
         local payload = json.decode(payload_json)
-        if event_id == 1 then
-            input(payload)
-        elseif event_id == 2 then
+        if event_id == 2 then
             login(payload)
         elseif event_id == 3 then
             start(payload)
         elseif event_id == 4 then
-            assert(state.fields(payload, {"v", "paused"}) and payload.v == 3
+            assert(state.fields(payload, {"v", "paused"}) and payload.v == 4
                 and type(payload.paused) == "boolean", "invalid pause contract")
-            world.paused = payload.paused
+            World.set_paused(world, payload.paused)
             world_api.clear_input(world)
         else
             error("unsupported event")
@@ -148,44 +106,39 @@ return function(deps)
         assert(type(dt_seconds) == "number" and math.abs(dt_seconds - 1.0 / 60.0) < 0.000001,
             "invalid timestep")
         local tick_text = tostring(tick_id)
-        assert(state.newer(tick_text, world.tick_id), "stale tick")
-        world.tick_id = tick_text
-        local previous_phase = world.phase
-        if world.phase == "Playing" and not world.paused then
-            local player = world_api.find(world, world.player_entity_id)
+        assert(tick_text == World.get_tick_id(world), "native tick mismatch")
+        if World.get_phase(world) == "Playing" and not World.get_paused(world) then
+            local player = world_api.find(world, World.get_player_entity_id(world))
             local controls = player.controls
-            movement.step(player, content.players[player.cfg_id], content,
-                controls.move_x, controls.jump)
+            local move_x = Player.get_move_x(controls)
+            local jump = Player.get_jump(controls)
+            movement.step(player, content.players[player.cfg_id], content, move_x, jump)
             ai.move(world, content)
             weapon.step(world, content)
             ai.attack(world, content)
             world_api.flush(world)
             world_api.finish(world)
-            player.controls.jump = false
-            player.controls.fire_once = false
-            player.controls.reload = false
+            Player.set_jump(player.controls, false)
+            Player.set_fire_once(player.controls, false)
+            Player.set_reload(player.controls, false)
         end
-        if world.phase ~= previous_phase or tick_id % snapshot_every == 0 then
-            snapshot()
-        end
+        state.gc_step()
         return true
     end
 
     -- 导出全部权威状态，包含输入边沿、冷却和最近开局幂等记录。
     function api.export_state()
         assert(world_api.valid(world, content), "invalid session state")
-        return json.encode(world)
+        return World.save(world)
     end
 
     -- 完整验证独立候选之后才替换活动世界。
     function api.import_state(snapshot_json)
-        local candidate = json.decode(snapshot_json)
-        assert(world_api.valid(candidate, content), "invalid imported state")
-        world = candidate
+        World.load(world, snapshot_json)
         return true
     end
 
-    -- 检查当前纯数据状态，不发送网络输出。
+    -- 检查当前原生状态，不发送网络输出。
     function api.validate_state()
         assert(world_api.valid(world, content), "invalid session state")
         return true

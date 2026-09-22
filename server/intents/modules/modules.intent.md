@@ -20,14 +20,15 @@ verification: ["hunter_assemble_contract", "hunter_script_contract", "tools:hunt
 - 拒绝重名、缺失依赖、环、绝对路径、父目录路径和符号链接逃逸。无依赖节点按模块名排序，
   入口必须依赖全部传递使用的模块，生成源和行号映射不包含工作区绝对路径。
 - 功能文件返回接收 `deps` 的工厂；入口也返回工厂。模块表不跨 Host；只导出七个函数。
-- 所有可变玩法状态保存在入口持有的单一纯数据表，功能模块不保存第二份状态。
+- C++ World 独占可变玩法状态；脚本模块只持有代际句柄、不可变身份索引及局部计算值。
+- Lua 文件和清单路径必须全小写，并检查文件系统实际路径大小写一致。
 - 序号为规范 uint64 十进制字符串；
   Tick 为非负有符号 64 位整数的精确字符串。导入先完整验证，再替换状态。
 
 ## 线程与所有权
 
-脚本数据只由逻辑线程中的 Isolate 创建、修改和释放。构建工具独立运行，拥有输入字节，
-仅输出构建制品；C++ 搬运 JSON 字符串，不建立权威状态副本。
+逻辑线程独占 C++ World 和 Isolate，World 管理对象的创建和销毁，Lua GC 不拥有原生对象。
+构建工具独立运行并只输出制品；身份视图不复制原生可变状态。
 
 ## 接口与值语义
 
@@ -35,16 +36,18 @@ verification: ["hunter_assemble_contract", "hunter_script_contract", "tools:hunt
 `export_state()`、`import_state(snapshot_json)`、`validate_state()`、`shutdown(reason)`。
 除导出返回 JSON 字符串外均返回 `true`；失败抛出脚本错误。
 
-初始化上下文为 `{v:3,snapshot_every:3,content:共享配置}`；内容 v2 在会话中只读。
-事件 1～4 分别处理动作、登录、开局和宿主暂停；字段以 SRV-009 和脚本契约为准。
+初始化上下文为 `{v:4,snapshot_every:3,content:共享配置}`；内容 v2 在会话中只读。
+低频事件 2～4 处理登录、开局及暂停；动作直接由 C++ input 接口处理，字段以 SRV-009 为准。
 每 `snapshot_every` Tick 输出权威快照，开局和终态立即补充快照。
 内部导出状态还包括动作锁存、冷却、AI、请求去重与分配器；导入先完整验证再替换。
-内部状态 v3 独立描述实体组件、ID 字典和遍历索引，不引用网络字段作为内部 schema。
+内部状态 v4 独立描述实体组件、ID 字典和遍历索引，不引用网络字段作为内部 schema。
 校验实体 ID 唯一性、索引完整性、配置/出生引用、玩家引用、分配高水位及阶段关系。
-实体引用不保存对象别名；旧 v2 快照明确拒绝，无状态迁移。网络投影由 snapshot 模块完成。
-Hunter 契约、上下文、输入、输出和状态版本分别检查；本轮均升级为 3，清单仍为 1。
+导出状态只保存身份和数据；旧状态版本拒绝，无迁移。C++ 负责网络投影，snapshot.lua 只发出请求。
+状态新增至多 64 个 Item 实例及独立 ID 高水位；不包含物品玩法或配置加载。
+Hunter 契约、上下文与内部状态为 v4；网络输出及协议保持 v3，内容 v2，清单 v1。
 签名 identity 从更新后的契约重新派生，不修改固定 Luax 的兼容版本常量。
-宿主提供只读 `net.emit(kind,payload_json)`、`cfg.get()`、`diagnostics.log(message)`。
+生产加载将四项应用摘要与编译时契约核对，旧 Bundle 与旧 policy 也不能成对绕过。
+宿主提供原生对象方法、`net.event`、`net.snapshot`，以及低频 `net.emit`、`cfg.get`、日志接口。
 
 ## 失败、取消与退出
 

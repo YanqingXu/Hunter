@@ -1,12 +1,13 @@
 {
-  "version": 3,
+  "version": 4,
   "host_api": {
     "net.emit": {
       "args": [
         "string kind",
         "string payload_json"
       ],
-      "returns": "boolean"
+      "returns": "boolean",
+      "usage": "cold JSON adapter only; deployed high-frequency paths use native input, net.event and net.snapshot"
     },
     "cfg.get": {
       "args": [],
@@ -41,10 +42,190 @@
     },
     "entry_returns": "boolean true except export_state returns string",
     "ctx": {
-      "v": 3,
+      "v": 4,
       "snapshot_every": "integer [1,3600]",
       "content": "validated exported content object"
-    }
+    },
+    "net.event": {
+      "args": [
+        "string kind",
+        "string actor_id",
+        "string target_id",
+        "integer x",
+        "integer y",
+        "integer amount"
+      ],
+      "returns": "boolean"
+    },
+    "net.snapshot": {
+      "args": [],
+      "returns": "boolean"
+    },
+    "classes": {
+      "Entity": {
+        "script": "game/entity.lua",
+        "members": {
+          "get_id": "Str get_id() const",
+          "get_kind": "Str get_kind() const",
+          "get_cfg_id": "Str get_cfg_id() const",
+          "get_x": "i64 get_x() const",
+          "set_x": "void set_x(i64 value)",
+          "get_y": "i64 get_y() const",
+          "set_y": "void set_y(i64 value)",
+          "get_facing": "i64 get_facing() const",
+          "set_facing": "void set_facing(i64 value)",
+          "get_pending_remove": "bool get_pending_remove() const"
+        },
+        "ownership": "World",
+        "handle": "type + slot + generation + owner + module epoch + capability",
+        "access": "explicit class methods; no userdata property access",
+        "factory": {
+          "find": "(string id) -> Entity handle"
+        }
+      },
+      "Unit": {
+        "script": "game/unit.lua",
+        "members": {
+          "read_motion": "std::tuple<i64, i64, i64, i64, bool, i64, bool, bool> read_motion() const",
+          "write_motion": "void write_motion(i64 x, i64 y, i64 vx, i64 vy, bool grounded, i64 facing)",
+          "get_vx": "i64 get_vx() const",
+          "set_vx": "void set_vx(i64 value)",
+          "get_vy": "i64 get_vy() const",
+          "set_vy": "void set_vy(i64 value)",
+          "get_grounded": "bool get_grounded() const",
+          "set_grounded": "void set_grounded(bool value)",
+          "get_hp": "i64 get_hp() const",
+          "set_hp": "void set_hp(i64 value)",
+          "get_max_hp": "i64 get_max_hp() const",
+          "get_alive": "bool get_alive() const",
+          "set_alive": "void set_alive(bool value)"
+        },
+        "ownership": "World",
+        "handle": "type + slot + generation + owner + module epoch + capability",
+        "access": "explicit class methods; no userdata property access",
+        "factory": {
+          "find": "(string id) -> Unit handle"
+        }
+      },
+      "Player": {
+        "script": "game/player.lua",
+        "members": {
+          "get_player_id": "Str get_player_id() const",
+          "get_reserve": "i64 get_reserve() const",
+          "set_reserve": "void set_reserve(i64 value)",
+          "get_move_x": "i64 get_move_x() const",
+          "set_move_x": "void set_move_x(i64 value)",
+          "get_aim_x": "i64 get_aim_x() const",
+          "set_aim_x": "void set_aim_x(i64 value)",
+          "get_aim_y": "i64 get_aim_y() const",
+          "set_aim_y": "void set_aim_y(i64 value)",
+          "get_jump": "bool get_jump() const",
+          "set_jump": "void set_jump(bool value)",
+          "get_fire": "bool get_fire() const",
+          "set_fire": "void set_fire(bool value)",
+          "get_fire_once": "bool get_fire_once() const",
+          "set_fire_once": "void set_fire_once(bool value)",
+          "get_reload": "bool get_reload() const",
+          "set_reload": "void set_reload(bool value)"
+        },
+        "ownership": "World",
+        "handle": "type + slot + generation + owner + module epoch + capability",
+        "access": "explicit class methods; no userdata property access",
+        "factory": {
+          "find": "(string id) -> Player handle"
+        }
+      },
+      "Monster": {
+        "script": "game/monster.lua",
+        "members": {
+          "get_spawn_id": "Str get_spawn_id() const",
+          "get_state": "Str get_state() const",
+          "set_state": "void set_state(Str value)",
+          "get_attack_ticks": "i64 get_attack_ticks() const",
+          "set_attack_ticks": "void set_attack_ticks(i64 value)"
+        },
+        "ownership": "World",
+        "handle": "type + slot + generation + owner + module epoch + capability",
+        "access": "explicit class methods; no userdata property access",
+        "factory": {
+          "find": "(string id) -> Monster handle"
+        }
+      },
+      "Item": {
+        "script": "game/item.lua",
+        "members": {
+          "get_id": "Str get_id() const",
+          "get_cfg_id": "Str get_cfg_id() const",
+          "get_count": "i64 get_count() const",
+          "set_count": "void set_count(i64 value)"
+        },
+        "ownership": "World",
+        "handle": "type + slot + generation + owner + module epoch + capability",
+        "access": "explicit class methods; no userdata property access",
+        "factory": {
+          "find": "(string id) -> Item handle",
+          "new": "(string cfg_id, integer count) -> Item handle"
+        }
+      },
+      "Weapon": {
+        "script": "game/weapon.lua",
+        "members": {
+          "get_cfg_id": "Str get_cfg_id() const",
+          "get_ammo": "i64 get_ammo() const",
+          "set_ammo": "void set_ammo(i64 value)",
+          "get_shot_ticks": "i64 get_shot_ticks() const",
+          "set_shot_ticks": "void set_shot_ticks(i64 value)",
+          "get_reload_ticks": "i64 get_reload_ticks() const",
+          "set_reload_ticks": "void set_reload_ticks(i64 value)"
+        },
+        "ownership": "World",
+        "handle": "type + slot + generation + owner + module epoch + capability",
+        "access": "explicit class methods; no userdata property access",
+        "factory": {
+          "find": "(string id) -> Weapon handle"
+        }
+      },
+      "World": {
+        "script": "game/world.lua",
+        "members": {
+          "get_tick_id": "Str get_tick_id() const",
+          "get_seq": "Str get_seq() const",
+          "get_match_id": "Str get_match_id() const",
+          "get_player_id": "Str get_player_id() const",
+          "get_player_entity_id": "Str get_player_entity_id() const",
+          "get_last_entity_id": "Str get_last_entity_id() const",
+          "get_last_req": "Str get_last_req() const",
+          "get_last_after": "Str get_last_after() const",
+          "get_revision": "i64 get_revision() const",
+          "get_phase": "Str get_phase() const",
+          "set_phase": "void set_phase(Str value)",
+          "get_paused": "bool get_paused() const",
+          "set_paused": "void set_paused(bool value)",
+          "contains": "bool contains(const Str& id) const",
+          "count": "i64 count() const",
+          "entity_id": "Str entity_id(i64 index) const",
+          "login": "void login()",
+          "begin": "void begin(const Str& req, const Str& after)",
+          "spawn": "Str spawn(const Str& kind, const Str& spawn_id)",
+          "remove": "bool remove(const Str& id)",
+          "flush": "void flush()",
+          "clear_input": "void clear_input()",
+          "create_item": "Str create_item(const Str& cfg_id, i64 count)",
+          "has_item": "bool has_item(const Str& id) const",
+          "remove_item": "bool remove_item(const Str& id)",
+          "save": "Str save() const",
+          "load": "void load(const Str& text)",
+          "valid": "bool valid() const"
+        },
+        "ownership": "World",
+        "handle": "type + slot + generation + owner + module epoch + capability",
+        "access": "explicit class methods; no userdata property access",
+        "factory": {
+          "current": "() -> World handle"
+        }
+      }
+    },
+    "gc_checkpoint": "bounded 128 temporary table writes per tick; fixed runtime automatic GC safepoints"
   },
   "capability": {
     "namespaces": [
@@ -55,10 +236,19 @@
     "namespace_mutation": false,
     "entry_suspension": false,
     "ordinary_table_crossing": false,
-    "net_commit": "validated successful call output batch"
+    "net_commit": "validated successful call output batch",
+    "classes": [
+      "Entity",
+      "Unit",
+      "Player",
+      "Monster",
+      "Item",
+      "Weapon",
+      "World"
+    ]
   },
   "state": {
-    "v": 3,
+    "v": 4,
     "tick_id": "canonical decimal string [0,9223372036854775807]",
     "seq": "canonical decimal string [0,18446744073709551615]",
     "match_id": "canonical decimal string [0,18446744073709551615]",
@@ -141,7 +331,18 @@
       "Dead requires dead player; Cleared requires live player and no active live monsters; Playing requires live player and active live monsters",
       "inactive phases have empty entities and indices and zero allocator and player entity id",
       "match_id is last_start.after_match_id + 1; existing request and sequence invariants retained"
-    ]
+    ],
+    "items": {
+      "max": 64,
+      "key": "positive canonical uint64 string matching instance id",
+      "fields": {
+        "id": "positive uint64 string <= last_item_id",
+        "cfg_id": "canonical decimal string [1,2147483647]; no item cfg lookup in this increment",
+        "count": "integer [1,2147483647]"
+      }
+    },
+    "last_item_id": "canonical uint64 string; per-match high water, never reused",
+    "owner": "C++ World; Lua retains immutable identity and generation-checked handles only"
   },
   "effect": {
     "v": 3,
@@ -161,7 +362,8 @@
       "aim_y": "integer [-1000,1000]",
       "jump": "boolean",
       "fire": "boolean",
-      "reload": "boolean"
+      "reload": "boolean",
+      "transport": "native Protobuf FrameInput; no JSON or Lua input dispatch"
     },
     "kinds": [
       "ack",
@@ -500,6 +702,7 @@
           }
         }
       }
-    }
+    },
+    "control_version": 4
   }
 }

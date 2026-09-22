@@ -1,6 +1,7 @@
 // 验证玩法协议、无损 ID、嵌套输出 schema 与有界原子发送批次。
 #include "common/Types.h"
 #include "net/Protocol.h"
+#include "script/Schema.h"
 
 #include <iostream>
 #include <stdexcept>
@@ -146,7 +147,7 @@ void outputs(const hunter::Cfg& cfg)
     bad["entities"].erase(64);
     check(hunter::script_frames({{"snapshot", bad.dump()}}, cfg).has_value(),
         "bounded entity array maximum");
-    bad = nlohmann::json::parse(good[2].payload);
+    bad = hunter::output_json(good[2]);
     bad["req_id"] = Str(129, 'x');
     rejects("login", bad, cfg);
     rejects("unknown", ack, cfg);

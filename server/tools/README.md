@@ -15,7 +15,8 @@ py -3 server/tools/assemble.py `
 清单使用 `version:1`、入口模块名 `entry` 和 `modules` 数组。每项包含 `name/file/deps`；
 文件返回 `function(deps)` 工厂，依赖用 `deps["framework.state"]` 访问。
 入口必须传递依赖全部模块。清单顺序不会改变生成源码；相同就绪节点按模块名排序。
-清单不允许重名、依赖环、缺失依赖、目录穿越或链接逃逸。
+清单不允许重名、依赖环、缺失依赖、目录穿越或链接逃逸。模块名和玩法 Lua 路径必须小写；
+校验包含未列入清单的脚本，并拒绝实际路径或源码依赖引用的大小写不一致。独立导表不受影响。
 
 `game.map.json` 记录每段源码的原文件、生成起止行和摘要。原始行号为
 `生成报错行 - generated_start + source_start`；包装层报错不伪造原文件位置。
@@ -23,7 +24,8 @@ py -3 server/tools/assemble.py `
 未列入清单的玩法占位文件不会加载。
 
 构建同时运行 `gen_schema.py --contract server/lua/contract.json --output <构建目录>/SchemaSpec.h`，
-从同一契约生成输出字段集、版本与数值边界。桥接和传输共用生成常量及解码器；不支持的 schema
+从同一契约生成原生 Protobuf 校验、冷路径 JSON 描述与宿主契约摘要；高频路径不解析 JSON。
+桥接和传输共用生成常量；不支持的 schema
 变化会令生成失败，避免静默沿用旧范围。单头文件也在完整落盘后替换，写入失败保留旧文件。
 
 ## 离线生产制品
@@ -62,6 +64,8 @@ Hunter 契约；Runtime 身份包含预算成本模型、标准库和 VM 实现�
 
 生产程序以 `--bundle <game.luxb> --policy <policy.json>` 启动；不提供 policy、签名不符、
 身份不符或 Bundle 损坏都必须失败。测试公钥只用于测试，不能复制成发行公钥。
+宿主还将 policy 的 Host、capability、state、effect 摘要与编译时契约核对，旧 Bundle 和旧
+policy 即使彼此匹配，也不能与当前 v4 Host 混用。网络仍为 v3，内容仍为 v2。
 
 ## 发布失败与恢复边界
 
@@ -95,11 +99,13 @@ py -3 server/tests/scripts/test_schema.py
 py -3 server/tests/scripts/test_bundle.py --luax-root $luaxRoot `
     --luaxc $luaxc --bundle-tool $bundleTool `
     --source server/build/win-dev/generated/game.lua `
+    --entity-source server/build/win-dev/generated/entities.lua `
     --output-dir server/build/win-dev/bundle-test
 ```
 
 Bundle 测试使用与上游一致的 RFC 8032 公共测试向量，seed 只短暂写入指定构建目录后删除。
 保留的 `game.luxb/policy.json/public.key/policy.provenance.json` 可供生产 Runtime 契约测试。
 测试覆盖重复构建、错误公钥、九项身份、代次、签名与载荷篡改、已有制品、编译失败，
-以及密码学签名有效但 Runtime 兼容版本错误的制品。
+以及密码学签名有效但 Runtime 兼容版本错误的制品。另保留 host-v3.luxb/host-v3.json
+作为旧 Host 元数据夹具，生产测试验证旧制品与旧 policy 成对提供时仍被拒绝。
 这些工具测试不替代真实 Runtime 加载、Windows 进程或 Android ARM64 测试。

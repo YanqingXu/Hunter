@@ -2,6 +2,8 @@
 #include "common/Types.h"
 #include "script/Script.h"
 #include "script/Schema.h"
+#include "script/Objects.h"
+#include "SchemaSpec.h"
 
 #include <luax/Runtime.hpp>
 #include <luax/bind/Bind.hpp>
@@ -130,6 +132,16 @@ std::expected<luax::ProductionBundlePolicy, Str> read_policy(const Str& path)
         &compat.language, &compat.hostApi, &compat.capabilities, &compat.stateSchema,
         &compat.effectSchema};
     const auto& ids = obj["identities"];
+    const std::array expected{schema::host_api_hash, schema::capability_hash,
+        schema::state_hash, schema::effect_hash};
+
+    for (usize index = 0; index < expected.size(); ++index)
+    {
+        if (!ids.contains(names[index + 5]) || ids[names[index + 5]] != expected[index])
+        {
+            return std::unexpected("host_contract_mismatch: " + Str(names[index + 5]));
+        }
+    }
 
     for (usize index = 0; index < names.size(); ++index)
     {
@@ -150,6 +162,8 @@ struct Script::Impl
 {
     const std::thread::id owner = std::this_thread::get_id();
     Cfg cfg;
+    World world;
+    u64 snapshot_every = 3;
     UPtr<luax::Runtime> runtime;
     luax::Isolate isolate;
     luax::ModuleHandle module;
@@ -201,6 +215,24 @@ struct Script::Impl
     // 入口失败后丢弃输出，防止继续操作已经部分更新的状态。
     Str fail(Str error)
     {
+        if (error.find("memory") != Str::npos && isolate.valid())
+        {
+            const auto metrics = isolate.metricsSnapshot();
+            if (metrics)
+            {
+                const auto& memory = metrics->memory.generation;
+                error += " live=" + std::to_string(memory.liveBytes)
+                    + " peak=" + std::to_string(memory.peakBytes)
+                    + " rejected=" + std::to_string(memory.lastRejectedRequestBytes)
+                    + " gc=" + std::to_string(metrics->gc.completedCycles);
+                for (const auto& category : memory.categories)
+                {
+                    error += " " + Str(luax::memoryCategoryName(category.category)) + "="
+                        + std::to_string(category.liveBytes);
+                }
+            }
+        }
+
         pending.clear();
         output_bytes = 0;
         alive = false;
@@ -208,50 +240,98 @@ struct Script::Impl
         return error.substr(0, 4096);
     }
 
-    // 注册拥有数据的同步函数，命名空间由 Luax 保证不可改写。
+    // 对原生输出计费并暂存，外部副作用只能在入口成功后提交。
+    luax::Result<luax::HostStep> stage(luax::HostCallContext& ctx, ScriptOut out)
+    {
+        const auto bytes = out.message.ByteSizeLong();
+        if (!allow_output || !validate_output(out, cfg.max_frame_bytes)
+            || pending.size() >= cfg.max_outputs || bytes > cfg.max_output_bytes - output_bytes)
+        {
+            host_fault = "output_rejected";
+            return std::unexpected(host_error(host_fault));
+        }
+
+        auto work = ctx.consumeNativeWork(bytes);
+        auto charge = ctx.consumeEffectBytes(bytes);
+        if (!work || !charge)
+        {
+            host_fault = "output_budget_exhausted";
+            return std::unexpected(host_error(host_fault));
+        }
+
+        output_bytes += bytes;
+        pending.push_back(std::move(out));
+        return luax::HostStep::completed({luax::OwnedValue::boolean(true)});
+    }
+
+    // 注册有界网络请求及原生对象，命名空间不允许脚本改写。
     luax::Status register_hosts()
     {
+        auto result = register_objects(world, isolate, module);
+        if (!result)
+        {
+            return result;
+        }
+
         luax::HostNamespace net("net");
         net.add(luax::HostNamespaceEntry::function("emit", luax::HostFunction(
             [this](luax::HostCallContext& ctx,
                 std::span<const luax::ValueView> args) -> luax::Result<luax::HostStep>
             {
-                if (args.size() != 2 || !args[0].stringIf() || !args[1].stringIf())
+                if (args.size() != 2 || !args[0].stringIf() || !args[1].stringIf()
+                    || args[1].stringIf()->size() > cfg.max_json_bytes)
                 {
                     host_fault = "invalid_emit_arguments";
                     return std::unexpected(host_error(host_fault));
                 }
 
-                const auto& kind = *args[0].stringIf();
-                const auto& payload = *args[1].stringIf();
-                const usize bytes = kind.size() + payload.size();
-                if (!allow_output || kind.empty() || kind.size() > 32 ||
-                    payload.size() > cfg.max_json_bytes || pending.size() >= cfg.max_outputs ||
-                    bytes > cfg.max_output_bytes - output_bytes)
-                {
-                    host_fault = "output_rejected";
-                    return std::unexpected(host_error("output_rejected"));
-                }
-
-                auto work = ctx.consumeNativeWork(bytes);
+                auto work = ctx.consumeNativeWork(args[0].stringIf()->size()
+                    + args[1].stringIf()->size());
                 if (!work)
                 {
                     host_fault = "native_work_exhausted";
                     return std::unexpected(work.error());
                 }
 
-                auto charge = ctx.consumeEffectBytes(bytes);
-                if (!charge)
+                return stage(ctx, ScriptOut(Str(*args[0].stringIf()), Str(*args[1].stringIf())));
+            })));
+        net.add(luax::HostNamespaceEntry::function("event", luax::HostFunction(
+            [this](luax::HostCallContext& ctx,
+                std::span<const luax::ValueView> args) -> luax::Result<luax::HostStep>
+            {
+                if (args.size() != 6 || !args[0].stringIf() || !args[1].stringIf()
+                    || !args[2].stringIf() || !args[3].integerIf() || !args[4].integerIf()
+                    || !args[5].integerIf() || !allow_output)
                 {
-                    host_fault = "output_budget_exhausted";
-                    return std::unexpected(charge.error());
+                    host_fault = "invalid_event_arguments";
+                    return std::unexpected(host_error(host_fault));
                 }
 
-                pending.push_back({Str(kind), Str(payload)});
-                output_bytes += bytes;
-                return luax::HostStep::completed({luax::OwnedValue::boolean(true)});
+                try
+                {
+                    return stage(ctx, ScriptOut(world.event(Str(*args[0].stringIf()),
+                        Str(*args[1].stringIf()), Str(*args[2].stringIf()), *args[3].integerIf(),
+                        *args[4].integerIf(), *args[5].integerIf())));
+                }
+                catch (const std::exception&)
+                {
+                    host_fault = "invalid_event_value";
+                    return std::unexpected(host_error(host_fault));
+                }
             })));
-        auto result = isolate.registerHostNamespace(module, std::move(net));
+        net.add(luax::HostNamespaceEntry::function("snapshot", luax::HostFunction(
+            [this](luax::HostCallContext& ctx,
+                std::span<const luax::ValueView> args) -> luax::Result<luax::HostStep>
+            {
+                if (!args.empty())
+                {
+                    host_fault = "invalid_snapshot_arguments";
+                    return std::unexpected(host_error(host_fault));
+                }
+
+                return stage(ctx, ScriptOut(world.snapshot()));
+            })));
+        result = isolate.registerHostNamespace(module, std::move(net));
         if (!result)
         {
             return result;
@@ -298,6 +378,7 @@ struct Script::Impl
 
         busy = true;
         allow_output = output;
+        world.access.writable = output || name == "import_state" || name == "shutdown";
         pending.clear();
         output_bytes = 0;
         host_fault.clear();
@@ -305,6 +386,7 @@ struct Script::Impl
             std::forward<Args>(args)...);
         busy = false;
         allow_output = false;
+        world.access.writable = false;
 
         if (!result)
         {
@@ -334,7 +416,7 @@ struct Script::Impl
 
         for (const auto& out : pending)
         {
-            const auto decoded = decode_output(out, cfg.max_json_bytes);
+            const auto decoded = validate_output(out, cfg.max_frame_bytes);
             if (!decoded)
             {
                 return std::unexpected(fail(decoded.error()));
@@ -386,6 +468,24 @@ std::expected<Vec<ScriptOut>, Str> Script::open(const Cfg& cfg, const Str& ctx_j
     self.host_fault.clear();
     self.logs.clear();
     self.log_bytes = 0;
+    try
+    {
+        self.world.reset();
+        const auto ctx = nlohmann::json::parse(ctx_json);
+        if (ctx.contains("content"))
+        {
+            require(ctx.at("v") == 4 && ctx.size() == 3, "invalid_context_version");
+            self.snapshot_every = ctx.at("snapshot_every").get<u64>();
+            require(self.snapshot_every >= 1 && self.snapshot_every <= 3600,
+                "invalid_snapshot_frequency");
+            self.world.configure(ctx.at("content"));
+        }
+    }
+    catch (const std::exception& error)
+    {
+        return std::unexpected(self.fail(error.what()));
+    }
+
     luax::RuntimeConfig rt_cfg;
     rt_cfg.maxIsolates = 1;
     rt_cfg.maxModulesPerIsolate = 1;
@@ -507,6 +607,36 @@ std::expected<Vec<ScriptOut>, Str> Script::event(i64 event_id, const Str& payloa
     return impl_->commit(impl_->invoke<bool>("on_event", true, event_id, payload_json));
 }
 
+std::expected<Vec<ScriptOut>, Str> Script::input(const wire::FrameInput& input, u64 applied_tick)
+{
+    auto& self = *impl_;
+    const auto guard = self.enter();
+    if (!guard)
+    {
+        return std::unexpected(guard.error());
+    }
+
+    self.pending.clear();
+    self.world.access.writable = true;
+    try
+    {
+        self.pending.emplace_back(self.world.input(input, applied_tick));
+        self.world.access.writable = false;
+        if (self.cfg.max_outputs == 0
+            || self.pending.front().message.ByteSizeLong() > self.cfg.max_output_bytes)
+        {
+            return std::unexpected(self.fail("output_capacity"));
+        }
+
+        return self.commit(true);
+    }
+    catch (const std::exception& error)
+    {
+        self.world.access.writable = false;
+        return std::unexpected(self.fail(error.what()));
+    }
+}
+
 std::expected<Vec<ScriptOut>, Str> Script::tick(u64 tick_id, f64 dt_seconds)
 {
     auto guard = impl_->enter();
@@ -521,7 +651,35 @@ std::expected<Vec<ScriptOut>, Str> Script::tick(u64 tick_id, f64 dt_seconds)
         return std::unexpected(impl_->fail("invalid_tick_arguments"));
     }
 
-    return impl_->commit(impl_->invoke<bool>("tick", true, static_cast<i64>(tick_id), dt_seconds));
+    auto& self = *impl_;
+    const bool game = !self.world.content.is_null();
+    const auto previous_phase = self.world.phase;
+    if (game)
+    {
+        if (tick_id <= self.world.tick_id || std::abs(dt_seconds - 1.0 / 60.0) > 0.000001)
+        {
+            return std::unexpected(self.fail("invalid_game_tick"));
+        }
+
+        self.world.tick_id = tick_id;
+    }
+
+    auto invoked = self.invoke<bool>("tick", true, static_cast<i64>(tick_id), dt_seconds);
+    if (invoked && *invoked && game
+        && (previous_phase != self.world.phase || tick_id % self.snapshot_every == 0))
+    {
+        ScriptOut snapshot(self.world.snapshot());
+        const auto bytes = snapshot.message.ByteSizeLong();
+        if (self.pending.size() >= self.cfg.max_outputs
+            || bytes > self.cfg.max_output_bytes - self.output_bytes)
+        {
+            return std::unexpected(self.fail("output_capacity"));
+        }
+
+        self.pending.push_back(std::move(snapshot));
+    }
+
+    return self.commit(std::move(invoked));
 }
 
 std::expected<Str, Str> Script::export_state()
@@ -580,6 +738,24 @@ Vec<Str> Script::take_logs() noexcept
     return std::exchange(self.logs, {});
 }
 
+std::expected<ScriptStats, Str> Script::stats() const
+{
+    const auto guard = impl_->enter();
+    if (!guard)
+    {
+        return std::unexpected(guard.error());
+    }
+
+    const auto value = impl_->isolate.metricsSnapshot();
+    if (!value)
+    {
+        return std::unexpected(Str(value.error().message()));
+    }
+
+    return ScriptStats{value->memory.generation.liveBytes, value->memory.generation.peakBytes,
+        value->gc.completedCycles};
+}
+
 std::expected<void, Str> Script::shutdown(const Str& reason)
 {
     auto& self = *impl_;
@@ -609,6 +785,10 @@ std::expected<void, Str> Script::shutdown(const Str& reason)
         }
 
         self.alive = false;
+        self.world.access.alive = false;
+        self.world.actors = {};
+        self.world.items = {};
+        self.world.order.clear();
         self.pending.clear();
         self.funcs.clear();
 

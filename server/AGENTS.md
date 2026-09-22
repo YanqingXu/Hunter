@@ -6,7 +6,8 @@
 构建与运行见 [README.md](README.md)，验证范围见 [VERIFICATION.md](VERIFICATION.md)。
 
 - `.gitkeep` 仅用于保留空目录。
-- `lua/main.lua` 组装会话、世界、移动、枪械、AI 和快照；实体构造与伤害由独立模块承担。
+- `src/game/` 持有唯一权威状态，`lua/main.lua` 组装玩法规则；高频输入和网络投影由 C++ 实现。
+  Entity、Unit、Player、Monster、Item、Weapon、World 与同名小写 Lua 文件配对。
   未列入清单的掉落与结算文件仍是占位；`tests/fixtures` 的实体夹具不属于生产模块清单。
 - `lua/modules.json` 定义正式构建清单，桥接与状态 schema 见 `lua/contract.json`。
 - 不因目录和文件已经存在，就将相应阶段、模块或测试标记为完成。
@@ -37,6 +38,8 @@ Android 工具链与真机、Unity 联调仍待验证，不得将延期内容自
   禁止英文说明句，工具指令保留要求的原文与位置；具体见
   [可读性规则](rules/readability_rules.md) 的 `R-READABILITY-02`、`R-READABILITY-08`、`R-READABILITY-09`。
 - `lua/main.lua` 负责组装和入口分发，玩法放在 `lua/game/`，通用脚本支持放在 `lua/framework/`。
+  Lua 只保留身份视图、代际句柄及局部计算值；通过显式 getter/setter 和批量标量方法访问原生数据。
+  玩法 Lua 文件名及清单路径必须小写，不改动独立导表产物的命名。
 - `tools/` 放服务端专用脚本与制品工具；通用导表继续使用仓库根目录 `export/`。
 - 协议继续使用根目录 `protobuf/`，配置源表使用 `design/`，不建立重复来源。
 - 正式发布面向 Android 随包双进程，Windows 用于开发；Luax 的线程、重入、模块授权和数据边界以规划及固定候选的实际接口为准。

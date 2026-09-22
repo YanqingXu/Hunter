@@ -2,6 +2,7 @@
 #include "common/Types.h"
 #include "core/Cfg.h"
 #include "script/Script.h"
+#include "script/Schema.h"
 
 #include <nlohmann/json.hpp>
 
@@ -67,14 +68,28 @@ struct Game
     Game(const hunter::Cfg& cfg, Json data) : content(std::move(data))
     {
         const auto output = take(script.open(cfg,
-            Json{{"v", 3}, {"snapshot_every", 3}, {"content", content}}.dump()));
+            Json{{"v", 4}, {"snapshot_every", 3}, {"content", content}}.dump()));
         check(output.empty(), "init must not send network output");
     }
 
     // 通过正式事件入口提交有版本的请求。
     Vec<hunter::ScriptOut> event(i64 id, Json payload)
     {
-        payload["v"] = 3;
+        if (id == 1)
+        {
+            hunter::wire::FrameInput input;
+            input.set_seq(std::stoull(payload["seq"].get<Str>()));
+            input.set_match_id(std::stoull(payload["match_id"].get<Str>()));
+            input.set_move_x(payload["move_x"]);
+            input.set_aim_x(payload["aim_x"]);
+            input.set_aim_y(payload["aim_y"]);
+            input.set_jump(payload["jump"]);
+            input.set_fire(payload["fire"]);
+            input.set_reload(payload["reload"]);
+            return take(script.input(input, std::stoull(payload["applied_tick"].get<Str>())));
+        }
+
+        payload["v"] = 4;
         return take(script.event(id, payload.dump()));
     }
 
@@ -135,7 +150,7 @@ Json message(const Vec<hunter::ScriptOut>& output, const Str& kind)
     {
         if (item.kind == kind)
         {
-            return Json::parse(item.payload);
+            return hunter::output_json(item);
         }
     }
 
@@ -149,7 +164,7 @@ usize events(const Vec<hunter::ScriptOut>& output, const Str& kind)
 
     for (const auto& item : output)
     {
-        if (item.kind == "event" && Json::parse(item.payload)["kind"] == kind)
+        if (item.kind == "event" && hunter::output_json(item)["kind"] == kind)
         {
             ++count;
         }
@@ -581,7 +596,8 @@ void persistence(const hunter::Cfg& cfg, const Json& base)
         for (usize item = 0; item < expected.size(); ++item)
         {
             check(expected[item].kind == actual[item].kind
-                && expected[item].payload == actual[item].payload, "restored events match");
+                && expected[item].message.SerializeAsString()
+                    == actual[item].message.SerializeAsString(), "restored events match");
         }
 
         check(first.state() == second.state(), "restored world must replay identically");
