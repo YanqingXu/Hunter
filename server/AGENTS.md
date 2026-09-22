@@ -2,11 +2,11 @@
 
 ## 当前阶段
 
-本目录已实现 Windows 基础框架和两种 Luax 加载路径。设计基线见 [plan.md](plan.md)，
+本目录已实现 Windows 基础框架、基础战斗切片和两种 Luax 加载路径。设计基线见 [plan.md](plan.md)，
 构建与运行见 [README.md](README.md)，验证范围见 [VERIFICATION.md](VERIFICATION.md)。
 
 - `.gitkeep` 仅用于保留空目录。
-- `lua/main.lua` 与清单中的框架模块已实现探针状态；未列入清单的玩法文件仍是占位。
+- `lua/main.lua` 组装会话、世界、移动、战斗和 AI；未列入清单的掉落与结算文件仍是占位。
 - `lua/modules.json` 定义正式构建清单，桥接与状态 schema 见 `lua/contract.json`。
 - 不因目录和文件已经存在，就将相应阶段、模块或测试标记为完成。
 

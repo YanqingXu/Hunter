@@ -11,6 +11,10 @@ add_executable(hunter_script_contract tests/contract/ScriptContract.cpp)
 hunter_target(hunter_script_contract)
 target_link_libraries(hunter_script_contract PRIVATE hunter_script)
 add_dependencies(hunter_script_contract hunter_scripts)
+add_executable(hunter_game_contract tests/contract/GameContract.cpp)
+hunter_target(hunter_game_contract)
+target_link_libraries(hunter_game_contract PRIVATE hunter_script)
+add_dependencies(hunter_game_contract hunter_scripts hunter_content)
 if(HUNTER_PRODUCTION)
     set(HUNTER_TEST_BUNDLE "" CACHE FILEPATH "仅供测试的已签名 Bundle")
     set(HUNTER_TEST_POLICY "" CACHE FILEPATH "仅供测试的 Bundle 公钥和身份策略")
@@ -19,9 +23,13 @@ if(HUNTER_PRODUCTION)
     endif()
     add_test(NAME hunter_script_contract COMMAND hunter_script_contract
         "${HUNTER_TEST_BUNDLE}" "${HUNTER_TEST_POLICY}")
+    add_test(NAME hunter_game_contract COMMAND hunter_game_contract
+        "${HUNTER_TEST_BUNDLE}" "${HUNTER_GEN}/content.json" "${HUNTER_TEST_POLICY}")
     set(process_args --bundle "${HUNTER_TEST_BUNDLE}" --policy "${HUNTER_TEST_POLICY}")
 else()
     add_test(NAME hunter_script_contract COMMAND hunter_script_contract "${HUNTER_GEN}/game.lua")
+    add_test(NAME hunter_game_contract COMMAND hunter_game_contract
+        "${HUNTER_GEN}/game.lua" "${HUNTER_GEN}/content.json")
     add_executable(hunter_async_contract tests/contract/AsyncContract.cpp)
     hunter_target(hunter_async_contract)
     target_link_libraries(hunter_async_contract PRIVATE hunter_script)
@@ -31,7 +39,8 @@ endif()
 if(TARGET hunter_server_desktop)
     add_test(NAME hunter_process_integration COMMAND ${Python3_EXECUTABLE}
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/process_test.py"
-        --exe $<TARGET_FILE:hunter_server_desktop> ${process_args})
+        --exe $<TARGET_FILE:hunter_server_desktop> --client $<TARGET_FILE:hunter_client>
+        ${process_args})
     set_tests_properties(hunter_process_integration PROPERTIES TIMEOUT 150)
     if(HUNTER_PRODUCTION)
         add_test(NAME hunter_production_link_contract COMMAND ${Python3_EXECUTABLE}
@@ -43,6 +52,8 @@ add_test(NAME hunter_assemble_contract COMMAND ${Python3_EXECUTABLE}
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/scripts/test_assemble.py")
 add_test(NAME hunter_schema_contract COMMAND ${Python3_EXECUTABLE}
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/scripts/test_schema.py")
+add_test(NAME hunter_content_contract COMMAND ${Python3_EXECUTABLE}
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/scripts/test_content.py")
 if(HUNTER_BUILD_TOOLS)
     add_test(NAME hunter_bundle_contract COMMAND ${Python3_EXECUTABLE}
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/scripts/test_bundle.py"

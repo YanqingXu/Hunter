@@ -1,66 +1,173 @@
-// 依据 lua/contract.json 生成的常量执行共享输出校验，避免桥接与协议各自解释。
+// 使用构建生成的有限 schema 校验输出，不持有或修改脚本权威世界。
 #include "common/Types.h"
 #include "script/Schema.h"
 #include "SchemaSpec.h"
 
-#include <nlohmann/json.hpp>
-
 #include <charconv>
 #include <limits>
-#include <span>
-#include <string_view>
 
 namespace hunter
 {
 namespace
 {
 
-// 对象必须精确包含契约字段，既不允许遗漏也不允许附加字段。
-bool has_fields(const nlohmann::json& obj, std::span<const std::string_view> fields)
-{
-    if (!obj.is_object() || obj.size() != fields.size())
-    {
-        return false;
-    }
-
-    for (const auto field : fields)
-    {
-        if (!obj.contains(field))
-        {
-            return false;
-        }
-    }
-
-    return true;
-}
-
-// 读取规范十进制并检查领域范围，拒绝符号、前导零和浮点转换。
-std::expected<u64, Str> parse_id(const nlohmann::json& value, u64 min, u64 max)
+// 读取规范十进制 ID，拒绝符号、前导零、浮点及超出契约的整数。
+bool normalize_id(nlohmann::json& value, const nlohmann::json& spec)
 {
     if (!value.is_string())
     {
-        return std::unexpected("output_id_type");
+        return false;
     }
 
     const auto& text = value.get_ref<const Str&>();
     if (text.empty() || (text.size() > 1 && text.front() == '0'))
     {
-        return std::unexpected("output_id_encoding");
+        return false;
     }
 
     u64 id = 0;
     const auto result = std::from_chars(text.data(), text.data() + text.size(), id);
-    if (result.ec != std::errc{} || result.ptr != text.data() + text.size() || id < min || id > max)
+    const auto min = std::stoull(spec.at("min").get<Str>());
+    const auto max = std::stoull(spec.at("max").get<Str>());
+
+    if (result.ec != std::errc{} || result.ptr != text.data() + text.size()
+        || id < min || id > max)
     {
-        return std::unexpected("output_id_range");
+        return false;
     }
 
-    return id;
+    value = id;
+    return true;
+}
+
+// 校验整数边界或有限枚举，禁止无符号溢出与浮点值隐式截断。
+bool valid_int(const nlohmann::json& value, const nlohmann::json& spec)
+{
+    if (!value.is_number_integer() || (value.is_number_unsigned()
+        && value.get<u64>() > static_cast<u64>(std::numeric_limits<i64>::max())))
+    {
+        return false;
+    }
+
+    const auto number = value.get<i64>();
+    if (number < spec.at("min").get<i64>() || number > spec.at("max").get<i64>())
+    {
+        return false;
+    }
+
+    if (spec.contains("values"))
+    {
+        for (const auto& item : spec.at("values"))
+        {
+            if (number == item.get<i64>())
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    return true;
+}
+
+// 校验 UTF-8 字符串的字节限额与有限枚举。
+bool valid_string(const nlohmann::json& value, const nlohmann::json& spec)
+{
+    if (!value.is_string())
+    {
+        return false;
+    }
+
+    const auto& text = value.get_ref<const Str&>();
+    if (text.size() < spec.at("min").get<usize>() || text.size() > spec.at("max").get<usize>())
+    {
+        return false;
+    }
+
+    if (spec.contains("values"))
+    {
+        for (const auto& item : spec.at("values"))
+        {
+            if (text == item.get_ref<const Str&>())
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    return true;
+}
+
+// 遍历已在构建期限定深度和形状的描述；对象精确匹配，数组逐项有界检查。
+bool normalize(nlohmann::json& value, const nlohmann::json& spec)
+{
+    const auto& type = spec.at("type").get_ref<const Str&>();
+    if (type == "id")
+    {
+        return normalize_id(value, spec);
+    }
+
+    if (type == "int")
+    {
+        return valid_int(value, spec);
+    }
+
+    if (type == "string")
+    {
+        return valid_string(value, spec);
+    }
+
+    if (type == "bool")
+    {
+        return value.is_boolean();
+    }
+
+    if (type == "array")
+    {
+        if (!value.is_array() || value.size() > spec.at("max").get<usize>())
+        {
+            return false;
+        }
+
+        for (auto& item : value)
+        {
+            if (!normalize(item, spec.at("item")))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    if (type == "object")
+    {
+        const auto& fields = spec.at("fields");
+        if (!value.is_object() || value.size() != fields.size())
+        {
+            return false;
+        }
+
+        for (auto field = fields.begin(); field != fields.end(); ++field)
+        {
+            if (!value.contains(field.key()) || !normalize(value[field.key()], field.value()))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    return false;
 }
 
 }
 
-std::expected<ScriptMsg, Str> decode_output(const ScriptOut& out, usize max_json_bytes)
+std::expected<nlohmann::json, Str> decode_output(const ScriptOut& out, usize max_json_bytes)
 {
     if (out.payload.size() > max_json_bytes)
     {
@@ -69,59 +176,15 @@ std::expected<ScriptMsg, Str> decode_output(const ScriptOut& out, usize max_json
 
     try
     {
-        const auto obj = nlohmann::json::parse(out.payload, nullptr, false);
-        const bool snapshot = out.kind == "snapshot";
-        if ((out.kind != "ack" && !snapshot) ||
-            !(snapshot ? has_fields(obj, schema::snapshot_fields) :
-                has_fields(obj, schema::ack_fields)))
+        static const auto specs = nlohmann::json::parse(schema::outputs);
+        auto obj = nlohmann::json::parse(out.payload, nullptr, false);
+
+        if (!specs.contains(out.kind) || !normalize(obj, specs.at(out.kind)))
         {
-            return std::unexpected("output_fields");
+            return std::unexpected("output_schema");
         }
 
-        const auto& version = obj["v"];
-        if (!version.is_number_integer() || (version.is_number_unsigned() ?
-            version.get<u64>() != static_cast<u64>(schema::version) :
-            version.get<i64>() != schema::version))
-        {
-            return std::unexpected("output_version");
-        }
-
-        const auto& count = obj["count"];
-        if (!count.is_number_integer() || (count.is_number_unsigned() &&
-            count.get<u64>() > static_cast<u64>(std::numeric_limits<i64>::max())))
-        {
-            return std::unexpected("output_count_range");
-        }
-
-        const i64 count_value = count.get<i64>();
-        if (count_value < schema::min_count || count_value > schema::max_count)
-        {
-            return std::unexpected("output_count_range");
-        }
-
-        auto seq = parse_id(obj["seq"], snapshot ? 0 : schema::min_ack_seq, schema::max_seq);
-        if (!seq)
-        {
-            return std::unexpected(seq.error());
-        }
-
-        ScriptMsg msg;
-        msg.snapshot = snapshot;
-        msg.count = count_value;
-        msg.seq = *seq;
-
-        if (snapshot)
-        {
-            auto tick = parse_id(obj["tick_id"], 0, schema::max_tick);
-            if (!tick)
-            {
-                return std::unexpected(tick.error());
-            }
-
-            msg.tick_id = *tick;
-        }
-
-        return msg;
+        return obj;
     }
     catch (const std::exception&)
     {

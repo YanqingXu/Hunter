@@ -2,6 +2,7 @@
 #include "common/Types.h"
 #include "core/Cfg.h"
 #include "script/Script.h"
+#include "ContentSpec.h"
 
 #include <filesystem>
 #include <chrono>
@@ -67,7 +68,7 @@ Str fixture(const Str& init, const Str& event, const Str& shutdown = "return tru
 void failures(hunter::Cfg cfg)
 {
     cfg.source_path = fixture("return true", "net.emit('ack', "
-        "'{\"v\":1,\"seq\":\"1\",\"count\":1}'); error('failed')");
+        "'{\"v\":2,\"seq\":\"1\",\"match_id\":\"1\",\"applied_tick\":\"1\"}'); error('failed')");
     hunter::Script txn;
     take(txn.open(cfg, "{\"v\":1}"));
     check(!txn.event(1, "{}"), "failed call must discard earlier net.emit");
@@ -90,14 +91,15 @@ void failures(hunter::Cfg cfg)
     check(!table.event(1, "{}"), "table must not cross Host boundary");
 
     cfg.source_path = fixture("return true", "net.emit('ack', "
-        "'{\"v\":1,\"seq\":\"1\",\"count\":1}'); return true");
+        "'{\"v\":2,\"seq\":\"1\",\"match_id\":\"1\",\"applied_tick\":\"1\"}'); return true");
     cfg.max_outputs = 0;
     hunter::Script full;
     take(full.open(cfg, "{}"));
     check(!full.event(1, "{}"), "output reservation must reject saturated call buffer");
 
     cfg.source_path = fixture("return true", "local ok = pcall(function() "
-        "net.emit('ack', '{\"v\":1,\"seq\":\"1\",\"count\":1}') end); return true");
+        "net.emit('ack', '{\"v\":2,\"seq\":\"1\",\"match_id\":\"1\","
+        "\"applied_tick\":\"1\"}') end); return true");
     hunter::Script caught;
     take(caught.open(cfg, "{}"));
     check(!caught.event(1, "{}"), "caught Host rejection still aborts output transaction");
@@ -109,7 +111,7 @@ void failures(hunter::Cfg cfg)
     check(!ctx_probe.event(1, Str(cfg.max_json_bytes + 1, 'x')), "JSON boundary size limit");
 
     cfg.source_path = fixture("return true", "net.emit('ack', "
-        "'{\"v\":1,\"seq\":\"1\",\"count\":1}'); return true");
+        "'{\"v\":2,\"seq\":\"1\",\"match_id\":\"1\",\"applied_tick\":\"1\"}'); return true");
     cfg.native_work_budget = 10;
     hunter::Script native;
     take(native.open(cfg, "{}"));
@@ -126,21 +128,21 @@ void failures(hunter::Cfg cfg)
 void output_schema(hunter::Cfg cfg)
 {
     const Vec<hunter::ScriptOut> bad{
-        {"ack", R"({"v":1,"seq":"0","count":1})"},
-        {"ack", R"({"v":1,"seq":"1","count":1000000001})"},
-        {"ack", R"({"v":1,"seq":"1","count":-1000000001})"},
-        {"ack", R"({"v":1,"seq":"1","count":18446744073709551615})"},
-        {"ack", R"({"v":18446744073709551615,"seq":"1","count":0})"},
-        {"ack", R"({"v":1,"seq":"1","count":0,"extra":0})"},
-        {"ack", R"({"v":1.0,"seq":"1","count":0})"},
-        {"snapshot", R"({"v":1,"seq":"0","tick_id":"9223372036854775808","count":0})"},
-        {"snapshot", R"({"v":1,"seq":"0","tick_id":"0","count":0,"extra":0})"}};
+        {"ack", R"({"v":2,"seq":"0","match_id":"1","applied_tick":"1"})"},
+        {"ack", R"({"v":2,"seq":"01","match_id":"1","applied_tick":"1"})"},
+        {"ack", R"({"v":2,"seq":1,"match_id":"1","applied_tick":"1"})"},
+        {"ack", R"({"v":2,"seq":"1","match_id":"1","applied_tick":"9223372036854775808"})"},
+        {"ack", R"({"v":2,"seq":"1","match_id":"1","applied_tick":"1","extra":0})"},
+        {"ack", R"({"v":2.0,"seq":"1","match_id":"1","applied_tick":"1"})"},
+        {"snapshot", R"({"v":2,"seq":"0","tick_id":"0","match_id":"1","phase":"Playing",)"
+            R"("entities":[{}]})"},
+        {"error", R"({"v":2,"code":"rejected","detail":"","req_id":"","seq":"0"})"}};
 
     for (const auto& item : bad)
     {
         cfg.source_path = fixture("return true",
-            "net.emit('ack', '{\"v\":1,\"seq\":\"1\",\"count\":0}'); net.emit('" +
-            item.kind + "', payload); return true");
+            "net.emit('ack', '{\"v\":2,\"seq\":\"1\",\"match_id\":\"1\","
+            "\"applied_tick\":\"1\"}'); net.emit('" + item.kind + "', payload); return true");
         hunter::Script script;
         take(script.open(cfg, "{}"));
         check(!script.event(1, item.payload), "invalid output aborts the whole script batch");
@@ -148,10 +150,11 @@ void output_schema(hunter::Cfg cfg)
     }
 
     const Vec<hunter::ScriptOut> good{
-        {"ack", R"({"v":1,"seq":"18446744073709551615","count":1000000000})"},
-        {"ack", R"({"v":1,"seq":"1","count":-1000000000})"},
-        {"snapshot", R"({"v":1,"seq":"0","tick_id":"0","count":0})"},
-        {"snapshot", R"({"v":1,"seq":"1","tick_id":"9223372036854775807","count":0})"}};
+        {"ack", R"({"v":2,"seq":"18446744073709551615","match_id":"1",)"
+            R"("applied_tick":"9223372036854775807"})"},
+        {"snapshot", R"({"v":2,"seq":"0","tick_id":"0","match_id":"0","phase":"Lobby",)"
+            R"("entities":[]})"},
+        {"error", R"({"v":2,"code":"paused","detail":"","req_id":"","seq":"0","match_id":"0"})"}};
 
     for (const auto& item : good)
     {
@@ -307,11 +310,20 @@ int main(int argc, char** argv)
         cfg.source_path = argv[1];
 #endif
         hunter::Script script;
-        take(script.open(cfg, "{\"v\":1,\"snapshot_every\":3}"));
+        const nlohmann::json ctx = {{"v", 2}, {"snapshot_every", 3},
+            {"content", nlohmann::json::parse(hunter::content::json_text)}};
+        take(script.open(cfg, ctx.dump()));
         const auto logs = script.take_logs();
         check(!logs.empty(), "script diagnostics are observable after the entry returns");
         check(script.take_logs().empty(), "diagnostic extraction drains the bounded buffer");
-        auto out = take(script.event(1, "{\"v\":1,\"seq\":\"1\",\"value\":1}"));
+        auto out = take(script.event(2, R"({"v":2,"req_id":"login"})"));
+        check(out.size() == 1 && out[0].kind == "login", "local session login");
+        out = take(script.event(3, R"({"v":2,"req_id":"start","after_match_id":"0"})"));
+        check(out.size() == 2 && out[0].kind == "start" && out[1].kind == "snapshot",
+            "start produces response and initial snapshot");
+        out = take(script.event(1,
+            R"({"v":2,"seq":"1","match_id":"1","applied_tick":"1","move_x":1,)"
+            R"("aim_x":1000,"aim_y":0,"jump":false,"fire":false,"reload":false})"));
         check(out.size() == 1 && out[0].kind == "ack", "input produces one ack");
         check(nlohmann::json::parse(out[0].payload)["seq"] == "1", "exact input sequence");
         take(script.tick(1, 1.0 / 60.0));
@@ -325,12 +337,12 @@ int main(int argc, char** argv)
         bool rejected = false;
         std::thread other([&]
         {
-            const auto res = script.tick(4, 0.01);
+            const auto res = script.tick(4, 1.0 / 60.0);
             rejected = !res && res.error().find("wrong_thread") != Str::npos;
         });
         other.join();
         check(rejected, "foreign thread must be rejected before VM access");
-        take(script.tick(4, 0.01));
+        take(script.tick(4, 1.0 / 60.0));
         check(script.shutdown("test").has_value(), "normal shutdown releases VM resources");
         check(script.shutdown("test").has_value(), "normal shutdown is idempotent");
         check(!script.tick(5, 0.01), "stopped handle is stale");

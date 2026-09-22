@@ -5,6 +5,7 @@
 #include "core/TickClock.h"
 #include "net/Transport.h"
 #include "script/Script.h"
+#include "ContentSpec.h"
 
 #include <asio.hpp>
 #include <nlohmann/json.hpp>
@@ -270,6 +271,39 @@ struct Runtime::Loop
                 paused = true;
                 session = "Paused";
                 timer.cancel();
+                discard_through_seq = received_seq;
+
+                while (auto queued = inputs.pop())
+                {
+                    if (queued->has_login_req())
+                    {
+                        reject("paused", queued->login_req().req_id());
+                    }
+                    else if (queued->has_start_req())
+                    {
+                        reject("paused", queued->start_req().req_id());
+                    }
+                }
+
+                pending_seqs.clear();
+
+                if (session == "Aborted" || stopped)
+                {
+                    return;
+                }
+
+                if (!commit(script->event(4, R"({"v":2,"paused":true})")))
+                {
+                    return;
+                }
+
+                notify_pause();
+
+                if (session == "Aborted" || stopped)
+                {
+                    return;
+                }
+
                 emit(rsp("Rsp", req_id));
             }
             else if (cmd == "Resume" && state == "Ready" && session != "Aborted")
@@ -280,8 +314,20 @@ struct Runtime::Loop
 
                 if (was_paused)
                 {
+                    if (!commit(script->event(4, R"({"v":2,"paused":false})")))
+                    {
+                        return;
+                    }
+
                     clock.reset(TickClock::Clock::now());
                     schedule();
+                }
+
+                notify_pause();
+
+                if (session == "Aborted" || stopped)
+                {
+                    return;
                 }
 
                 emit(rsp("Rsp", req_id));
@@ -308,8 +354,7 @@ struct Runtime::Loop
         try
         {
             const auto& cfg = shared.cfg;
-            if (cfg.snapshot_hz == 0 || cfg.snapshot_hz > cfg.tick_hz
-                || cfg.tick_hz % cfg.snapshot_hz != 0)
+            if (cfg.tick_hz != 60 || cfg.snapshot_hz != 20)
             {
                 throw std::runtime_error("invalid snapshot frequency");
             }
@@ -317,8 +362,9 @@ struct Runtime::Loop
             instance = random_hex(16);
             token = random_hex(32);
             script = std::make_unique<Script>();
-            const nlohmann::json ctx = {{"v", 1},
-                {"snapshot_every", cfg.tick_hz / cfg.snapshot_hz}};
+            const nlohmann::json ctx = {{"v", 2},
+                {"snapshot_every", cfg.tick_hz / cfg.snapshot_hz},
+                {"content", nlohmann::json::parse(content::json_text)}};
             auto out = script->open(cfg, ctx.dump());
 
             if (!flush_logs())
@@ -362,8 +408,8 @@ struct Runtime::Loop
         evt["port"] = port;
         evt["instance"] = instance;
         evt["token"] = token;
-        evt["protocol_version"] = 1;
-        evt["content_version"] = shared.cfg.content_version;
+        evt["protocol_version"] = 2;
+        evt["content_version"] = content::version;
         emit(std::move(evt));
     }
 
@@ -373,8 +419,8 @@ struct Runtime::Loop
         if (!authenticated)
         {
             const auto& hello = msg.hello();
-            if (!msg.has_hello() || hello.protocol_version() != 1
-                || hello.content_version() != shared.cfg.content_version
+            if (!msg.has_hello() || hello.protocol_version() != 2
+                || hello.content_version() != content::version
                 || hello.instance() != instance || hello.token() != token)
             {
                 abort("handshake_rejected");
@@ -385,8 +431,8 @@ struct Runtime::Loop
             net->authenticate();
             wire::Envelope reply;
             auto* ack = reply.mutable_hello_ack();
-            ack->set_protocol_version(1);
-            ack->set_content_version(shared.cfg.content_version);
+            ack->set_protocol_version(2);
+            ack->set_content_version(Str(content::version));
             ack->set_instance(instance);
 
             if (!send_msg(reply))
@@ -395,13 +441,38 @@ struct Runtime::Loop
             }
 
             session = paused ? "Paused" : "Running";
+            notify_pause();
             clock.reset(TickClock::Clock::now());
             schedule();
             return;
         }
 
-        if (!msg.has_input() || msg.input().seq() == 0
-            || msg.input().value() < -1000 || msg.input().value() > 1000)
+        if (msg.has_login_req() || msg.has_start_req())
+        {
+            const auto& req = msg.has_login_req() ? msg.login_req().req_id()
+                : msg.start_req().req_id();
+
+            if (req.empty() || req.size() > 128)
+            {
+                reject("invalid_request");
+            }
+            else if (paused)
+            {
+                reject("paused", req);
+            }
+            else
+            {
+                enqueue(std::move(msg));
+            }
+
+            return;
+        }
+
+        if (!msg.has_input() || msg.input().seq() == 0 || msg.input().match_id() == 0
+            || msg.input().move_x() < -1 || msg.input().move_x() > 1
+            || msg.input().aim_x() < -1000 || msg.input().aim_x() > 1000
+            || msg.input().aim_y() < -1000 || msg.input().aim_y() > 1000
+            || (msg.input().aim_x() == 0 && msg.input().aim_y() == 0))
         {
             abort("invalid_input");
             return;
@@ -410,28 +481,66 @@ struct Runtime::Loop
         const auto& input = msg.input();
         if (input.seq() <= received_seq)
         {
-            if (last_ack && input.seq() == last_ack->ack().seq())
+            if (last_ack && input.seq() == last_ack->ack().seq()
+                && input.match_id() == last_ack->ack().match_id())
             {
                 send_msg(*last_ack);
             }
             else if (!pending_seqs.contains(input.seq()))
             {
-                wire::Envelope reply;
-                reply.mutable_error()->set_code("stale_input");
-                send_msg(reply);
+                reject(input.seq() <= discard_through_seq ? "input_discarded" : "stale_input",
+                    "", input.seq(), input.match_id());
             }
 
             return;
         }
 
-        if (!inputs.push(input, input.ByteSizeLong()))
+        received_seq = input.seq();
+
+        if (paused)
         {
-            abort("input_backpressure");
+            discard_through_seq = received_seq;
+            reject("paused", "", input.seq(), input.match_id());
             return;
         }
 
-        received_seq = input.seq();
         pending_seqs.insert(input.seq());
+        enqueue(std::move(msg));
+    }
+
+    // 只缓存拥有数据的协议命令，在逻辑 Tick 边界进入脚本。
+    void enqueue(wire::Envelope msg)
+    {
+        const auto bytes = msg.ByteSizeLong();
+
+        if (!inputs.push(std::move(msg), bytes))
+        {
+            abort("input_backpressure");
+        }
+    }
+
+    // 关联正常业务拒绝，不关闭仍可处理后续合法命令的会话。
+    void reject(const Str& code, const Str& req = "", u64 seq = 0, u64 match = 0)
+    {
+        wire::Envelope msg;
+        auto* err = msg.mutable_error();
+        err->set_code(code);
+        err->set_req_id(req);
+        err->set_seq(seq);
+        err->set_match_id(match);
+        send_msg(msg);
+    }
+
+    // 认证后的连接观察宿主暂停状态以及不允许重放的输入高水位。
+    void notify_pause()
+    {
+        if (authenticated && session != "Aborted")
+        {
+            wire::Envelope msg;
+            msg.mutable_pause()->set_paused(paused);
+            msg.mutable_pause()->set_discard_through_seq(discard_through_seq);
+            send_msg(msg);
+        }
     }
 
     // 发送一条控制协议消息，无法保留关键输出时中止会话。
@@ -466,6 +575,11 @@ struct Runtime::Loop
         {
             abort(frames.error());
             return false;
+        }
+
+        if (frames->empty())
+        {
+            return true;
         }
 
         std::optional<wire::Envelope> ack;
@@ -567,11 +681,33 @@ struct Runtime::Loop
                 break;
             }
 
-            pending_seqs.erase(input->seq());
-            const nlohmann::json payload = {{"v", 1}, {"seq", std::to_string(input->seq())},
-                {"value", input->value()}};
+            nlohmann::json payload = {{"v", 2}};
+            i64 event_id = 1;
 
-            if (!commit(script->event(1, payload.dump())))
+            if (input->has_input())
+            {
+                const auto& cmd = input->input();
+                pending_seqs.erase(cmd.seq());
+                payload.update({{"seq", std::to_string(cmd.seq())},
+                    {"match_id", std::to_string(cmd.match_id())},
+                    {"applied_tick", std::to_string(tick_id + 1)},
+                    {"move_x", cmd.move_x()}, {"aim_x", cmd.aim_x()},
+                    {"aim_y", cmd.aim_y()}, {"jump", cmd.jump()},
+                    {"fire", cmd.fire()}, {"reload", cmd.reload()}});
+            }
+            else if (input->has_login_req())
+            {
+                event_id = 2;
+                payload["req_id"] = input->login_req().req_id();
+            }
+            else
+            {
+                event_id = 3;
+                payload["req_id"] = input->start_req().req_id();
+                payload["after_match_id"] = std::to_string(input->start_req().after_match_id());
+            }
+
+            if (!commit(script->event(event_id, payload.dump())))
             {
                 return;
             }
@@ -687,7 +823,7 @@ struct Runtime::Loop
     asio::steady_timer timer;
     asio::executor_work_guard<asio::io_context::executor_type> guard;
     TickClock clock;
-    BoundedQueue<wire::FrameInput> inputs;
+    BoundedQueue<wire::Envelope> inputs;
     Set<u64> pending_seqs;
     UPtr<Script> script;
     UPtr<Transport> net;
@@ -699,6 +835,7 @@ struct Runtime::Loop
     u16 port = 0;
     u64 tick_id = 0;
     u64 received_seq = 0;
+    u64 discard_through_seq = 0;
     bool authenticated = false;
     bool paused = false;
     bool stopped = false;

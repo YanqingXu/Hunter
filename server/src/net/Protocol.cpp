@@ -1,4 +1,4 @@
-// 实现框架消息的严格 schema 校验和原子发送容量预留。
+// 转换严格校验的玩法输出并原子预留发送容量，保持快照可合并与事件不可丢失。
 #include "net/Protocol.h"
 #include "common/Types.h"
 #include "script/Schema.h"
@@ -6,6 +6,97 @@
 
 namespace hunter
 {
+namespace
+{
+
+// 将已校验的实体投影写入 Protobuf，不保留可独立修改的实体状态。
+void encode_entity(const nlohmann::json& obj, wire::Entity& entity)
+{
+    entity.set_id(obj.at("id").get<u64>());
+    entity.set_kind(obj.at("kind").get<Str>());
+    entity.set_x(obj.at("x").get<i32>());
+    entity.set_y(obj.at("y").get<i32>());
+    entity.set_vx(obj.at("vx").get<i32>());
+    entity.set_vy(obj.at("vy").get<i32>());
+    entity.set_hp(obj.at("hp").get<i32>());
+    entity.set_max_hp(obj.at("max_hp").get<i32>());
+    entity.set_ammo(obj.at("ammo").get<i32>());
+    entity.set_reserve(obj.at("reserve").get<i32>());
+    entity.set_reload_ticks(obj.at("reload_ticks").get<i32>());
+    entity.set_grounded(obj.at("grounded").get<bool>());
+    entity.set_alive(obj.at("alive").get<bool>());
+    entity.set_facing(obj.at("facing").get<i32>());
+    entity.set_ai(obj.at("ai").get<Str>());
+}
+
+// 按冻结输出种类构造信封；输入对象已经完成字段、精度和范围检查。
+wire::Envelope encode_output(const Str& kind, const nlohmann::json& obj)
+{
+    wire::Envelope msg;
+
+    if (kind == "ack")
+    {
+        auto& ack = *msg.mutable_ack();
+        ack.set_seq(obj.at("seq").get<u64>());
+        ack.set_match_id(obj.at("match_id").get<u64>());
+        ack.set_applied_tick(obj.at("applied_tick").get<u64>());
+    }
+    else if (kind == "snapshot")
+    {
+        auto& snapshot = *msg.mutable_snapshot();
+        snapshot.set_tick_id(obj.at("tick_id").get<u64>());
+        snapshot.set_seq(obj.at("seq").get<u64>());
+        snapshot.set_match_id(obj.at("match_id").get<u64>());
+        snapshot.set_phase(obj.at("phase").get<Str>());
+
+        for (const auto& entity : obj.at("entities"))
+        {
+            encode_entity(entity, *snapshot.add_entities());
+        }
+    }
+    else if (kind == "login")
+    {
+        auto& login = *msg.mutable_login_rsp();
+        login.set_req_id(obj.at("req_id").get<Str>());
+        login.set_player_id(obj.at("player_id").get<u64>());
+        login.set_match_id(obj.at("match_id").get<u64>());
+        login.set_phase(obj.at("phase").get<Str>());
+    }
+    else if (kind == "start")
+    {
+        auto& start = *msg.mutable_start_rsp();
+        start.set_req_id(obj.at("req_id").get<Str>());
+        start.set_match_id(obj.at("match_id").get<u64>());
+        start.set_phase(obj.at("phase").get<Str>());
+    }
+    else if (kind == "event")
+    {
+        auto& event = *msg.mutable_event();
+        event.set_match_id(obj.at("match_id").get<u64>());
+        event.set_event_id(obj.at("event_id").get<u64>());
+        event.set_tick_id(obj.at("tick_id").get<u64>());
+        event.set_kind(obj.at("kind").get<Str>());
+        event.set_actor_id(obj.at("actor_id").get<u64>());
+        event.set_target_id(obj.at("target_id").get<u64>());
+        event.set_x(obj.at("x").get<i32>());
+        event.set_y(obj.at("y").get<i32>());
+        event.set_amount(obj.at("amount").get<i32>());
+    }
+    else if (kind == "error")
+    {
+        auto& error = *msg.mutable_error();
+        error.set_code(obj.at("code").get<Str>());
+        error.set_detail(obj.at("detail").get<Str>());
+        error.set_req_id(obj.at("req_id").get<Str>());
+        error.set_seq(obj.at("seq").get<u64>());
+        error.set_match_id(obj.at("match_id").get<u64>());
+    }
+
+    return msg;
+}
+
+}
+
 std::expected<Frame, Str> encode_frame(const wire::Envelope& msg, usize max_bytes)
 {
     const auto size = msg.ByteSizeLong();
@@ -62,20 +153,7 @@ std::expected<Vec<Frame>, Str> script_frames(const Vec<ScriptOut>& out, const Cf
                 return std::unexpected(decoded.error());
             }
 
-            wire::Envelope msg;
-
-            if (decoded->snapshot)
-            {
-                msg.mutable_snapshot()->set_tick_id(decoded->tick_id);
-                msg.mutable_snapshot()->set_seq(decoded->seq);
-                msg.mutable_snapshot()->set_count(decoded->count);
-            }
-            else
-            {
-                msg.mutable_ack()->set_seq(decoded->seq);
-                msg.mutable_ack()->set_count(decoded->count);
-            }
-
+            const auto msg = encode_output(item.kind, *decoded);
             auto frame = encode_frame(msg, cfg.max_frame_bytes);
             if (!frame)
             {

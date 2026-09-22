@@ -10,7 +10,6 @@ struct Cfg
     Str source_path;
     Str bundle_path;
     Str policy_path;
-    Str content_version = "framework-v1";
     u32 tick_hz = 60;
     u32 snapshot_hz = 20;
     u32 max_catchup = 4;

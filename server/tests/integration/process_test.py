@@ -39,10 +39,14 @@ def frame(tag, body):
     return struct.pack("!I", len(payload)) + payload
 
 
-# 独立编码首批框架输入，不依赖生成的 C++ 客户端代码。
-def input_frame(seq, value):
-    zigzag = (value << 1) ^ (value >> 63)
-    return frame(3, number(1, seq) + number(2, zigzag))
+# 独立编码动作输入，验证生成客户端之外的真实线格式。
+def input_frame(seq, move=0, match=1, aim_x=1000, aim_y=0, jump=False,
+                fire=False, reload=False):
+    return frame(7, number(1, seq) + number(3, match)
+                 + number(4, (move << 1) ^ (move >> 31))
+                 + number(5, (aim_x << 1) ^ (aim_x >> 31))
+                 + number(6, (aim_y << 1) ^ (aim_y >> 31))
+                 + number(7, int(jump)) + number(8, int(fire)) + number(9, int(reload)))
 
 
 # 有界解码 Protobuf varint，拒绝截断和超宽字段。
@@ -78,11 +82,16 @@ def fields(data):
             pos += size
         else:
             raise AssertionError(f"unexpected wire type {kind}")
-        result[tag] = value
+        if tag in result:
+            if not isinstance(result[tag], list):
+                result[tag] = [result[tag]]
+            result[tag].append(value)
+        else:
+            result[tag] = value
     return result
 
 
-# 将有符号整数恢复为探针世界计数。
+# 恢复 ZigZag 编码的坐标和方向。
 def signed(value):
     return (value >> 1) ^ -(value & 1)
 
@@ -210,7 +219,7 @@ class Server:
         else:
             self.conn.sendall(hello)
         ack = wait_msg(self.conn, 2)
-        assert ack[1] == 1 and ack[3].decode() == self.ready["instance"]
+        assert ack[1] == 2 and ack[3].decode() == self.ready["instance"]
         return self.conn
 
     # 请求退出并确保旧端口不再监听；stdin 保持打开以覆盖阻塞读取取消。
@@ -244,7 +253,29 @@ class Server:
         self.proc.stderr.close()
 
 
-# 在同一真实会话验证输入 FIFO、去重、暂停和恢复不追赶。
+# 登录并进入第一局，保留真实请求响应的关联校验。
+def enter_game(conn):
+    conn.sendall(frame(10, blob(1, "login")))
+    login = wait_msg(conn, 11)
+    assert login[1] == b"login" and login[2] == 1 and login[4] == b"Lobby"
+    conn.sendall(frame(12, blob(1, "start")))
+    start = wait_msg(conn, 13)
+    assert start[1] == b"start" and start[2] == 1 and start[3] == b"Playing"
+    return wait_msg(conn, 9)
+
+
+# 读取某个稳定实体，检查重复实体字段未被解码器覆盖。
+def entity(snap, entity_id=1):
+    values = snap.get(6, [])
+    values = [values] if isinstance(values, bytes) else values
+    for value in values:
+        item = fields(value)
+        if item.get(1) == entity_id:
+            return item
+    raise AssertionError(f"missing entity {entity_id}")
+
+
+# 在同一真实会话验证登录开局、输入去重、暂停清理及恢复不追赶。
 def round_trip(args, index):
     srv = Server(args)
     try:
@@ -252,44 +283,51 @@ def round_trip(args, index):
         srv.cmd("Start", "again")
         assert srv.event("Ready", "again")["instance"] == ready["instance"]
         conn = srv.connect(split=index == 0)
-        conn.sendall(input_frame(1, 7) + input_frame(2, -2))
-        first = wait_msg(conn, 4)
-        second = wait_msg(conn, 4)
-        assert first[1] == 1 and signed(first.get(2, 0)) == 7
-        assert second[1] == 2 and signed(second.get(2, 0)) == 5
-        conn.sendall(input_frame(2, 999))
-        duplicate = wait_msg(conn, 4)
+        conn.sendall(frame(12, blob(1, "premature")))
+        assert wait_msg(conn, 6)[1] == b"not_logged_in"
+        initial = enter_game(conn)
+        conn.sendall(frame(10, blob(1, "again")))
+        assert wait_msg(conn, 11)[2] == 1
+        conn.sendall(frame(12, blob(1, "start")))
+        assert wait_msg(conn, 13)[2] == 1
+        conn.sendall(input_frame(1, 1) + input_frame(2, 1))
+        first = wait_msg(conn, 8)
+        second = wait_msg(conn, 8)
+        assert first[1] == 1 and second[1] == 2 and second[3] == 1
+        conn.sendall(input_frame(2, -1))
+        duplicate = wait_msg(conn, 8)
         assert duplicate == second
-        snap = wait_msg(conn, 5)
-        assert snap[2] == 2 and signed(snap.get(3, 0)) == 5
+        snap = wait_msg(conn, 9)
+        assert snap[2] == 2
+        assert signed(entity(snap).get(3, 0)) > signed(entity(initial).get(3, 0))
         srv.cmd("Pause")
         assert srv.event("Rsp", "pause")["session"] == "Paused"
         conn.settimeout(.08)
         while True:
             try:
                 tag, body = receive(conn)
-                if tag == 5:
+                if tag == 9:
                     snap = body
             except socket.timeout:
                 break
-        conn.sendall(input_frame(3, 4))
-        conn.settimeout(.15)
-        try:
-            receive(conn)
-            raise AssertionError("simulation advanced while paused")
-        except socket.timeout:
-            pass
+        conn.sendall(input_frame(3, 1, fire=True, jump=True))
+        rejected = wait_msg(conn, 6)
+        assert rejected[1] == b"paused" and rejected[4] == 3
         srv.cmd("Resume")
         assert srv.event("Rsp", "resume")["session"] == "Running"
-        ack = wait_msg(conn, 4)
-        assert ack[1] == 3 and signed(ack.get(2, 0)) == 9
-        resumed = wait_msg(conn, 5)
+        resumed = wait_msg(conn, 9)
         assert resumed[1] - snap[1] <= 6, "paused wall time was caught up"
+        stopped_x = signed(entity(resumed).get(3, 0))
+        later = wait_msg(conn, 9)
+        assert signed(entity(later).get(3, 0)) == stopped_x, "held movement survived pause"
+        assert entity(later).get(9) == 6, "paused fire was replayed"
+        conn.sendall(input_frame(3, 1))
+        assert wait_msg(conn, 6)[1] == b"input_discarded"
         extra = socket.create_connection(("127.0.0.1", ready["port"]), 3)
         closed(extra)
         extra.close()
-        conn.sendall(input_frame(4, 1))
-        assert signed(wait_msg(conn, 4).get(2, 0)) == 10
+        conn.sendall(input_frame(4, 0))
+        assert wait_msg(conn, 8)[1] == 4
         srv.stop()
     finally:
         srv.cleanup()
@@ -313,15 +351,30 @@ def rejection(args, payload=None, override=None, extra=()):
         srv.cleanup()
 
 
-# 验证暂停输入饱和与发送容量不足都明确中止，不留下无界缓存。
+# 宿主可以先暂停再接入客户端，空输出不得触发未连接套接字发送。
+def pause_before_hello(args):
+    srv = Server(args)
+    try:
+        srv.start()
+        srv.cmd("Pause")
+        assert srv.event("Rsp", "pause")["session"] == "Paused"
+        conn = srv.connect()
+        assert wait_msg(conn, 15)[1] == 1
+        srv.cmd("Resume")
+        assert srv.event("Rsp", "resume")["session"] == "Running"
+        enter_game(conn)
+        srv.stop()
+    finally:
+        srv.cleanup()
+
+
+# 验证运行中输入饱和与发送容量不足都明确中止，不留下无界缓存。
 def saturation(args):
     srv = Server(args, ["--queue-count", "2"])
     try:
         srv.start()
         conn = srv.connect()
-        srv.cmd("Pause")
-        srv.event("Rsp", "pause")
-        conn.sendall(b"".join(input_frame(i, 1) for i in range(1, 4)))
+        conn.sendall(b"".join(input_frame(i, 1) for i in range(1, 257)))
         closed(conn)
         assert srv.event("Error")["code"] == "input_backpressure"
         srv.stop()
@@ -350,13 +403,14 @@ def slow_reader(args):
         conn.connect(("127.0.0.1", srv.ready["port"]))
         srv.conn = conn
         conn.sendall(srv.hello())
-        assert wait_msg(conn, 2)[1] == 1
+        assert wait_msg(conn, 2)[1] == 2
+        enter_game(conn)
         seq = 0
         for _ in range(10):
             conn.sendall(b"".join(input_frame(seq + i, 0) for i in range(1, 9)))
             for _ in range(8):
                 seq += 1
-                assert wait_msg(conn, 4)[1] == seq
+                assert wait_msg(conn, 8)[1] == seq
 
         first_unread = seq + 1
         deadline = time.monotonic() + 10
@@ -435,6 +489,168 @@ def host_failures(args):
         except OSError:
             pass
         proc.stdout.close()
+
+
+# 通过生成协议的命令行客户端验证可交付的人工联调入口。
+class Client:
+    # 启动客户端并通过标准输入交付本次启动凭据。
+    def __init__(self, args, ready):
+        self.proc = subprocess.Popen([args.client], stdin=subprocess.PIPE,
+                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                     text=True, bufsize=1)
+        self.events = queue.Queue()
+        self.errors = []
+        self.reader = threading.Thread(target=self.read, daemon=True)
+        self.logger = threading.Thread(target=self.log, daemon=True)
+        self.reader.start()
+        self.logger.start()
+        try:
+            self.send(ready)
+            self.wait("hello_ack")
+        except BaseException:
+            self.close()
+            raise
+
+    # 收集每条协议输出，解析错误作为测试失败传播。
+    def read(self):
+        try:
+            for line in self.proc.stdout:
+                self.events.put(json.loads(line))
+        except Exception as err:
+            self.events.put(err)
+
+    # 持续读取诊断，避免测试创建管道背压。
+    def log(self):
+        self.errors.extend(self.proc.stderr)
+
+    # 写入一个完整操作对象。
+    def send(self, cmd):
+        self.proc.stdin.write(json.dumps(cmd) + "\n")
+        self.proc.stdin.flush()
+
+    # 等待指定消息，任何客户端本身的失败都立即上报。
+    def wait(self, kind, timeout=5):
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            try:
+                evt = self.events.get(timeout=max(.01, deadline - time.monotonic()))
+            except queue.Empty as err:
+                raise AssertionError(f"CLI missing {kind}: {self.errors}") from err
+            if isinstance(evt, Exception):
+                raise evt
+            assert evt["type"] != "client_error", evt
+            if evt["type"] == kind:
+                return evt
+        raise AssertionError(f"CLI missing {kind}")
+
+    # 用 EOF 正常退出，失败时也只清理本测试创建的进程。
+    def close(self):
+        try:
+            if self.proc.poll() is None:
+                self.proc.stdin.close()
+                assert self.proc.wait(timeout=5) == 0, self.errors
+        finally:
+            if self.proc.poll() is None:
+                self.proc.kill()
+                self.proc.wait(timeout=3)
+            self.reader.join(timeout=2)
+            self.logger.join(timeout=2)
+            for stream in (self.proc.stdin, self.proc.stdout, self.proc.stderr):
+                stream.close()
+
+
+# 驱动真实 Tick 完成死亡和清怪两局，并检查旧局输入与请求不能污染重开。
+def combat_rounds(args):
+    srv = Server(args)
+    cli = None
+    try:
+        cli = Client(args, srv.start())
+        cli.send({"cmd": "login", "req_id": "login"})
+        assert cli.wait("login_rsp")["player_id"] == "1"
+        seq = 0
+        after = "0"
+        for expected in ("Dead", "Cleared"):
+            cli.send({"cmd": "start", "req_id": "round-" + expected,
+                      "after_match_id": after})
+            current = cli.wait("start_rsp")["match_id"]
+            assert current != after
+            if after != "0":
+                seq += 1
+                cli.send({"cmd": "input", "seq": str(seq), "match_id": after,
+                          "move_x": 0, "aim_x": 1000, "aim_y": 0,
+                          "jump": False, "fire": True, "reload": False})
+                assert cli.wait("error")["code"] == "stale_match"
+                cli.send({"cmd": "start", "req_id": "round-Dead", "after_match_id": "0"})
+                assert cli.wait("error")["code"] in ("stale_match", "invalid_state")
+            deadline = time.monotonic() + 25
+            while time.monotonic() < deadline:
+                snap = cli.wait("snapshot")
+                assert snap["match_id"] == current
+                if snap["phase"] != "Playing":
+                    assert snap["phase"] == expected, snap
+                    break
+                player = next(item for item in snap["entities"] if item["kind"] == "player")
+                enemies = [item for item in snap["entities"]
+                           if item["kind"] == "enemy" and item["alive"]]
+                assert enemies
+                target = min(enemies, key=lambda item: abs(item["x"] - player["x"]))
+                dx, dy = target["x"] - player["x"], target["y"] - player["y"] - 100
+                scale = max(1, abs(dx), abs(dy))
+                aim_x, aim_y = int(dx * 1000 / scale), int(dy * 1000 / scale)
+                if aim_x == 0 and aim_y == 0:
+                    aim_x = 1000
+                fire = expected == "Cleared" and (target["id"] == "2" or player["x"] > 15800)
+                move = (1 if player["x"] < 11500 else 0) if expected == "Dead" else (
+                    0 if fire else 1)
+                seq += 1
+                cli.send({"cmd": "input", "seq": str(seq), "match_id": current,
+                          "move_x": move, "aim_x": aim_x, "aim_y": aim_y,
+                          "jump": player["grounded"] and move != 0,
+                          "fire": fire, "reload": player["ammo"] == 0})
+            else:
+                raise AssertionError(f"combat did not reach {expected}: {snap}")
+            after = current
+        cli.send({"cmd": "start", "req_id": "third", "after_match_id": after})
+        assert cli.wait("start_rsp")["match_id"] == "3"
+        fresh = cli.wait("snapshot")
+        player = next(item for item in fresh["entities"] if item["kind"] == "player")
+        assert player["hp"] == 100 and player["ammo"] == 6 and player["reserve"] == 30
+        cli.close()
+        cli = None
+        srv.stop()
+    finally:
+        if cli:
+            cli.close()
+        srv.cleanup()
+
+
+# 在 stdin 仍打开时断开服务端，客户端也必须取消管道读取并退出。
+def client_lifecycle(args):
+    srv = Server(args)
+    cli = None
+    try:
+        ready = srv.start()
+        bad = ready | {"content_version": "wrong"}
+        result = subprocess.run([args.client], input=json.dumps(bad) + "\n",
+                                capture_output=True, text=True, timeout=5)
+        assert result.returncode != 0
+        assert any(json.loads(line).get("type") == "client_error"
+                   for line in result.stdout.splitlines()), result
+        cli = Client(args, ready)
+        srv.stop()
+        code = cli.proc.wait(timeout=5)
+        assert code in (0, 1), cli.errors
+        cli.reader.join(timeout=2)
+        if code == 1:
+            observed = []
+            while not cli.events.empty():
+                observed.append(cli.events.get_nowait())
+            assert any(evt.get("type") == "client_error" and evt.get("detail") == "receive_failed"
+                       for evt in observed), observed
+    finally:
+        if cli:
+            cli.close()
+        srv.cleanup()
 
 
 # 创建有完整中文说明的七入口脚本，仅用于开发 Runtime 的故障注入。
@@ -552,27 +768,24 @@ def shutdown_results(args, folder):
         srv.cleanup()
 
 
-# 用合法但昂贵的输入验证暂停能打断积压批次，恢复后仍按 FIFO 完整执行。
+# 用合法但昂贵的输入验证暂停打断积压，并作废尚未执行的动作。
 def bounded_dispatch(args, folder):
-    event = """local item = json.decode(payload)
+    event = """if id ~= 1 then return true end
+local item = json.decode(payload)
 local work = 0
 for i = 1, 10000 do
     work = work + 1
 end
 assert(work == 10000)
-net.emit('ack', json.encode({v=1, seq=item.seq, count=0}))
+net.emit('ack', json.encode({v=2, seq=item.seq, match_id=item.match_id,
+    applied_tick=item.applied_tick}))
 return true"""
     srv = Server(args, source=script_fixture(folder, "bounded_dispatch", event=event))
     try:
         srv.start()
         conn = srv.connect()
-        srv.cmd("Pause", "fill")
-        srv.event("Rsp", "fill")
         conn.sendall(b"".join(input_frame(seq, 0) for seq in range(1, 257)))
-        time.sleep(.15)
-        srv.cmd("Resume", "run")
-        srv.event("Rsp", "run")
-        assert wait_msg(conn, 4)[1] == 1
+        assert wait_msg(conn, 8)[1] == 1
         started = time.monotonic()
         srv.cmd("Pause")
         assert srv.event("Rsp", "pause", timeout=1)["session"] == "Paused"
@@ -584,15 +797,15 @@ return true"""
                 tag, body = receive(conn)
             except socket.timeout:
                 break
-            if tag == 4:
+            if tag == 8:
                 seen.append(body[1])
         assert len(seen) < 256, "one dispatch drained the complete input backlog"
         assert elapsed < .5, f"pause latency under expensive inputs was {elapsed:.3f}s"
         srv.cmd("Resume")
         srv.event("Rsp", "resume")
-        while len(seen) < 256:
-            seen.append(wait_msg(conn, 4)[1])
-        assert seen == list(range(1, 257)), "sliced dispatch changed input order or lost inputs"
+        conn.sendall(input_frame(257, 0))
+        assert wait_msg(conn, 8)[1] == 257, "discarded backlog was replayed"
+        assert seen == list(range(1, len(seen) + 1)), "dispatch changed accepted input order"
         srv.stop()
     finally:
         srv.cleanup()
@@ -602,15 +815,16 @@ return true"""
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--exe", required=True)
+    parser.add_argument("--client", required=True)
     parser.add_argument("--source", default="")
     parser.add_argument("--bundle", default="")
     parser.add_argument("--policy", default="")
     args = parser.parse_args()
-    assert input_frame(1, -1) == bytes.fromhex("000000061a0408011001")
+    assert input_frame(1, -1) == bytes.fromhex("0000000b3a0908011801200128d00f")
     assert fields(bytes.fromhex("08011001")) == {1: 1, 2: 1}
     for index in range(10):
         round_trip(args, index)
-    for override in ({"protocol_version": 2}, {"content_version": "wrong"},
+    for override in ({"protocol_version": 1}, {"content_version": "wrong"},
                      {"instance": "wrong"}, {"token": "wrong"}):
         rejection(args, override=override)
     for payload in (input_frame(1, 1), b"\0\0\0\0", struct.pack("!I", 65537),
@@ -618,7 +832,10 @@ def main():
         rejection(args, payload=payload)
     rejection(args, extra=["--handshake-ms", "100"])
     saturation(args)
+    pause_before_hello(args)
     slow_reader(args)
+    combat_rounds(args)
+    client_lifecycle(args)
     host_failures(args)
     numeric_args(args)
     if not args.bundle:

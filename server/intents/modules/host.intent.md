@@ -12,7 +12,7 @@ verification: ["hunter_script_contract", "dev:hunter_async_contract"]
 
 真实 Luax Runtime 执行七个同步入口；提供只读 `net/cfg/diagnostics` namespace、
 受预算约束的调用和调用级输出事务。独立 Asio 异步适配验证 continuation 与 detached completion。
-不实现存档、玩法、热更新或跨代次活动 continuation 迁移。
+桥接不决定玩法，不实现存档、热更新或跨代次活动 continuation 迁移；玩法由 SRV-009 定义。
 
 ## 不变量、线程与所有权
 
@@ -26,9 +26,10 @@ Script 不可复制；所有入口拒绝错误线程与同步重入。普通 tab
 
 `Script::open/event/tick` 返回拥有字符串的 ScriptOut 数组；export_state 返回 JSON 字符串。
 脚本 init/on_event/tick/import_state/validate_state/shutdown 返回 true，export_state 返回 string。
-Host `net.emit(kind,payload)` 仅允许 ack/snapshot 的 v1 JSON；seq/tick_id 为十进制字符串，
+Host `net.emit(kind,payload)` 接受契约列明的 v2 登录、开局、确认、快照、事件和错误 JSON；
+ID、seq/tick_id 为十进制字符串，
 字段集合、数值范围以 `lua/contract.json` 为权威；构建时生成共享 schema 常量，Script 和
-Protocol 使用同一解码器，拒绝 Ack 零序号、越界计数、有符号范围外 Tick 和多余字段。
+Protocol 使用同一解码器，拒绝 Ack 零序号、非法实体、有符号范围外 Tick 和多余字段。
 `cfg.get()` 返回初始化上下文的副本；`diagnostics.log()` 缓冲有限诊断。
 拥有线程在入口返回后通过 `take_logs()` 移交日志；宿主再通过有界队列交给输出线程。
 事件类型 event_id 与 Tick ID 使用 Luax integer，超出 i64 范围时明确拒绝。

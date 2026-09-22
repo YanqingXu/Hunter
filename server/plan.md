@@ -3,6 +3,10 @@
 编制日期：2026-09-22。状态：设计基线；P0＋Windows 基础框架已进入实现与验证。
 当前能力及执行证据见 [构建说明](README.md) 与 [验证记录](VERIFICATION.md)。
 
+基础战斗切片增量由 [SRV-009](intents/usecases/combat.intent.md) 定义：沿用共用核心和
+Windows 宿主，实现会话登录、开局、移动、射击、普通怪与终态重开；不等待 Android 宿主再验证
+这些共用玩法。该切片不代表完整撤离、存档、Unity 或 Android 发布阶段完成。
+
 本计划面向比赛用单人 PvE 撤离 Demo。服务端采用 **C++23 / Standalone Asio / Luax**，与 Unity 客户端一起打包为 Android APK，在同一手机上以两个进程运行。Windows 保留开发、联调和自动化测试宿主。
 
 本文承接 [项目说明](../README.md) 与 [参赛计划](../docs/2026-TapTap-GameJam-Plan.md)，记录本轮已经确认的技术方向。正式发布目标由旧文档中的 Windows 改为 Android，脚本接入由前序草案中的普通 Lua 改为 Luax，PC 进程管理保留为开发能力；后续排期需同步修订。本计划不表示框架已可运行，也不表示参赛资格或平台兼容性已通过验证。

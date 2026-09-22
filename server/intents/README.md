@@ -19,7 +19,8 @@ CTest 名称；无前缀项在两种模式都必须存在。检查器从 CMake �
 | SRV-005 | [模块](modules/modules.intent.md) | 构建组装、纯数据状态和制品身份 |
 | SRV-006 | [热更新](modules/reload.intent.md) | deferred；安全点切换不在本轮 |
 | SRV-007 | [存档](modules/storage.intent.md) | deferred；SQLite 事务不在本轮 |
-| SRV-008 | [PvE 验收](usecases/pve.intent.md) | deferred；真实战斗和真机不在本轮 |
+| SRV-008 | [PvE 验收](usecases/pve.intent.md) | deferred；完整撤离与 Android 真机尚待验收 |
+| SRV-009 | [基础战斗](usecases/combat.intent.md) | 本机登录、开局、移动、射击、普通怪和终态重开；Windows 验证 |
 
 `tools/verify_intents.py` 对照构建生成的目标清单与 CTest 注册信息检查 active 契约，
 并检查索引、唯一 ID、引用及依赖环。它核对注册名称，不检查测试源码内容或证明行为覆盖；

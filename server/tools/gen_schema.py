@@ -1,4 +1,4 @@
-# 从正式契约生成桥接校验常量；不支持的 schema 在构建阶段拒绝，禁止静默沿用旧值。
+# 从唯一契约生成闭集输出描述；构建阶段拒绝未知字段、无界容器和无法表示的范围。
 import argparse
 import json
 import os
@@ -6,65 +6,134 @@ import re
 import tempfile
 from pathlib import Path
 
-
-# 解析契约明确给出的闭区间，并确认原生类型能够无损表达。
-def interval(text, prefix, lower, upper):
-    if not isinstance(text, str):
-        raise ValueError("schema interval must be a string")
-    match = re.fullmatch(re.escape(prefix) + r" \[(-?\d+),(-?\d+)\]", text)
-    if not match:
-        raise ValueError(f"unsupported schema interval: {text}")
-    start, end = map(int, match.groups())
-    if not lower <= start <= end <= upper:
-        raise ValueError(f"schema interval exceeds native type: {text}")
-    return start, end
-
-
-# 输出精确的有符号 C++ 常量，避免最小 i64 被先解析为无符号字面量。
-def signed_literal(value):
-    return "(-9223372036854775807LL - 1)" if value == -(1 << 63) else f"{value}LL"
+KINDS = {"ack", "snapshot", "login", "start", "event", "error"}
+FIELDS = {
+    "ack": {"v", "seq", "match_id", "applied_tick"},
+    "snapshot": {"v", "tick_id", "seq", "match_id", "phase", "entities"},
+    "login": {"v", "req_id", "player_id", "match_id", "phase"},
+    "start": {"v", "req_id", "match_id", "phase"},
+    "event": {"v", "match_id", "event_id", "tick_id", "kind", "actor_id",
+              "target_id", "x", "y", "amount"},
+    "error": {"v", "code", "detail", "req_id", "seq", "match_id"},
+}
+ENTITY_FIELDS = {"id", "kind", "x", "y", "vx", "vy", "hp", "max_hp", "ammo", "reserve",
+                 "reload_ticks", "grounded", "alive", "facing", "ai"}
 
 
-# 校验当前支持的消息形状并生成共享字段和边界，字段顺序不影响结果。
+# 检查有上下限的整数描述，拒绝把 JSON 布尔值当作整数。
+def bounds(node, lower, upper):
+    lo, hi = node.get("min"), node.get("max")
+    if type(lo) is not int or type(hi) is not int or not lower <= lo <= hi <= upper:
+        raise ValueError("invalid integer schema bounds")
+
+
+# 验证当前六类输出使用的有限描述集合，不提供引用、递归类型或任意扩展。
+def validate_node(node, depth=0):
+    if not isinstance(node, dict) or depth > 4:
+        raise ValueError("invalid or excessively nested schema")
+    kind = node.get("type")
+    keys = set(node)
+    if kind == "object":
+        if keys != {"type", "fields"} or not isinstance(node["fields"], dict):
+            raise ValueError("object requires exact fields")
+        if not 1 <= len(node["fields"]) <= 32:
+            raise ValueError("object field count")
+        for name, child in node["fields"].items():
+            if not re.fullmatch(r"[a-z][a-z0-9_]*", name):
+                raise ValueError("invalid schema field name")
+            validate_node(child, depth + 1)
+    elif kind == "array":
+        if keys != {"type", "max", "item"} or type(node["max"]) is not int:
+            raise ValueError("array requires a finite maximum")
+        if not 1 <= node["max"] <= 64:
+            raise ValueError("array maximum exceeds gameplay bound")
+        validate_node(node["item"], depth + 1)
+    elif kind == "id":
+        if keys != {"type", "min", "max"}:
+            raise ValueError("id requires exact bounds")
+        for key in ("min", "max"):
+            value = node[key]
+            if not isinstance(value, str) or not re.fullmatch(r"0|[1-9][0-9]*", value):
+                raise ValueError("id bounds must be canonical decimal strings")
+        if not 0 <= int(node["min"]) <= int(node["max"]) <= (1 << 64) - 1:
+            raise ValueError("id range exceeds uint64")
+    elif kind in ("int", "string"):
+        if keys not in ({"type", "min", "max"}, {"type", "min", "max", "values"}):
+            raise ValueError("unexpected scalar schema fields")
+        bounds(node, -(1 << 31) if kind == "int" else 0,
+               (1 << 31) - 1 if kind == "int" else 4096)
+        if "values" in node:
+            values = node["values"]
+            if not isinstance(values, list) or not 1 <= len(values) <= 16:
+                raise ValueError("invalid closed value set")
+            if any(type(value) is not (int if kind == "int" else str) for value in values):
+                raise ValueError("closed values have wrong type")
+            if len(set(values)) != len(values):
+                raise ValueError("duplicate closed values")
+            if any(not node["min"] <= (value if kind == "int" else len(value.encode()))
+                   <= node["max"] for value in values):
+                raise ValueError("closed value exceeds schema bounds")
+    elif kind == "bool":
+        if keys != {"type"}:
+            raise ValueError("bool cannot carry extra schema fields")
+    else:
+        raise ValueError("unsupported schema node type")
+
+
+# 校验冻结消息形状并生成唯一原生描述，合法边界改动会直接反映到产物。
 def generate(doc):
-    if not isinstance(doc, dict) or type(doc.get("version")) is not int or doc["version"] != 1:
+    if not isinstance(doc, dict) or type(doc.get("version")) is not int or doc["version"] != 2:
         raise ValueError("unsupported contract version")
-    state, effect = doc.get("state"), doc.get("effect")
-    if not isinstance(state, dict) or not isinstance(effect, dict):
-        raise ValueError("contract requires state and effect schemas")
-    if set(state) != {"v", "seq", "tick_id", "count", "extra_fields"}:
-        raise ValueError("unsupported state fields")
-    ack = effect.get("ack")
-    if not isinstance(ack, dict) or set(ack) != {"v", "seq", "count"}:
-        raise ValueError("unsupported ack fields")
-    if state["extra_fields"] is not False or effect.get("snapshot") != "state schema":
-        raise ValueError("snapshot must use the exact state schema")
-    if effect.get("kinds") != ["ack", "snapshot"]:
+    if not isinstance(doc.get("state"), dict) or doc["state"].get("v") != 2:
+        raise ValueError("state schema must declare version 2")
+    effect = doc.get("effect")
+    if not isinstance(effect, dict) or type(effect.get("v")) is not int or effect["v"] != 2:
+        raise ValueError("effect schema must declare version 2")
+    schemas = effect.get("schemas")
+    kinds = effect.get("kinds")
+    if not isinstance(kinds, list) or len(kinds) != len(KINDS) or set(kinds) != KINDS:
         raise ValueError("unsupported output kinds")
-    versions = (state.get("v"), effect.get("v"), ack.get("v"))
-    if any(type(value) is not int or value != 1 for value in versions):
-        raise ValueError("all output schemas must use integer version 1")
-    if ack["seq"] != "positive uint64 decimal string" or ack["count"] != "bounded integer":
-        raise ValueError("ack must use positive sequence and bounded state count")
-    min_count, max_count = interval(state["count"], "integer", -(1 << 63), (1 << 63) - 1)
-    min_tick, max_tick = interval(state["tick_id"], "canonical decimal string", 0, (1 << 63) - 1)
-    min_seq, max_seq = interval(state["seq"], "canonical decimal string", 0, (1 << 64) - 1)
-    if min_tick != 0 or min_seq != 0 or max_seq != (1 << 64) - 1:
-        raise ValueError("state requires nonnegative Tick and complete uint64 sequence")
-    lines = ["// 从 lua/contract.json 生成的桥接边界；请修改契约后重新构建。", "#pragma once", "",
-             '#include "common/Types.h"', "", "#include <array>", "#include <string_view>", "",
-             "namespace hunter::schema", "{",
-             f"inline constexpr i32 version = {versions[0]};",
-             "inline constexpr u64 min_ack_seq = 1ULL;",
-             f"inline constexpr u64 max_seq = {max_seq}ULL;",
-             f"inline constexpr u64 max_tick = {max_tick}ULL;",
-             f"inline constexpr i64 min_count = {signed_literal(min_count)};",
-             f"inline constexpr i64 max_count = {signed_literal(max_count)};", ""]
-    for name, fields in (("ack", ack), ("snapshot", set(state) - {"extra_fields"})):
-        keys = ", ".join(json.dumps(key) for key in sorted(fields))
-        lines.append(f"inline constexpr std::array<std::string_view, {len(fields)}> {name}_fields"
-                     + "{" + keys + "};")
-    return "\n".join(lines + ["}", ""])
+    if not isinstance(schemas, dict) or set(schemas) != KINDS:
+        raise ValueError("missing or unknown output schema")
+    for name, node in schemas.items():
+        validate_node(node)
+        if node["type"] != "object" or set(node["fields"]) != FIELDS[name]:
+            raise ValueError("unsupported message fields")
+        if node["fields"]["v"] != {"type": "int", "min": 2, "max": 2}:
+            raise ValueError("all messages require integer version 2")
+        for field, spec in node["fields"].items():
+            expected = ("id" if (field.endswith("_id") and field != "req_id")
+                        or field in {"seq", "applied_tick"} else
+                        "int" if field in {"v", "x", "y", "amount"} else
+                        "array" if field == "entities" else "string")
+            if spec["type"] != expected:
+                raise ValueError("message field cannot change its wire type")
+    entity = schemas["snapshot"]["fields"]["entities"]
+    if entity["type"] != "array" or entity["item"]["type"] != "object":
+        raise ValueError("snapshot requires entity objects")
+    if set(entity["item"]["fields"]) != ENTITY_FIELDS:
+        raise ValueError("unsupported entity fields")
+    for field, spec in entity["item"]["fields"].items():
+        expected = ("id" if field == "id" else "string" if field in {"kind", "ai"}
+                    else "bool" if field in {"grounded", "alive"} else "int")
+        if spec["type"] != expected:
+            raise ValueError("entity field cannot change its wire type")
+    for name, node in schemas.items():
+        for field, spec in node["fields"].items():
+            if field in {"tick_id", "applied_tick"}:
+                if spec["type"] != "id" or int(spec["max"]) > (1 << 63) - 1:
+                    raise ValueError("Tick exceeds signed runtime range")
+            elif (field.endswith("_id") and field != "req_id") or field == "seq":
+                if spec["type"] != "id":
+                    raise ValueError("domain IDs require exact decimal representation")
+    payload = json.dumps(schemas, sort_keys=True, ensure_ascii=True, separators=(",", ":"))
+    return ("// 从 lua/contract.json 生成的闭集输出描述；请修改契约后重新构建。\n"
+            "#pragma once\n\n"
+            '#include "common/Types.h"\n\n'
+            "namespace hunter::schema\n{\n"
+            "inline constexpr i32 version = 2;\n"
+            'inline constexpr const char* outputs = R"SCHEMA(' + payload + ')SCHEMA";\n'
+            "}\n")
 
 
 # 完整准备头文件后单次替换，失败保留旧输出并移除本次临时文件。
@@ -87,7 +156,7 @@ def write_header(output, header):
 
 # 向构建目录输出校验头，契约错误或写入失败以非零退出报告。
 def main():
-    parser = argparse.ArgumentParser(description="从 Hunter 契约生成输出 schema 校验常量")
+    parser = argparse.ArgumentParser(description="从 Hunter 契约生成输出 schema 校验描述")
     parser.add_argument("--contract", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()

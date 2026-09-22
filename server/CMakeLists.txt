@@ -50,6 +50,13 @@ endfunction()
 
 set(HUNTER_GEN "${CMAKE_CURRENT_BINARY_DIR}/generated")
 file(MAKE_DIRECTORY "${HUNTER_GEN}" "${HUNTER_GEN}/csharp")
+add_custom_command(OUTPUT "${HUNTER_GEN}/content.json" "${HUNTER_GEN}/ContentSpec.h"
+    COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/../export/combat.py"
+        --source "${CMAKE_CURRENT_SOURCE_DIR}/../design/combat_demo.json"
+        --output "${HUNTER_GEN}/content.json" --header "${HUNTER_GEN}/ContentSpec.h"
+    DEPENDS ../design/combat_demo.json ../export/combat.py tools/publish.py VERBATIM)
+add_custom_target(hunter_content ALL DEPENDS
+    "${HUNTER_GEN}/content.json" "${HUNTER_GEN}/ContentSpec.h")
 set(HUNTER_PROTO "${CMAKE_CURRENT_SOURCE_DIR}/../protobuf/hunter.proto")
 if(HUNTER_BUILD_TOOLS)
     set(HUNTER_PROTOC "$<TARGET_FILE:protoc>")
@@ -92,6 +99,7 @@ add_custom_command(OUTPUT "${HUNTER_GEN}/SchemaSpec.h"
     DEPENDS lua/contract.json tools/gen_schema.py VERBATIM)
 add_library(hunter_script STATIC src/script/Script.cpp src/script/Async.cpp
     src/script/Schema.cpp "${HUNTER_GEN}/SchemaSpec.h")
+add_dependencies(hunter_script hunter_content)
 hunter_target(hunter_script)
 target_include_directories(hunter_script SYSTEM PUBLIC "${HUNTER_GEN}")
 target_compile_definitions(hunter_script PUBLIC HUNTER_PRODUCTION=$<BOOL:${HUNTER_PRODUCTION}>)
@@ -115,6 +123,9 @@ if(WIN32)
         HUNTER_SCRIPT_PATH="${HUNTER_GEN}/game.lua")
     add_dependencies(hunter_server_desktop hunter_scripts)
     install(TARGETS hunter_server_desktop RUNTIME DESTINATION bin)
+    add_executable(hunter_client tools/Client.cpp)
+    hunter_target(hunter_client)
+    target_link_libraries(hunter_client PRIVATE hunter_server_core)
 endif()
 if(ANDROID)
     add_executable(hunter_android_probe platform/android/Probe.cpp)

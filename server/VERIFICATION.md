@@ -1,7 +1,44 @@
-# 基础框架验证记录
+# 服务端验证记录
 
 日期：2026-09-22。结果来自本轮实现与审查修复后的本机工作区验证。
 本记录区分实现、实际运行结果和后续平台验收；active intent 不等于完整路线阶段完成。
+
+## 基础战斗切片最终验证（2026-09-22）
+
+本节为 SRV-009 的最新结果；下方框架记录保留为历史证据。使用已有锁定依赖重新生成协议、
+内容、schema 和脚本，再完整构建；未修改第三方源码或更新依赖版本。
+
+| 命令／检查 | 结果 |
+| --- | --- |
+| `cmake --preset win-dev -A x64 -DFETCHCONTENT_SOURCE_DIR_LUAX=G:/github/luax` | 配置成功 |
+| `cmake --build --preset win-dev --parallel 8` | 成功；包含服务端、协议客户端、C++／C# 协议、共享内容和玩法契约 |
+| `ctest --preset win-dev --output-on-failure` | **12/12 通过，38.44 秒** |
+| `cmake --preset win-bundle ...` | 指定上述开发构建的 protoc、签名测试 Bundle 与 policy；配置成功 |
+| `cmake --build --preset win-bundle --parallel 8` | 成功；使用 compiler-free Runtime |
+| `ctest --preset win-bundle --output-on-failure` | **11/11 通过，30.95 秒** |
+
+两套顺序运行，开发测试先生成新签名 Bundle，生产测试再使用同一制品。生产链接检查通过，
+不含 Compiler／AST／DevelopmentRuntime；签名制品仍使用公开测试向量，不能用于正式发行。
+
+新增和扩展的实际覆盖：
+
+- 两种 Runtime 均执行同一 `hunter_game_contract`：登录和开局幂等、移动与扫掠碰撞、落地／顶板、
+  空中跳跃拒绝、枪械最近目标／墙优先／射程端点／射速／换弹、同 Tick 点射和 uint64 序号精度。
+- 普通怪巡逻／追击／近战、窄巡逻区高速端点限制、区外逐步返回、死亡和清怪只裁定一次，
+  死怪不能在同 Tick 再攻击；重开重置实体和弹药、保持连接序号，旧局请求不重置新局。
+- 状态导出／导入后继续重放得到相同结果；非法字段、浮点坐标、错误实体 ID、内容不一致、
+  暂停持有动作与终态非零速度均被拒绝。导入导出仅验证状态契约，不代表已有热更新或存档。
+- 两种模式各完成十次真实服务进程启停，并经正式 C++ 协议客户端跑完死亡、清怪与第三局重开。
+  保留拆包粘包、错误凭据／版本、超时、额外客户端、慢读背压、宿主管道与退出故障回归。
+- 握手前暂停不触发未连接套接字发送；暂停期间和积压中输入明确作废，恢复不回放移动／开火。
+  CLI 拒绝错误内容版本，服务端退出且 CLI stdin 仍打开时也有界结束；TCP 重置返回明确错误。
+- 共享配置工具内部 **12 项测试**覆盖字段／数值／ID／出生碰撞／巡逻支撑及发布失败回滚。
+  schema、组装、签名和 intent 工具继续通过；内部用例不重复计入 CTest 项数。
+
+日志位于各配置的 `build/win-dev/` 与 `build/win-bundle/`：
+`combat-configure.log`、`combat-build.log`、`combat-tests.log` 及 `Testing/Temporary/LastTest.log`。
+现有 Android 原生探针只同步了 v2 上下文和登录／开局调用，未安装 NDK、编译 Android 或运行真机。
+Unity 仍为占位；没有客户端画面、APK、完整撤离／Boss／掉落／存档或干净 PC 发行验收声明。
 
 ## 已实现
 
@@ -10,7 +47,8 @@
   已核对生成的 `hunter_server_core.vcxproj` 编译定义及实际 TCP／定时器运行测试。
 - 同一脚本的开发源码路径和 compiler-free 生产签名 Bundle 路径。
 - C++／C# 协议生成、intent 检查、Windows CI 配置、Android ARM64 原生探针入口。
-- SRV-006～008 保持 deferred。玩法、SQLite、热更新、AAR／Service／Binder 未实现。
+- SRV-009 增加本机登录、开局、共享灰盒、权威移动／射击／普通怪以及死亡和清怪重开。
+- SRV-006～008 保持 deferred。完整撤离、SQLite、热更新、AAR／Service／Binder 未实现。
 
 ## 本机工具链与依赖
 
@@ -130,6 +168,7 @@ schema 6 项、Bundle／identity 13 项、intent 检查器 6 项，全部通过�
   API 26、16 KB 链接选项只是构建入口，不能当作设备兼容证据。
 - 没有 Unity 工程／客户端运行，没有 C# 集成、AAR／Binder／APK、前后台及强杀验收。
 - Windows CI 配置已提交到工作区，但远程 CI 未执行；私有 Luax 访问需要相应读取凭据。
-- 没有干净 PC 发行包、长时间性能／发热或真实玩法测试；测试公钥不得作为发行公钥。
+- 没有干净 PC 发行包、长时间性能／发热或 Unity 实机玩法测试；测试公钥不得作为发行公钥。
 
-因此：**Windows 基础框架已实现且通过本机验证，P0 整体未完成，P1～P5 未开始。**
+Windows 基础框架及 SRV-009 共用玩法切片已实现；P0 的 Android 证据、Android 宿主、
+热更新、存档及完整撤离阶段仍待完成，不能由 Windows 通过替代。

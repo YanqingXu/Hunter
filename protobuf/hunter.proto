@@ -1,4 +1,4 @@
-// 框架探针协议的唯一来源；所有整数语义由服务端契约约束。
+// 本机单人 PvE 协议的唯一来源；位置和速度使用毫米与毫米每 Tick。
 syntax = "proto3";
 package hunter.wire;
 option optimize_for = LITE_RUNTIME;
@@ -16,28 +16,103 @@ message HelloAck {
 }
 message FrameInput {
   uint64 seq = 1;
-  sint64 value = 2;
+  reserved 2;
+  reserved "value";
+  uint64 match_id = 3;
+  sint32 move_x = 4;
+  sint32 aim_x = 5;
+  sint32 aim_y = 6;
+  bool jump = 7;
+  bool fire = 8;
+  bool reload = 9;
 }
 message InputAck {
   uint64 seq = 1;
-  sint64 count = 2;
+  reserved 2;
+  reserved "count";
+  uint64 match_id = 3;
+  uint64 applied_tick = 4;
+}
+message Entity {
+  uint64 id = 1;
+  string kind = 2;
+  sint32 x = 3;
+  sint32 y = 4;
+  sint32 vx = 5;
+  sint32 vy = 6;
+  int32 hp = 7;
+  int32 max_hp = 8;
+  int32 ammo = 9;
+  int32 reserve = 10;
+  int32 reload_ticks = 11;
+  bool grounded = 12;
+  bool alive = 13;
+  sint32 facing = 14;
+  string ai = 15;
 }
 message Snapshot {
   uint64 tick_id = 1;
   uint64 seq = 2;
-  sint64 count = 3;
+  reserved 3;
+  reserved "count";
+  uint64 match_id = 4;
+  string phase = 5;
+  repeated Entity entities = 6;
+}
+message LoginReq {
+  string req_id = 1;
+}
+message LoginRsp {
+  string req_id = 1;
+  uint64 player_id = 2;
+  uint64 match_id = 3;
+  string phase = 4;
+}
+message StartReq {
+  string req_id = 1;
+  uint64 after_match_id = 2;
+}
+message StartRsp {
+  string req_id = 1;
+  uint64 match_id = 2;
+  string phase = 3;
+}
+message GameEvent {
+  uint64 match_id = 1;
+  uint64 event_id = 2;
+  uint64 tick_id = 3;
+  string kind = 4;
+  uint64 actor_id = 5;
+  uint64 target_id = 6;
+  sint32 x = 7;
+  sint32 y = 8;
+  sint32 amount = 9;
+}
+message PauseState {
+  bool paused = 1;
+  uint64 discard_through_seq = 2;
 }
 message Error {
   string code = 1;
   string detail = 2;
+  string req_id = 3;
+  uint64 seq = 4;
+  uint64 match_id = 5;
 }
 message Envelope {
+  reserved 3, 4, 5;
   oneof body {
     Hello hello = 1;
     HelloAck hello_ack = 2;
-    FrameInput input = 3;
-    InputAck ack = 4;
-    Snapshot snapshot = 5;
     Error error = 6;
+    FrameInput input = 7;
+    InputAck ack = 8;
+    Snapshot snapshot = 9;
+    LoginReq login_req = 10;
+    LoginRsp login_rsp = 11;
+    StartReq start_req = 12;
+    StartRsp start_rsp = 13;
+    GameEvent event = 14;
+    PauseState pause = 15;
   }
 }

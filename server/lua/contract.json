@@ -1,41 +1,446 @@
 {
-  "version": 1,
+  "version": 2,
   "host_api": {
-    "net.emit": {"args": ["string kind", "string payload_json"], "returns": "boolean"},
-    "cfg.get": {"args": [], "returns": "string ctx_json"},
-    "diagnostics.log": {"args": ["string message"], "returns": "boolean"},
+    "net.emit": {
+      "args": [
+        "string kind",
+        "string payload_json"
+      ],
+      "returns": "boolean"
+    },
+    "cfg.get": {
+      "args": [],
+      "returns": "string ctx_json"
+    },
+    "diagnostics.log": {
+      "args": [
+        "string message"
+      ],
+      "returns": "boolean"
+    },
     "entries": {
-      "init": ["string ctx_json"],
-      "on_event": ["integer event_id", "string payload_json"],
-      "tick": ["integer tick_id", "number dt_seconds"],
+      "init": [
+        "string ctx_json"
+      ],
+      "on_event": [
+        "integer event_id",
+        "string payload_json"
+      ],
+      "tick": [
+        "integer tick_id",
+        "number dt_seconds"
+      ],
       "export_state": [],
-      "import_state": ["string snapshot_json"],
+      "import_state": [
+        "string snapshot_json"
+      ],
       "validate_state": [],
-      "shutdown": ["string reason"]
+      "shutdown": [
+        "string reason"
+      ]
     },
     "entry_returns": "boolean true except export_state returns string",
-    "ctx": {"v": 1, "snapshot_every": "integer [1,3600]"}
+    "ctx": {
+      "v": 2,
+      "snapshot_every": "integer [1,3600]",
+      "content": "validated exported content object"
+    }
   },
   "capability": {
-    "namespaces": ["cfg", "diagnostics", "net"],
+    "namespaces": [
+      "cfg",
+      "diagnostics",
+      "net"
+    ],
     "namespace_mutation": false,
     "entry_suspension": false,
     "ordinary_table_crossing": false,
     "net_commit": "validated successful call output batch"
   },
   "state": {
-    "v": 1,
+    "v": 2,
     "tick_id": "canonical decimal string [0,9223372036854775807]",
     "seq": "canonical decimal string [0,18446744073709551615]",
-    "count": "integer [-1000000000,1000000000]",
+    "match_id": "canonical decimal string [0,18446744073709551615]",
+    "player_id": "canonical decimal string [0,18446744073709551615]",
+    "event_id": "canonical decimal string [0,18446744073709551615]",
+    "phase": "Unauthenticated|Lobby|Playing|Dead|Cleared",
+    "paused": "boolean",
+    "content_key": "canonical JSON encoding of complete immutable content; exact import match",
+    "entities": {
+      "max": 64,
+      "wire_fields": "effect.schemas.snapshot.fields.entities.item.fields",
+      "shot_ticks": "nonnegative integer",
+      "attack_ticks": "nonnegative integer"
+    },
+    "controls": {
+      "move_x": "integer [-1,1]",
+      "aim_x": "integer [-1000,1000]",
+      "aim_y": "integer [-1000,1000]",
+      "jump": "boolean",
+      "fire": "boolean",
+      "fire_once": "boolean",
+      "reload": "boolean"
+    },
+    "last_start": {
+      "req_id": "string [0,128] bytes",
+      "after_match_id": "canonical uint64 decimal string",
+      "match_id": "canonical uint64 decimal string"
+    },
     "extra_fields": false
   },
   "effect": {
-    "v": 1,
-    "input_event_id": 1,
-    "input": {"v": 1, "seq": "positive uint64 decimal string", "value": "integer +/-1000"},
-    "ack": {"v": 1, "seq": "positive uint64 decimal string", "count": "bounded integer"},
-    "snapshot": "state schema",
-    "kinds": ["ack", "snapshot"]
+    "v": 2,
+    "events": {
+      "input": 1,
+      "login": 2,
+      "start": 3,
+      "pause": 4
+    },
+    "input": {
+      "v": 2,
+      "seq": "positive uint64 decimal string",
+      "match_id": "positive uint64 decimal string",
+      "applied_tick": "nonnegative i64 decimal string",
+      "move_x": "integer [-1,1]",
+      "aim_x": "integer [-1000,1000]",
+      "aim_y": "integer [-1000,1000]",
+      "jump": "boolean",
+      "fire": "boolean",
+      "reload": "boolean"
+    },
+    "kinds": [
+      "ack",
+      "snapshot",
+      "login",
+      "start",
+      "event",
+      "error"
+    ],
+    "schemas": {
+      "ack": {
+        "type": "object",
+        "fields": {
+          "v": {
+            "type": "int",
+            "min": 2,
+            "max": 2
+          },
+          "seq": {
+            "type": "id",
+            "min": "1",
+            "max": "18446744073709551615"
+          },
+          "match_id": {
+            "type": "id",
+            "min": "1",
+            "max": "18446744073709551615"
+          },
+          "applied_tick": {
+            "type": "id",
+            "min": "0",
+            "max": "9223372036854775807"
+          }
+        }
+      },
+      "snapshot": {
+        "type": "object",
+        "fields": {
+          "v": {
+            "type": "int",
+            "min": 2,
+            "max": 2
+          },
+          "tick_id": {
+            "type": "id",
+            "min": "0",
+            "max": "9223372036854775807"
+          },
+          "seq": {
+            "type": "id",
+            "min": "0",
+            "max": "18446744073709551615"
+          },
+          "match_id": {
+            "type": "id",
+            "min": "0",
+            "max": "18446744073709551615"
+          },
+          "phase": {
+            "type": "string",
+            "min": 1,
+            "max": 20,
+            "values": [
+              "Unauthenticated",
+              "Lobby",
+              "Playing",
+              "Dead",
+              "Cleared"
+            ]
+          },
+          "entities": {
+            "type": "array",
+            "max": 64,
+            "item": {
+              "type": "object",
+              "fields": {
+                "id": {
+                  "type": "id",
+                  "min": "1",
+                  "max": "18446744073709551615"
+                },
+                "kind": {
+                  "type": "string",
+                  "min": 1,
+                  "max": 16,
+                  "values": [
+                    "player",
+                    "enemy"
+                  ]
+                },
+                "x": {
+                  "type": "int",
+                  "min": -1000000000,
+                  "max": 1000000000
+                },
+                "y": {
+                  "type": "int",
+                  "min": -1000000000,
+                  "max": 1000000000
+                },
+                "vx": {
+                  "type": "int",
+                  "min": -1000000000,
+                  "max": 1000000000
+                },
+                "vy": {
+                  "type": "int",
+                  "min": -1000000000,
+                  "max": 1000000000
+                },
+                "hp": {
+                  "type": "int",
+                  "min": 0,
+                  "max": 1000000000
+                },
+                "max_hp": {
+                  "type": "int",
+                  "min": 1,
+                  "max": 1000000000
+                },
+                "ammo": {
+                  "type": "int",
+                  "min": 0,
+                  "max": 1000000000
+                },
+                "reserve": {
+                  "type": "int",
+                  "min": 0,
+                  "max": 1000000000
+                },
+                "reload_ticks": {
+                  "type": "int",
+                  "min": 0,
+                  "max": 1000000000
+                },
+                "grounded": {
+                  "type": "bool"
+                },
+                "alive": {
+                  "type": "bool"
+                },
+                "facing": {
+                  "type": "int",
+                  "min": -1,
+                  "max": 1,
+                  "values": [
+                    -1,
+                    1
+                  ]
+                },
+                "ai": {
+                  "type": "string",
+                  "min": 1,
+                  "max": 16,
+                  "values": [
+                    "idle",
+                    "patrol",
+                    "chase",
+                    "attack",
+                    "dead"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "login": {
+        "type": "object",
+        "fields": {
+          "v": {
+            "type": "int",
+            "min": 2,
+            "max": 2
+          },
+          "req_id": {
+            "type": "string",
+            "min": 1,
+            "max": 128
+          },
+          "player_id": {
+            "type": "id",
+            "min": "1",
+            "max": "18446744073709551615"
+          },
+          "match_id": {
+            "type": "id",
+            "min": "0",
+            "max": "18446744073709551615"
+          },
+          "phase": {
+            "type": "string",
+            "min": 1,
+            "max": 20,
+            "values": [
+              "Unauthenticated",
+              "Lobby",
+              "Playing",
+              "Dead",
+              "Cleared"
+            ]
+          }
+        }
+      },
+      "start": {
+        "type": "object",
+        "fields": {
+          "v": {
+            "type": "int",
+            "min": 2,
+            "max": 2
+          },
+          "req_id": {
+            "type": "string",
+            "min": 1,
+            "max": 128
+          },
+          "match_id": {
+            "type": "id",
+            "min": "1",
+            "max": "18446744073709551615"
+          },
+          "phase": {
+            "type": "string",
+            "min": 1,
+            "max": 20,
+            "values": [
+              "Unauthenticated",
+              "Lobby",
+              "Playing",
+              "Dead",
+              "Cleared"
+            ]
+          }
+        }
+      },
+      "event": {
+        "type": "object",
+        "fields": {
+          "v": {
+            "type": "int",
+            "min": 2,
+            "max": 2
+          },
+          "match_id": {
+            "type": "id",
+            "min": "1",
+            "max": "18446744073709551615"
+          },
+          "event_id": {
+            "type": "id",
+            "min": "1",
+            "max": "18446744073709551615"
+          },
+          "tick_id": {
+            "type": "id",
+            "min": "0",
+            "max": "9223372036854775807"
+          },
+          "kind": {
+            "type": "string",
+            "min": 1,
+            "max": 16,
+            "values": [
+              "shot",
+              "hit",
+              "death",
+              "reload",
+              "end"
+            ]
+          },
+          "actor_id": {
+            "type": "id",
+            "min": "0",
+            "max": "18446744073709551615"
+          },
+          "target_id": {
+            "type": "id",
+            "min": "0",
+            "max": "18446744073709551615"
+          },
+          "x": {
+            "type": "int",
+            "min": -1000000000,
+            "max": 1000000000
+          },
+          "y": {
+            "type": "int",
+            "min": -1000000000,
+            "max": 1000000000
+          },
+          "amount": {
+            "type": "int",
+            "min": -1000000000,
+            "max": 1000000000
+          }
+        }
+      },
+      "error": {
+        "type": "object",
+        "fields": {
+          "v": {
+            "type": "int",
+            "min": 2,
+            "max": 2
+          },
+          "code": {
+            "type": "string",
+            "min": 1,
+            "max": 64
+          },
+          "detail": {
+            "type": "string",
+            "min": 0,
+            "max": 256
+          },
+          "req_id": {
+            "type": "string",
+            "min": 0,
+            "max": 128
+          },
+          "seq": {
+            "type": "id",
+            "min": "0",
+            "max": "18446744073709551615"
+          },
+          "match_id": {
+            "type": "id",
+            "min": "0",
+            "max": "18446744073709551615"
+          }
+        }
+      }
+    }
   }
 }

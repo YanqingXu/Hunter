@@ -1,9 +1,10 @@
-// 验证协议真实编解码、严格桥接 schema 与慢读时的有界缓存。
+// 验证玩法协议、无损 ID、嵌套输出 schema 与有界原子发送批次。
 #include "common/Types.h"
 #include "net/Protocol.h"
 
 #include <iostream>
 #include <stdexcept>
+#include <nlohmann/json.hpp>
 
 namespace
 {
@@ -15,9 +16,136 @@ void check(bool ok, const char* detail)
         throw std::runtime_error(detail);
     }
 }
+
+// 返回覆盖有符号坐标与全部字段的合法实体投影。
+nlohmann::json entity()
+{
+    return {{"id", "1"}, {"kind", "player"}, {"x", -100}, {"y", 20},
+        {"vx", -30}, {"vy", 0}, {"hp", 100}, {"max_hp", 100}, {"ammo", 6},
+        {"reserve", 30}, {"reload_ticks", 0}, {"grounded", true}, {"alive", true},
+        {"facing", -1}, {"ai", "idle"}};
 }
 
-// 执行完整帧、桥接批次和发送队列的边界场景。
+// 在一个合法输出后放入非法输出，确认任何错误都会拒绝整批。
+void rejects(const Str& kind, const nlohmann::json& value, const hunter::Cfg& cfg)
+{
+    const Vec<hunter::ScriptOut> out{
+        {"ack", R"({"v":2,"seq":"1","match_id":"1","applied_tick":"1"})"},
+        {kind, value.dump()}};
+    check(!hunter::script_frames(out, cfg), "invalid output rejects entire batch");
+}
+
+// 验证全部输出投影及最重要的精度、字段与容器边界。
+void outputs(const hunter::Cfg& cfg)
+{
+    const nlohmann::json ack = {{"v", 2}, {"seq", "18446744073709551615"},
+        {"match_id", "18446744073709551615"}, {"applied_tick", "9223372036854775807"}};
+    const nlohmann::json snapshot = {{"v", 2}, {"tick_id", "9223372036854775807"},
+        {"seq", "18446744073709551615"}, {"match_id", "1"}, {"phase", "Playing"},
+        {"entities", nlohmann::json::array({entity()})}};
+    const Vec<hunter::ScriptOut> good{
+        {"ack", ack.dump()}, {"snapshot", snapshot.dump()},
+        {"login", R"({"v":2,"req_id":"l","player_id":"1","match_id":"0","phase":"Lobby"})"},
+        {"start", R"({"v":2,"req_id":"s","match_id":"1","phase":"Playing"})"},
+        {"event", R"({"v":2,"match_id":"1","event_id":"2","tick_id":"3","kind":"hit",)"
+            R"("actor_id":"1","target_id":"2","x":-100,"y":0,"amount":20})"},
+        {"error", R"({"v":2,"code":"stale_input","detail":"","req_id":"","seq":"9",)"
+            R"("match_id":"1"})"}};
+    const auto frames = hunter::script_frames(good, cfg);
+    check(frames && frames->size() == good.size(), "all output kinds encode");
+    const auto a = hunter::decode_frame(frames->at(0).bytes.substr(4), cfg.max_frame_bytes);
+    check(a && a->ack().seq() == 18446744073709551615ULL
+        && a->ack().applied_tick() == 9223372036854775807ULL, "exact ID and Tick maxima");
+    const auto s = hunter::decode_frame(frames->at(1).bytes.substr(4), cfg.max_frame_bytes);
+    check(s && s->snapshot().entities_size() == 1 && s->snapshot().entities(0).x() == -100
+        && s->snapshot().entities(0).facing() == -1, "signed entity fields");
+    check(frames->at(1).snapshot && !frames->at(4).snapshot, "only snapshots coalesce");
+    check(hunter::decode_frame(frames->at(2).bytes.substr(4), 65536)->login_rsp().req_id() == "l",
+        "login projection");
+    check(hunter::decode_frame(frames->at(3).bytes.substr(4), 65536)->start_rsp().match_id() == 1,
+        "start projection");
+    check(hunter::decode_frame(frames->at(4).bytes.substr(4), 65536)->event().amount() == 20,
+        "event projection");
+    check(hunter::decode_frame(frames->at(5).bytes.substr(4), 65536)->error().seq() == 9,
+        "error correlation");
+
+    for (const Str seq : {"0", "01", "+1", "-1", "18446744073709551616", ""})
+    {
+        auto bad = ack;
+        bad["seq"] = seq;
+        rejects("ack", bad, cfg);
+    }
+
+    for (const nlohmann::json seq : {nlohmann::json(1), nlohmann::json(1.0),
+        nlohmann::json(true)})
+    {
+        auto bad = ack;
+        bad["seq"] = seq;
+        rejects("ack", bad, cfg);
+    }
+
+    auto bad = ack;
+    bad["applied_tick"] = "9223372036854775808";
+    rejects("ack", bad, cfg);
+    bad = ack;
+    bad["v"] = 2.0;
+    rejects("ack", bad, cfg);
+    bad = ack;
+    bad["v"] = true;
+    rejects("ack", bad, cfg);
+    bad = ack;
+    bad["extra"] = 0;
+    rejects("ack", bad, cfg);
+    bad = ack;
+    bad.erase("match_id");
+    rejects("ack", bad, cfg);
+
+    for (const Str field : {"x", "hp", "facing"})
+    {
+        bad = snapshot;
+        bad["entities"][0][field] = field == "facing" ? 0 : 1000000001;
+        rejects("snapshot", bad, cfg);
+    }
+
+    bad = snapshot;
+    bad["entities"][0]["alive"] = 1;
+    rejects("snapshot", bad, cfg);
+    bad = snapshot;
+    bad["entities"][0]["kind"] = "boss";
+    rejects("snapshot", bad, cfg);
+    bad = snapshot;
+    bad["entities"][0]["extra"] = 0;
+    rejects("snapshot", bad, cfg);
+    bad = snapshot;
+    bad["phase"] = "Unknown";
+    rejects("snapshot", bad, cfg);
+    bad = snapshot;
+    bad["entities"] = nlohmann::json::array();
+
+    for (usize i = 0; i < 65; ++i)
+    {
+        bad["entities"].push_back(entity());
+    }
+
+    rejects("snapshot", bad, cfg);
+    bad["entities"].erase(64);
+    check(hunter::script_frames({{"snapshot", bad.dump()}}, cfg).has_value(),
+        "bounded entity array maximum");
+    bad = nlohmann::json::parse(good[2].payload);
+    bad["req_id"] = Str(129, 'x');
+    rejects("login", bad, cfg);
+    rejects("unknown", ack, cfg);
+
+    auto small = cfg;
+    small.max_outputs = 1;
+    check(!hunter::script_frames(good, small), "output count bound");
+    small = cfg;
+    small.max_output_bytes = 1;
+    check(!hunter::script_frames(good, small), "output byte bound");
+}
+}
+
+// 执行真实 Protobuf 帧、输出校验与发送队列的边界场景。
 int main()
 {
     using namespace hunter;
@@ -26,54 +154,20 @@ int main()
     {
         wire::Envelope msg;
         msg.mutable_input()->set_seq(1);
-        msg.mutable_input()->set_value(-1);
+        msg.mutable_input()->set_match_id(1);
+        msg.mutable_input()->set_move_x(-1);
+        msg.mutable_input()->set_aim_x(1000);
         const auto frame = encode_frame(msg, 65536);
         check(frame.has_value(), "encode input");
-        check(frame->bytes == Str("\0\0\0\6\x1a\4\x08\1\x10\1", 10), "protobuf golden frame");
+        check(frame->bytes == Str("\0\0\0\x0b\x3a\x09\x08\1\x18\1\x20\1\x28\xd0\x0f", 15),
+            "v2 protobuf golden frame");
         const auto decoded = decode_frame(frame->bytes.substr(4), 65536);
-        check(decoded && decoded->input().value() == -1, "decode signed input");
+        check(decoded && decoded->input().move_x() == -1, "decode signed input");
         check(!decode_frame("", 65536), "empty protobuf");
         check(!decode_frame(Str(1, '\xff'), 65536), "invalid protobuf");
+        check(!decode_frame(Str("\x1a\2\x08\1", 4), 65536), "retired envelope tag rejected");
         check(!decode_frame(frame->bytes.substr(4), 1), "frame limit");
-
-        Cfg cfg;
-        Vec<ScriptOut> good{{"ack", "{\"v\":1,\"seq\":\"18446744073709551615\",\"count\":2}"}};
-        check(script_frames(good, cfg).has_value(), "lossless uint64");
-        auto bad = good;
-        bad.push_back({"snapshot", "{\"v\":1,\"tick_id\":2}"});
-        check(!script_frames(bad, cfg), "batch schema rejection");
-        check(!script_frames({{"ack", "{\"v\":1,\"seq\":\"01\",\"count\":2}"}}, cfg),
-            "noncanonical id");
-
-        const Vec<ScriptOut> rejected{
-            {"ack", R"({"v":1,"seq":"0","count":1})"},
-            {"ack", R"({"v":1,"seq":"1","count":1000000001})"},
-            {"ack", R"({"v":1,"seq":"1","count":-1000000001})"},
-            {"ack", R"({"v":1,"seq":"1","count":18446744073709551615})"},
-            {"ack", R"({"v":18446744073709551615,"seq":"1","count":0})"},
-            {"ack", R"({"v":1,"seq":"1","count":0,"extra":0})"},
-            {"ack", R"({"v":1.0,"seq":"1","count":0})"},
-            {"snapshot", R"({"v":1,"seq":"0","tick_id":"9223372036854775808","count":0})"},
-            {"snapshot", R"({"v":1,"seq":"0","tick_id":"0","count":0,"extra":0})"}};
-
-        for (const auto& item : rejected)
-        {
-            auto batch = good;
-            batch.push_back(item);
-            check(!script_frames(batch, cfg), "schema violation rejects entire frame batch");
-        }
-
-        const Vec<ScriptOut> edges{
-            {"ack", R"({"v":1,"seq":"18446744073709551615","count":1000000000})"},
-            {"ack", R"({"v":1,"seq":"1","count":-1000000000})"},
-            {"snapshot", R"({"v":1,"seq":"0","tick_id":"0","count":0})"},
-            {"snapshot", R"({"v":1,"seq":"1","tick_id":"9223372036854775807","count":0})"}};
-        const auto edge_frames = script_frames(edges, cfg);
-        check(edge_frames && edge_frames->size() == edges.size(), "accept schema boundary values");
-        const auto max_tick = decode_frame(edge_frames->back().bytes.substr(4),
-            cfg.max_frame_bytes);
-        check(max_tick && max_tick->snapshot().tick_id() == 9223372036854775807ULL,
-            "snapshot conversion preserves exact signed Tick maximum");
+        outputs(Cfg{});
 
         SendQueue queue(3, 10);
         check(queue.push_batch({{"aaa", true}}), "first snapshot");

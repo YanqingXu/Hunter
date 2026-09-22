@@ -2,6 +2,7 @@
 #include "common/Types.h"
 #include "core/Cfg.h"
 #include "script/Script.h"
+#include "ContentSpec.h"
 
 #include <asio.hpp>
 #include <iostream>
@@ -41,7 +42,9 @@ int main(int argc, char** argv)
     cfg.bundle_path = argv[1];
     cfg.policy_path = argv[2];
     hunter::Script script;
-    auto opened = script.open(cfg, R"({"v":1,"snapshot_every":3})");
+    const nlohmann::json ctx = {{"v", 2}, {"snapshot_every", 3},
+        {"content", nlohmann::json::parse(hunter::content::json_text)}};
+    auto opened = script.open(cfg, ctx.dump());
     if (!opened)
     {
         std::cerr << opened.error() << '\n';
@@ -49,7 +52,20 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    auto input = script.event(1, R"({"v":1,"seq":"1","value":7})");
+    auto login = script.event(2, R"({"v":2,"req_id":"login"})");
+    auto start = login ? script.event(3,
+        R"({"v":2,"req_id":"start","after_match_id":"0"})") : login;
+
+    if (!login || !start)
+    {
+        static_cast<void>(close_probe(script, "probe_start_failed"));
+        return 1;
+    }
+
+    const nlohmann::json move = {{"v", 2}, {"seq", "1"}, {"match_id", "1"},
+        {"applied_tick", "1"}, {"move_x", 1}, {"aim_x", 1000}, {"aim_y", 0},
+        {"jump", false}, {"fire", false}, {"reload", false}};
+    auto input = script.event(1, move.dump());
     if (!input || input->size() != 1 || (*input)[0].kind != "ack")
     {
         std::cerr << "input probe failed\n";
@@ -93,7 +109,8 @@ int main(int argc, char** argv)
     }
 
     const auto world = nlohmann::json::parse(*state);
-    if (world.at("count") != 7 || world.at("tick_id") != "3" || world.at("seq") != "1")
+    if (world.at("phase") != "Playing" || world.at("match_id") != "1"
+        || world.at("tick_id") != "3" || world.at("seq") != "1")
     {
         return 1;
     }

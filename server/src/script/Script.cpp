@@ -225,7 +225,7 @@ struct Script::Impl
                 const auto& kind = *args[0].stringIf();
                 const auto& payload = *args[1].stringIf();
                 const usize bytes = kind.size() + payload.size();
-                if (!allow_output || (kind != "ack" && kind != "snapshot") ||
+                if (!allow_output || kind.empty() || kind.size() > 32 ||
                     payload.size() > cfg.max_json_bytes || pending.size() >= cfg.max_outputs ||
                     bytes > cfg.max_output_bytes - output_bytes)
                 {

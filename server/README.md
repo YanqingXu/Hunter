@@ -3,8 +3,9 @@
 技术栈为 **C++23 / Standalone Asio 1.36.0 / Luax / Protobuf / CMake**。
 构建显式定义 `ASIO_STANDALONE`，使用独立 Asio 头文件，不依赖 Boost。
 
-当前交付 Windows 服务端基础闭环：本机 TCP 握手、Luax 权威探针状态、固定 Tick、暂停恢复、
-有界背压和资源收尾。它验证基础框架，不包含战斗、SQLite、热更新或 Android Service。
+当前交付 Windows 基础战斗切片：本机 TCP 鉴权、会话登录、开局、权威跑跳／碰撞、
+射线枪械／换弹、普通怪 AI、死亡与清怪重开，以及暂停恢复、有界背压和资源收尾。
+全部玩法由 Luax 维护；不包含撤离结算、SQLite、热更新、Unity 接入或 Android Service。
 设计见 [规划](plan.md)，契约见 [intents](intents/README.md)，实际结果见 [验证记录](VERIFICATION.md)。
 
 ## 构建与测试
@@ -62,14 +63,17 @@ Start 成功返回 `type=Ready`，包含 `port/instance/token/protocol_version/c
 第一次消息必须为 Hello，逐项回传 Ready 的版本、实例和令牌，5 秒内完成握手。
 正式定义位于根目录 `protobuf/hunter.proto`，不能另建私有协议来源。
 
-FrameInput 的 `seq` 是递增非零 uint64，`value` 在 -1000～1000 内；框架脚本将 value 累加，
-只在 Tick 边界返回 InputAck，20 Hz 发送 Snapshot。重复输入不会再次累计。
-JSON 桥接中序号与 Tick 使用十进制字符串。累计值在 ±1,000,000,000 内，越界中止会话。
-这套计数消息只用于验证框架，未来玩法协议另行冻结。
+协议为 v2，Hello 后发送 LoginReq，再发送 StartReq 才进入游戏。StartReq 携带上局 ID，
+首局为 0；重复请求不重置活动世界。清怪或死亡后可在同一连接重开。旧计数协议不再提供。
+FrameInput 携带局 ID、连接内单调的非零 uint64 序号、左右／停止、二维瞄准、跳跃、开火和换弹。
+InputAck 仅确认操作已处理；命中、伤害和死亡以事件与快照为准，客户端不提交这些结果。
+60 Hz 固定模拟、20 Hz 快照；整数毫米坐标，脚底中心，X 向右、Y 向上。
+JSON 桥接和测试客户端中的 ID、序号与 Tick 使用十进制字符串。
 
 当前只接纳首个 TCP 客户端；额外连接关闭。首次客户端无效握手、超限输入、断连或脚本错误
-都会终止当前会话并关闭监听；需要新进程和新实例重新开始。暂停保留有界离散输入，恢复按序执行，
-不补算暂停时间；未来持续移动输入的清除策略随玩法协议实现。
+都会终止当前会话并关闭监听；需要新进程和新实例重新开始。
+暂停清空尚未应用的命令及移动／开火／跳跃／换弹意图，并通知作废序号范围。
+暂停中新输入返回 paused；恢复等待新输入，不回放旧动作、不补算暂停时间。
 
 默认 60 Hz、最多补算 4 Tick；单 Tick 最多处理 64 条输入，一次定时回调共享 4 ms 输入工作预算，
 其余输入保留 FIFO。脚本入口不可中途抢占，因此该预算是让出事件循环的软预算；回调最多额外
@@ -78,6 +82,28 @@ JSON 桥接中序号与 Tick 使用十进制字符串。累计值在 ±1,000,000
 测试参数只接受完整正十进制：`--handshake-ms/--stop-ms` 为 1～60000 毫秒，
 `--queue-count` 为 1～65536 条，`--send-bytes` 为 1～16777216 字节；负号、零、尾随内容和
 越界值均拒绝。异步探针适配器独立测试真实 continuation、定时器和后台完成；游戏入口保持同步。
+
+## 灰盒配置与协议客户端
+
+共享源为 `../design/combat_demo.json`；构建自动运行 `../export/combat.py`，生成
+`generated/content.json` 与 `ContentSpec.h`。内容摘要进入 Ready／Hello，客户端应使用同一导出数据。
+源配置包含毫米地图、实心平台、玩家与怪物出生点以及枪械数值；数据校验失败会阻止构建。
+具体导出和单位约定见 [导表说明](../export/README.md)。
+
+开发构建同时生成 `hunter_client.exe`。分别运行桌面服务和客户端，向客户端第一行输入服务端
+Ready 的完整 JSON；握手成功后逐行发送以下命令。客户端持续输出快照和事件，EOF 关闭连接。
+
+```json
+{"cmd":"login","req_id":"login-1"}
+{"cmd":"start","req_id":"start-1","after_match_id":"0"}
+{"cmd":"input","seq":"1","match_id":"1","move_x":1,"aim_x":1000,"aim_y":0,"jump":true,"fire":false,"reload":false}
+{"cmd":"input","seq":"2","match_id":"1","move_x":0,"aim_x":1000,"aim_y":0,"jump":false,"fire":true,"reload":false}
+```
+
+这些命令在客户端 stdin 使用 JSON，真实 TCP 始终传输 Protobuf。移动与开火持续到下一条输入改变；
+跳跃与换弹为按下动作。暂停通过服务端宿主控制通道执行。结束后以当前局 ID 请求新局，序号继续递增。
+客户端 EOF／对端正常 EOF 返回 0；协议错误或连接重置输出 client_error 并返回 1，均有界收尾。
+`hunter_process_integration` 自动管理两个真实进程，包含死亡／清怪／重开场景。
 
 ## 生产 Bundle 模式
 

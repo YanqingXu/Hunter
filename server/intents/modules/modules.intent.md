@@ -11,7 +11,7 @@ verification: ["hunter_assemble_contract", "hunter_script_contract", "tools:hunt
 ## 目标与非目标
 
 构建期将显式依赖的 Luax 工厂组装为一个 ModuleHandle，导出七个生命周期入口。
-本轮只实现输入计数和 Tick 探针，不实现移动、战斗、存档或热更新。
+框架承载 SRV-009 的会话、运动、枪械和普通怪模块，不实现存档或热更新。
 
 ## 不变量
 
@@ -20,8 +20,8 @@ verification: ["hunter_assemble_contract", "hunter_script_contract", "tools:hunt
 - 拒绝重名、缺失依赖、环、绝对路径、父目录路径和符号链接逃逸。无依赖节点按模块名排序，
   入口必须依赖全部传递使用的模块，生成源和行号映射不包含工作区绝对路径。
 - 功能文件返回接收 `deps` 的工厂；入口也返回工厂。模块表不跨 Host；只导出七个函数。
-- 所有可变探针状态保存在入口持有的单一纯数据表，功能模块不保存第二份状态。
-- 计数范围为 ±1,000,000,000；输入值范围为 ±1,000。序号为规范 uint64 十进制字符串；
+- 所有可变玩法状态保存在入口持有的单一纯数据表，功能模块不保存第二份状态。
+- 序号为规范 uint64 十进制字符串；
   Tick 为非负有符号 64 位整数的精确字符串。导入先完整验证，再替换状态。
 
 ## 线程与所有权
@@ -35,9 +35,10 @@ verification: ["hunter_assemble_contract", "hunter_script_contract", "tools:hunt
 `export_state()`、`import_state(snapshot_json)`、`validate_state()`、`shutdown(reason)`。
 除导出返回 JSON 字符串外均返回 `true`；失败抛出脚本错误。
 
-初始化上下文为 `{v:1,snapshot_every:3}`。事件 1 接收 `{v:1,seq:"1",value:1}`，输出
-`ack` 的 `{v:1,seq:"1",count:1}`。每 `snapshot_every` Tick 输出 `snapshot`，字段为
-`{v:1,tick_id:"3",seq:"1",count:1}`。导出状态使用同一快照 schema。
+初始化上下文为 `{v:2,snapshot_every:3,content:共享配置}`；内容在会话中只读。
+事件 1～4 分别处理动作、登录、开局和宿主暂停；字段以 SRV-009 和脚本契约为准。
+每 `snapshot_every` Tick 输出权威快照，开局和终态立即补充快照。
+内部导出状态还包括动作锁存、冷却、AI、请求去重与分配器；导入先完整验证再替换。
 宿主提供只读 `net.emit(kind,payload_json)`、`cfg.get()`、`diagnostics.log(message)`。
 
 ## 失败、取消与退出
