@@ -1,6 +1,7 @@
 # Hunter Server 首版规划
 
-编制日期：2026-09-22。状态：设计基线，尚未实现。
+编制日期：2026-09-22。状态：设计基线；P0＋Windows 基础框架已进入实现与验证。
+当前能力及执行证据见 [构建说明](README.md) 与 [验证记录](VERIFICATION.md)。
 
 本计划面向比赛用单人 PvE 撤离 Demo。服务端采用 **C++23 / Standalone Asio / Luax**，与 Unity 客户端一起打包为 Android APK，在同一手机上以两个进程运行。Windows 保留开发、联调和自动化测试宿主。
 
@@ -84,7 +85,7 @@ Android APK
 
 ### 3.1 预期目录
 
-以下是拟建立的目录，不代表当前已有实现：
+以下是目标目录；当前实现范围以 intent 和验证记录为准，目录存在不表示功能完成：
 
 ```text
 server/
@@ -150,7 +151,9 @@ Protobuf 在 C++ 端编解码。首版复杂跨界数据使用有版本和大小
 | 脚本 → 宿主异步 | `AsyncReturn`、`AwaitRequest` | 适配 Asio 定时器和存档任务，维护操作登记表 |
 | 完成线程 → 脚本 | `AsyncCompletionEncoder`、`resume/cancel` | 有界队列、操作关联、deadline、取消与代次检查 |
 
-初始 Host namespace 按职责暴露 `net`、`storage`、`config`、`diagnostics`；使用 Luax 标准库日志时，在模块首次执行前配置其服务。脚本不接触 Socket、SQLite 连接、任意文件路径或裸 C++ 指针。
+初始 Host namespace 按职责暴露 `net`、`cfg`、`diagnostics`；`cfg` 按命名规则冻结，
+`storage` 在存档阶段接入。使用 Luax 标准库日志时，在模块首次执行前配置其服务。
+脚本不接触 Socket、SQLite 连接、任意文件路径或裸 C++ 指针。
 
 - 同步调用只返回当前结果；网络和存档不得阻塞逻辑线程。
 - 异步操作返回 ID 或挂起当前执行；后台只返回 detached 数据，所属线程关联后才通知或恢复脚本。队列与关联信息不是 Luax 自动提供的服务。
@@ -249,7 +252,10 @@ active intent 的构建目标与验证入口必须真实存在；未实现能力
 
 ## 9. 实施路线与验收
 
-以下阶段均为未开始，按依赖推进。原参赛日程仅作时间约束；新增 Android 宿主、Luax 适配和热更新后，先用 P0/P1 实测工时再重排，不直接沿用 PC 排期。
+当前已实现 P0 的 Windows 工程、Luax 探针及桌面运行闭环；Android 仅提供探针入口，
+没有 NDK／真机证据，P0 整体尚未完成，P1～P5 尚未开始。详见 [验证记录](VERIFICATION.md)。
+原参赛日程仅作时间约束；新增 Android 宿主、Luax 适配和热更新后，先用 P0/P1 实测工时再重排，
+不直接沿用 PC 排期。
 
 | 阶段 | 前置 | 主要交付 | 完成标准 |
 | --- | --- | --- | --- |
@@ -282,4 +288,6 @@ active intent 的构建目标与验证入口必须真实存在；未实现能力
 - [Android 进程与线程](https://developer.android.com/guide/components/processes-and-threads)、[Bound Service](https://developer.android.com/develop/background-work/services/bound-services)
 - [Android 应用专属存储](https://developer.android.com/training/data-storage/app-specific)、[16 KB 页面兼容性](https://developer.android.com/guide/practices/page-sizes)
 
-Luax 能力判断来自指定提交的文档、接口、实现与测试代码静态核对；Hunter 尚未编译或运行该依赖。本文提出的模块装配、Host schema、Android 适配和更新控制是待实现的 Hunter 设计，不能视作 Luax 已经提供的现成功能。
+Luax 能力以指定提交为基线。Hunter 已构建并运行 Windows 模块装配、Host 桥接、结构化异步及
+签名 Bundle 契约；这些能力由 Hunter 接入层与固定 Runtime 共同提供。Android 适配和更新控制
+仍是待实现设计，不能由 Windows 测试推断其已可用。

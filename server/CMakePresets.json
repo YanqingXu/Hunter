@@ -1,0 +1,40 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {"major": 3, "minor": 28, "patch": 0},
+  "configurePresets": [
+    {
+      "name": "win-dev",
+      "displayName": "Windows 开发源码运行时",
+      "binaryDir": "${sourceDir}/build/win-dev",
+      "cacheVariables": {"HUNTER_PRODUCTION": "OFF", "BUILD_TESTING": "ON"}
+    },
+    {
+      "name": "win-bundle",
+      "displayName": "Windows 签名 Bundle 运行时",
+      "inherits": "win-dev",
+      "binaryDir": "${sourceDir}/build/win-bundle",
+      "cacheVariables": {"HUNTER_PRODUCTION": "ON", "HUNTER_BUILD_TOOLS": "OFF"}
+    },
+    {
+      "name": "android-probe",
+      "displayName": "Android ARM64 原生探针（需实际 NDK）",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/android-probe",
+      "toolchainFile": "$env{ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake",
+      "cacheVariables": {
+        "ANDROID_ABI": "arm64-v8a", "ANDROID_PLATFORM": "android-26",
+        "ANDROID_STL": "c++_static", "CMAKE_BUILD_TYPE": "Release",
+        "HUNTER_PRODUCTION": "ON", "HUNTER_BUILD_TOOLS": "OFF", "BUILD_TESTING": "OFF"
+      }
+    }
+  ],
+  "buildPresets": [
+    {"name": "win-dev", "configurePreset": "win-dev", "configuration": "Release"},
+    {"name": "win-bundle", "configurePreset": "win-bundle", "configuration": "Release"},
+    {"name": "android-probe", "configurePreset": "android-probe"}
+  ],
+  "testPresets": [
+    {"name": "win-dev", "configurePreset": "win-dev", "configuration": "Release", "output": {"outputOnFailure": true}},
+    {"name": "win-bundle", "configurePreset": "win-bundle", "configuration": "Release", "output": {"outputOnFailure": true}}
+  ]
+}

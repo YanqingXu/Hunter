@@ -1,0 +1,5 @@
+# 服务端构建、依赖与临时凭据不进入源码库。
+/server/build/
+/server/CMakeUserPresets.json
+__pycache__/
+*.pyc

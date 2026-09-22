@@ -1,0 +1,43 @@
+// 框架探针协议的唯一来源；所有整数语义由服务端契约约束。
+syntax = "proto3";
+package hunter.wire;
+option optimize_for = LITE_RUNTIME;
+
+message Hello {
+  uint32 protocol_version = 1;
+  string content_version = 2;
+  string instance = 3;
+  string token = 4;
+}
+message HelloAck {
+  uint32 protocol_version = 1;
+  string content_version = 2;
+  string instance = 3;
+}
+message FrameInput {
+  uint64 seq = 1;
+  sint64 value = 2;
+}
+message InputAck {
+  uint64 seq = 1;
+  sint64 count = 2;
+}
+message Snapshot {
+  uint64 tick_id = 1;
+  uint64 seq = 2;
+  sint64 count = 3;
+}
+message Error {
+  string code = 1;
+  string detail = 2;
+}
+message Envelope {
+  oneof body {
+    Hello hello = 1;
+    HelloAck hello_ack = 2;
+    FrameInput input = 3;
+    InputAck ack = 4;
+    Snapshot snapshot = 5;
+    Error error = 6;
+  }
+}

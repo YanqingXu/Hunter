@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "host_api": {
+    "net.emit": {"args": ["string kind", "string payload_json"], "returns": "boolean"},
+    "cfg.get": {"args": [], "returns": "string ctx_json"},
+    "diagnostics.log": {"args": ["string message"], "returns": "boolean"},
+    "entries": {
+      "init": ["string ctx_json"],
+      "on_event": ["integer event_id", "string payload_json"],
+      "tick": ["integer tick_id", "number dt_seconds"],
+      "export_state": [],
+      "import_state": ["string snapshot_json"],
+      "validate_state": [],
+      "shutdown": ["string reason"]
+    },
+    "entry_returns": "boolean true except export_state returns string",
+    "ctx": {"v": 1, "snapshot_every": "integer [1,3600]"}
+  },
+  "capability": {
+    "namespaces": ["cfg", "diagnostics", "net"],
+    "namespace_mutation": false,
+    "entry_suspension": false,
+    "ordinary_table_crossing": false,
+    "net_commit": "validated successful call output batch"
+  },
+  "state": {
+    "v": 1,
+    "tick_id": "canonical decimal string [0,9223372036854775807]",
+    "seq": "canonical decimal string [0,18446744073709551615]",
+    "count": "integer [-1000000000,1000000000]",
+    "extra_fields": false
+  },
+  "effect": {
+    "v": 1,
+    "input_event_id": 1,
+    "input": {"v": 1, "seq": "positive uint64 decimal string", "value": "integer +/-1000"},
+    "ack": {"v": 1, "seq": "positive uint64 decimal string", "count": "bounded integer"},
+    "snapshot": "state schema",
+    "kinds": ["ack", "snapshot"]
+  }
+}

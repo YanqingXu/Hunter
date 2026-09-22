@@ -1,0 +1,48 @@
+# 构建两种实际运行时并验证契约；Android 真机证据仍单独维护。
+name: server
+on:
+  push:
+    paths: ["server/**", "protobuf/**", ".github/workflows/server.yml"]
+  pull_request:
+    paths: ["server/**", "protobuf/**", ".github/workflows/server.yml"]
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-2025
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: YanqingXu/luax
+          ref: d8a8160420074f8e590d94910d1af5a5f5a93245
+          path: .deps/luax
+          token: ${{ secrets.LUAX_READ_TOKEN || github.token }}
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.14'
+      - name: 配置开发构建
+        working-directory: server
+        run: cmake --preset win-dev -A x64 "-DFETCHCONTENT_SOURCE_DIR_LUAX=${{ github.workspace }}/.deps/luax"
+      - name: 构建开发运行时与离线工具
+        working-directory: server
+        run: cmake --build --preset win-dev --parallel 4
+      - name: 验证源码、制品及真实进程
+        working-directory: server
+        run: ctest --preset win-dev
+      - name: 配置生产运行时
+        working-directory: server
+        run: >-
+          cmake --preset win-bundle -A x64
+          "-DFETCHCONTENT_SOURCE_DIR_LUAX=${{ github.workspace }}/.deps/luax"
+          "-DHUNTER_HOST_PROTOC=${{ github.workspace }}/server/build/win-dev/_deps/protobuf-build/Release/protoc.exe"
+          "-DHUNTER_TEST_BUNDLE=${{ github.workspace }}/server/build/win-dev/bundle-test/game.luxb"
+          "-DHUNTER_TEST_POLICY=${{ github.workspace }}/server/build/win-dev/bundle-test/policy.json"
+      - name: 构建并验证生产运行时
+        working-directory: server
+        run: |
+          cmake --build --preset win-bundle --parallel 4
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ctest --preset win-bundle

@@ -1,1 +1,8 @@
-{}
+{
+  "version": 1,
+  "entry": "main",
+  "modules": [
+    {"name": "framework.state", "file": "framework/state.lua", "deps": []},
+    {"name": "main", "file": "main.lua", "deps": ["framework.state"]}
+  ]
+}
