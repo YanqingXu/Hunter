@@ -92,9 +92,8 @@ server/
 ├─ AGENTS.md                   # 本目录的 intent 开发约定
 ├─ intents/                    # architecture / modules / usecases
 ├─ rules/                      # 线程、所有权、脚本边界、验证规则
-├─ include/hunter/             # 核心接口
-├─ src/                        # core / net / script / storage
-├─ platform/                   # android / desktop
+├─ src/                        # common / core / net / script / storage，各模块内并置头文件与实现文件
+├─ platform/                   # android / desktop，各宿主内并置头文件与实现文件
 ├─ lua/
 │  ├─ main.lua                 # 组装、生命周期、入口分发
 │  ├─ modules.json             # 显式模块依赖及构建顺序
@@ -103,6 +102,10 @@ server/
 ├─ tools/                      # 脚本组装、离线编译、Bundle 与开发控制工具
 └─ tests/                      # unit / contract / integration / scripts
 ```
+
+C++ 文件按模块组织：例如 `src/storage/` 同时放置该模块的 `.h`／`.hpp` 与 `.cpp`，平台适配文件放在对应 `platform/android/` 或 `platform/desktop/` 中。对外接口与内部实现通过模块职责和可见性区分，不另设 `include/` 目录，也不按文件类型拆分目录。
+
+`src/common/Types.h` 集中定义服务端通用短类型，所有自有 C++ 代码统一使用，第三方库保持上游定义。映射与外部契约边界见 [短类型命名规则](rules/type_naming_rules.md)；`common/` 仅承载实际共用定义，不承接玩法或跨模块可变状态。
 
 跨端 `.proto` 仍以仓库根目录 `protobuf/` 为唯一来源；配置源表仍在 `design/`，导表工具仍在 `export/`。不在 `server/` 创建重复协议或另一套手工地图。
 
