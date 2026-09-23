@@ -60,6 +60,27 @@ set(protobuf_MSVC_STATIC_RUNTIME OFF CACHE BOOL "" FORCE)
 set(protobuf_BUILD_PROTOC_BINARIES ${HUNTER_BUILD_TOOLS} CACHE BOOL "" FORCE)
 set(protobuf_BUILD_LIBPROTOC ${HUNTER_BUILD_TOOLS} CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(absl json asio protobuf luax)
+
+# SQLite 使用官方固定 amalgamation，源码覆盖也验证实际文件摘要。
+set(hunter_sqlite_url "https://www.sqlite.org/2026/sqlite-amalgamation-3530400.zip")
+if(EXISTS "${HUNTER_DOWNLOAD_DIR}/sqlite-amalgamation-3530400.zip")
+    set(hunter_sqlite_url "${HUNTER_DOWNLOAD_DIR}/sqlite-amalgamation-3530400.zip")
+endif()
+FetchContent_Declare(sqlite URL "${hunter_sqlite_url}"
+    URL_HASH SHA256=1e71ddf93849c6a6ecf58b827c0692073d2dd7ee40196158068f7b29f422e87d
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE EXCLUDE_FROM_ALL)
+FetchContent_MakeAvailable(sqlite)
+file(SHA256 "${sqlite_SOURCE_DIR}/sqlite3.c" hunter_sqlite_c_hash)
+file(SHA256 "${sqlite_SOURCE_DIR}/sqlite3.h" hunter_sqlite_h_hash)
+if(NOT hunter_sqlite_c_hash STREQUAL "b1dd5d74ec7f29055a6684fa06fb3c2f6821c87dd38f9a458dfd2e8a1db28189" OR
+   NOT hunter_sqlite_h_hash STREQUAL "919e7f2e8ed1d8f56ac17b412b8971c76aa5d1a879752cc6058f75e7d5910e1d")
+    message(FATAL_ERROR "SQLite sources must match the pinned 3.53.4 amalgamation")
+endif()
+add_library(hunter_sqlite STATIC "${sqlite_SOURCE_DIR}/sqlite3.c")
+target_include_directories(hunter_sqlite SYSTEM PUBLIC "${sqlite_SOURCE_DIR}")
+target_compile_definitions(hunter_sqlite PRIVATE SQLITE_THREADSAFE=1 SQLITE_OMIT_LOAD_EXTENSION)
+target_link_libraries(hunter_sqlite PRIVATE Threads::Threads)
+
 add_library(hunter_asio INTERFACE)
 target_include_directories(hunter_asio SYSTEM INTERFACE "${asio_SOURCE_DIR}/asio/include")
 target_compile_definitions(hunter_asio INTERFACE ASIO_STANDALONE ASIO_NO_DEPRECATED)

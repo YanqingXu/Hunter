@@ -12,6 +12,10 @@ Lua 保留运动、AI、枪械、伤害及终态规则，高频输入、事件�
 网络协议 v3、内容 v2 保持不变；Host 契约和内部状态为 v4，旧状态拒绝导入。
 Item 仅为基础实例，不扩展背包、掉落、拾取、装备、技能、撤离或平台范围。
 
+SRV-007 已新增独立 SQLite V1 底座：永久玩家／物品、持久对局 ID、原子幂等结算、
+异步完成与 Windows 强杀验证。当前不接入 Runtime、World、Lua 或网络，不代表 P4 闭环完成；
+具体接口和当前验证范围以存储 intent、README 和 VERIFICATION 为准。
+
 本计划面向比赛用单人 PvE 撤离 Demo。服务端采用 **C++23 / Standalone Asio / Luax**，与 Unity 客户端一起打包为 Android APK，在同一手机上以两个进程运行。Windows 保留开发、联调和自动化测试宿主。
 
 本文承接 [项目说明](../README.md) 与 [参赛计划](../docs/2026-TapTap-GameJam-Plan.md)，记录本轮已经确认的技术方向。正式发布目标由旧文档中的 Windows 改为 Android，脚本接入由前序草案中的普通 Lua 改为 Luax，PC 进程管理保留为开发能力；后续排期需同步修订。本计划不表示框架已可运行，也不表示参赛资格或平台兼容性已通过验证。

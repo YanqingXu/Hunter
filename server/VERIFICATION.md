@@ -3,6 +3,58 @@
 日期：2026-09-22。结果来自本轮实现与审查修复后的本机工作区验证。
 本记录区分实现、实际运行结果和后续平台验收；active intent 不等于完整路线阶段完成。
 
+## 独立 SQLite 持久化底座（2026-09-22）
+
+SRV-007 已实现独立的 hunter_storage：SQLite 3.53.4、Schema V1 四表、永久玩家／物品、
+持久对局 ID、原子结算与去重、异步容量和正常关闭。本次不改 Runtime、World、Lua 或协议；
+当前游戏不会自动存档，玩法结算、启动读档及 Android 真机验证仍未接入。
+
+依赖使用官方 amalgamation，归档 SHA-256 为
+`1e71ddf93849c6a6ecf58b827c0692073d2dd7ee40196158068f7b29f422e87d`；
+下载时另核对官方 SHA3-256，CMake 还校验 sqlite3.c/sqlite3.h 内容摘要。
+SQLite 直接作为 C 静态库构建，存储目标不链接 Luax、World 或 Protobuf。
+
+本轮实际覆盖：
+
+- 空库原子初始化、重复打开、未知版本、陌生结构、非空无版本库、损坏字节保留、
+  外键失效拒绝、文件打开失败；检查 WAL/FULL/foreign_keys/busy_timeout/user_version 生效。
+- 同请求原样重放、奖励变化／revision 变化／数组顺序变化冲突、revision 拒绝、未分配 ID、
+  空奖励、重复 cfg 的独立 UID、读档与查询一致；连续 10 次提交和重新打开不重复发奖。
+- 大于 2^53 的 match_id 和 item_uid 保持整数精度，i64 序列／revision 耗尽拒绝；
+  负奖励、非法 UTF-8、无符号范围溢出和不存在玩家均有明确错误。
+- 数量、请求总字节、完成总字节及单结果上限；大存档读取和大结果重放不截断或改变原数据；
+  真实连接／门面错误线程拒绝、完成在所属线程延后交付、关闭饱和队列、旧对象销毁后的独立完成。
+- Windows 父进程在 before_txn、in_txn、after_commit 确切检查点强杀子进程；
+  重启验证玩家、物品、结果同时提交或同时不存在，原请求重试只产生一次奖励。
+- 使用 SQLite max_page_count 注入真实 SQLITE_FULL，验证扩展错误码、全事务回滚及随后重试；
+  另一个真实连接持有写锁，验证 2000 ms 等待后 Busy，未发生部分修改。
+
+测试注入点仅存在于 hunter_storage_fault 测试副本，正式 hunter_storage 无故障开关。
+这些证据覆盖 Windows 进程强杀与 SQLite 写满，不代表硬件掉电、真实磁盘介质 I/O 故障、
+Android 系统强杀或完整撤离闭环已通过。无法确认 COMMIT 的错误会返回 commit_unknown，
+该不确定提交分支本轮未用实际磁盘 I/O 故障触发。
+
+| 命令／检查 | 实际结果 |
+| --- | --- |
+| `cmake --preset win-dev`、`cmake --preset win-bundle` | 两种配置成功，启用 C 并校验固定 SQLite 源码 |
+| `cmake --build --preset win-dev --parallel 8` | 完整开发构建成功 |
+| `ctest --preset win-dev --output-on-failure` | **17/17 通过，71.06 秒** |
+| `cmake --build --preset win-bundle --parallel 8` | 完整生产模式构建成功 |
+| `ctest --preset win-bundle --output-on-failure` | **16/16 通过，50.25 秒**，含生产链接检查 |
+| 两种 preset 重建 `hunter_storage_contract hunter_storage_crash` | 最终源代码定向构建成功 |
+| 两种 preset 执行 `ctest -R 'hunter_storage\|hunter_intent_contract'` | 各 **3/3 通过，3.39 秒** |
+| 实际存储契约链接图 | 两种配置均无 Luax、game/script、协议或故障副本依赖 |
+| 自有源码 UTF-8、100 列、Tab、行尾空白及 `git diff --check` | 通过；中文说明与短类型已复核 |
+
+完整回归后，最终审查修正了 schema 检查中 LIKE 的下划线通配符问题，并确保交付完成前释放
+请求缓冲容量；补充额外用户表拒绝用例。随后对最终代码重建两种模式，并定向重跑上述 3 项。
+开发全套完成后生产套件消费同一批签名制品；最终存储定向测试不依赖 Luax 或 Bundle。
+
+日志在忽略目录 `build/storage/`：`dev-build.log`、`dev-tests.log`、`bundle-configure.log`、
+`bundle-build.log`、`bundle-tests.log`、两种模式的 `*-final-build.log`／`*-final-tests.log`，
+以及 `source-scan.json`。CTest 原始输出也在各构建目录 `Testing/Temporary/LastTest.log`。
+此前各节保留对应实现增量的历史证据，不替代本节当前存储状态。
+
 ## 原生对象与小写 Lua 配对（2026-09-22）
 
 本节是 SRV-010 的当前验证结果；后续各节保留为迁移前的历史记录，不代表当前状态归属。
@@ -174,7 +226,8 @@ Unity 仍为占位；没有客户端画面、APK、完整撤离／Boss／掉落�
 - C++／C# 协议生成、intent 检查、Windows CI 配置、Android ARM64 原生探针入口。
 - SRV-009 增加本机登录、开局、共享灰盒、权威移动／射击／普通怪以及死亡和清怪重开。
 - SRV-005／009 增量完成 Luax 组件构造、实体／配置 ID 管理、独立枪械与伤害和 v3 快照配置引用。
-- SRV-006～008 保持 deferred。完整撤离、SQLite、热更新、AAR／Service／Binder 未实现。
+- SRV-007 已实现独立 SQLite 存档与事务接口，实际证据见本文首节；玩法与宿主尚未接入。
+- SRV-006、008 保持 deferred。完整撤离、热更新、AAR／Service／Binder 未实现。
 
 ## 本机工具链与依赖
 
@@ -191,6 +244,7 @@ Unity 仍为占位；没有客户端画面、APK、完整撤离／Boss／掉落�
 | Protobuf | 33.0，a79f2d2e9fadd75e94f3fe40a0399bf0a5d90551 |
 | Abseil | 20250512.1，76bb24329e8bf5f39704eb10d21b9a80befa7c81 |
 | nlohmann/json | 3.12.0，55f93686c01528224f448c19128836e7df245f72 |
+| SQLite | 3.53.4，官方 amalgamation 归档和源码摘要锁定 |
 
 公共归档摘要在 `cmake/Deps.cmake`。Luax 从指定干净源码检出构建，未修改上游。
 Protobuf 的公开解析头需要 `utf8_validity` 包含路径，Hunter 目标显式链接此已有依赖；
@@ -297,4 +351,5 @@ schema 6 项、Bundle／identity 13 项、intent 检查器 6 项，全部通过�
 - 没有干净 PC 发行包、长时间性能／发热或 Unity 实机玩法测试；测试公钥不得作为发行公钥。
 
 Windows 基础框架及 SRV-009 共用玩法切片已实现；P0 的 Android 证据、Android 宿主、
-热更新、存档及完整撤离阶段仍待完成，不能由 Windows 通过替代。
+热更新、存档玩法接入及完整撤离阶段仍待完成；独立 SQLite 底座已实现，不能由 Windows
+通过替代 Android 真机验收。

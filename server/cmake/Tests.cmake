@@ -1,4 +1,26 @@
 # 注册真实契约、脚本工具与进程集成测试；生产测试使用显式提供的签名制品。
+add_executable(hunter_storage_contract tests/contract/StorageContract.cpp)
+hunter_target(hunter_storage_contract)
+target_link_libraries(hunter_storage_contract PRIVATE hunter_storage
+    nlohmann_json::nlohmann_json hunter_sqlite)
+add_test(NAME hunter_storage_contract COMMAND hunter_storage_contract)
+set_tests_properties(hunter_storage_contract PROPERTIES TIMEOUT 60)
+
+# 注入点只编译进测试专用副本，不改变正式存储目标。
+add_library(hunter_storage_fault STATIC ${HUNTER_STORAGE_SOURCES})
+hunter_target(hunter_storage_fault)
+target_include_directories(hunter_storage_fault PRIVATE tests/fixtures)
+target_compile_definitions(hunter_storage_fault PRIVATE HUNTER_STORAGE_TESTING=1)
+target_link_libraries(hunter_storage_fault PUBLIC hunter_asio Threads::Threads
+    PRIVATE hunter_sqlite nlohmann_json::nlohmann_json)
+add_executable(hunter_storage_crash tests/fixtures/StorageCrash.cpp)
+hunter_target(hunter_storage_crash)
+target_link_libraries(hunter_storage_crash PRIVATE hunter_storage_fault hunter_sqlite)
+add_test(NAME hunter_storage_crash_integration COMMAND ${Python3_EXECUTABLE}
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/storage_test.py"
+    --exe $<TARGET_FILE:hunter_storage_crash>)
+set_tests_properties(hunter_storage_crash_integration PROPERTIES TIMEOUT 120)
+
 add_executable(hunter_perf tests/contract/Perf.cpp)
 hunter_target(hunter_perf)
 target_link_libraries(hunter_perf PRIVATE hunter_server_core)

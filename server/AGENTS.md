@@ -4,6 +4,7 @@
 
 本目录已实现 Windows 基础框架、基础战斗切片和两种 Luax 加载路径。设计基线见 [plan.md](plan.md)，
 构建与运行见 [README.md](README.md)，验证范围见 [VERIFICATION.md](VERIFICATION.md)。
+SRV-007 已实现独立 SQLite 存储底座与事务接口；Runtime、World、Lua 和协议尚未接入存档。
 
 - `.gitkeep` 仅用于保留空目录。
 - `src/game/` 持有唯一权威状态，`lua/main.lua` 组装玩法规则；高频输入和网络投影由 C++ 实现。

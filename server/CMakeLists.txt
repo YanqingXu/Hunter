@@ -1,6 +1,6 @@
 # 装配共用服务端、桌面宿主、脚本工具及可复现的契约测试。
 cmake_minimum_required(VERSION 3.28)
-project(HunterServer VERSION 0.1.0 LANGUAGES CXX)
+project(HunterServer VERSION 0.1.0 LANGUAGES C CXX)
 file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/.cmake/api/v1/query")
 file(WRITE "${CMAKE_BINARY_DIR}/.cmake/api/v1/query/codemodel-v2" "")
 set(CMAKE_CXX_STANDARD 23)
@@ -47,6 +47,14 @@ function(hunter_target target)
         target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic -Wconversion)
     endif()
 endfunction()
+
+set(HUNTER_STORAGE_SOURCES src/storage/Db.cpp src/storage/Schema.cpp
+    src/storage/Store.cpp src/storage/Storage.cpp)
+add_library(hunter_storage STATIC ${HUNTER_STORAGE_SOURCES})
+hunter_target(hunter_storage)
+target_link_libraries(hunter_storage PUBLIC hunter_asio Threads::Threads
+    PRIVATE hunter_sqlite nlohmann_json::nlohmann_json)
+target_compile_definitions(hunter_storage PRIVATE HUNTER_STORAGE_TESTING=0)
 
 set(HUNTER_GEN "${CMAKE_CURRENT_BINARY_DIR}/generated")
 file(MAKE_DIRECTORY "${HUNTER_GEN}" "${HUNTER_GEN}/csharp")

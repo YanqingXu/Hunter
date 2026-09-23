@@ -5,7 +5,8 @@
 
 当前交付 Windows 基础战斗切片：本机 TCP 鉴权、会话登录、开局、权威跑跳／碰撞、
 射线枪械／换弹、普通怪 AI、死亡与清怪重开，以及暂停恢复、有界背压和资源收尾。
-C++ 持有唯一世界状态和对象生命周期，Luax 编写玩法规则；不包含撤离结算、SQLite、热更新、Unity 接入或 Android Service。
+C++ 持有唯一世界状态和对象生命周期，Luax 编写玩法规则；不包含撤离结算、热更新、Unity 接入或 Android Service。
+独立 SQLite 存储底座已实现，提供永久存档与事务结算接口，尚未接入当前对局或宿主启动流程。
 Entity/Unit/Player/Monster/Item/Weapon/World 各有 C++ 类及同名小写 Lua 模块；
 实体按 ID 管理，玩家输入和枪械状态与怪物 AI 分离，支持不同配置怪物共存。
 默认灰盒数值保持不变；多配置、实体增删及分配边界由真实 Luax 契约验证。
@@ -30,6 +31,8 @@ FetchContent 按固定 Git 提交获取。访问私有依赖需要 Git 已有读
 
 源码锁定在 `cmake/Deps.cmake`：Luax `d8a8160`、Standalone Asio 1.36.0、Protobuf 33.0、
 Abseil 20250512.1、nlohmann/json 3.12.0，全部固定完整提交；公共归档另验 SHA-256。
+SQLite 3.53.4 使用固定官方 amalgamation，校验归档及 `sqlite3.c/sqlite3.h` 摘要；
+Windows 与未来 Android 构建编译同一源码，不依赖系统 SQLite。
 可用 `FETCHCONTENT_SOURCE_DIR_<大写依赖名>` 指向干净的同版本源码。
 依赖缓存位于构建目录，首次构建需要准备依赖；服务运行不访问远程地址。
 
@@ -138,6 +141,64 @@ CTest 检查真实链接参数不含 Compiler、AST、DevelopmentRuntime，并�
 
 `cmake --install build/win-bundle --config Release --prefix build/stage` 只安装桌面可执行文件。
 正式发行需要另外交付可信制品、公钥策略及系统运行库；本轮不宣称干净机器发行包已验收。
+
+## 独立持久化模块（SRV-007）
+
+使用方链接 `hunter_storage` 并包含 `storage/Storage.h`，命名空间为 `hunter::storage`。
+`Db` 封装资源、`Schema` 固定 V1 结构、`Store` 执行业务事务，`Storage` 提供异步门面；
+这些模块没有 Luax、World、Protobuf 依赖，也不会自行创建桌面游戏存档。
+
+在逻辑线程构造 `Storage(io, StorageCfg{}, instance)`，instance 必须为非零关联 ID。
+调用 `open(UTF-8 文件路径, done)`；父目录由宿主准备，首次成功打开才初始化玩家 1。
+收到 `Opened` 后才能提交业务请求。打开失败需关闭该对象，使用新对象重试。
+同一个存档文件由一个 Storage 实例拥有。
+
+| 方法 | 成功完成值 | 含义 |
+| --- | --- | --- |
+| `open(path, done)` | `Opened` | 文件、配置、schema 和完整性检查通过 |
+| `load_player(player_id, done)` | `PlayerSave` | 身份、revision、最后提交的 match_id 和全部永久物品 |
+| `alloc_match(done)` | `MatchId` | 已事务提交的稳定 ID，允许空洞、不复用 |
+| `commit_match(req, done)` | `MatchResult` | 已 Committed，`replayed` 表示返回先前的同一结果 |
+| `find_match(match_id, done)` | `MatchResult` | 已提交的原始结果，缺失返回 `NotFound` |
+| `stop(done)` | `Closed` | 已接受任务及其回调排空，数据库连接已关闭 |
+
+每个入口返回 `std::expected<Accepted, Error>`；拒绝不会产生回调或磁盘副作用。
+`Accepted` 仅表示受理，最终 `Rsp{key, result}` 通过 Asio 延后交付。`key` 保留 instance/op，
+成功的 `MatchResult` 才代表持久化成功；`result_json` 含 v1、完整结算字段、前后 revision、
+提交毫秒时间及带永久 UID 的奖励。读取或重试原样返回这个 JSON，不根据当前配置重新发奖。
+
+`CommitMatch` 提供 `match_id/player_id/expected_revision/outcome/content_key/items`。
+items 为 `{cfg_id, count}` 正数增量，可为空；每行产生独立物品，顺序是请求内容的一部分。
+存储层生成固定格式的 request_json；同 ID 同内容先于 revision 校验返回旧结果，不同内容冲突。
+请求、奖励、玩家 revision 和结果在一个事务内提交。SQLite INTEGER 的上限也是 ID/revision
+上限，JSON 直接编码整数，不经过浮点数；永久 item_uid 不使用 World 实体 ID。
+
+`Error.code` 区分参数、容量、未就绪、未找到、内容冲突、revision 冲突、溢出、版本、损坏、
+锁超时及写失败；`sqlite_code` 保留 SQLite 扩展码。`commit_unknown=true` 表示不能确认
+COMMIT 结果，调用方通过查询或相同请求重试确认，不能展示保存成功。
+
+默认限制为 64 个未交付操作、请求 1 MiB、完成 4 MiB、单结果 1 MiB。读取和结算按最大结果
+预留完成槽，因此默认最多同时接受四个大结果操作；超限显式失败，不截断存档。
+计费覆盖固定任务和拥有的请求／返回数据，不包含调用方回调捕获的外部对象或 SQLite 缓存。
+
+io_context 由创建 Storage 的同一线程运行，必须活过所有完成；回调不得抛异常。
+stop 使用独立控制槽，普通队列饱和也能关闭；已接受事务不取消，调用方持续驱动 io 至 Closed。
+析构仅作为等待磁盘工作退出的保底路径，不执行“保存全部”；旧完成拥有独立关联和数据，
+回调捕获的对象仍须由调用方保证有效。正常业务不依赖析构或退出回调保存结算。
+
+数据库使用 `user_version=1`、WAL、FULL、外键和 2000 ms 锁等待。仅空库从 0 初始化，
+已有库必须匹配 V1 完整结构并通过 quick_check／外键检查；不自动重置异常或高版本库。
+物品表增加正数约束和延迟外键，结果表约束 JSON 合法性及 revision 增量。
+
+```powershell
+cmake --build --preset win-dev --target hunter_storage_contract hunter_storage_crash --parallel 8
+ctest --preset win-dev -R hunter_storage
+```
+
+`hunter_storage_contract` 覆盖事务、重启、容量和线程；`hunter_storage_crash_integration`
+由父进程在精确事务检查点强杀并重新读取，同时验证真实 SQLITE_FULL 回滚。
+注入点只编译到测试专用 `hunter_storage_fault`，正式库没有故障开关。
+Runtime 启动读档、World 对局 ID、Lua 奖励和网络结果查询均留待下一轮接入。
 
 ## Android 探针与后续边界
 
