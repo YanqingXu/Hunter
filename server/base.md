@@ -6,20 +6,28 @@ Lua 负责玩法规则；高频输入、快照、确认和事件通过原生路�
 | C++ 对象 | 小写脚本 | 关系和数据 |
 | --- | --- | --- |
 | Entity | entity.lua | 身份、配置引用、位置、朝向、待移除标记 |
-| Unit | unit.lua | 组合 Entity，增加运动和生命状态 |
-| Player | player.lua | 组合 Unit 与 Weapon，增加输入、身份和备用弹药 |
-| Monster | monster.lua | 组合 Unit，增加出生引用、AI 状态与计时 |
+| Unit | unit.lua | 继承 Entity，增加运动和生命状态 |
+| Player | player.lua | 继承 Unit、组合 Weapon，增加输入、身份和备用弹药 |
+| Monster | monster.lua | 继承 Unit，增加出生引用、AI 状态与计时 |
 | Item | item.lua | 独立物品 ID、配置 ID 和正数量，不继承 Entity |
 | Weapon | weapon.lua | 玩家枪械配置、弹药和冷却；Lua 执行射击与换弹规则 |
 | World | world.lua | 会话、对象集合、稳定顺序、分配器和生命周期 |
+
+Entity → Unit → Player/Monster 为公开单继承，实体继承链共用 Entity 中的 Access*。
+World 仍以 Actor 的 variant<Player, Monster> 保存具体对象；基类视图只借用、不拥有对象，
+不通过基类指针销毁。Weapon 与 Item 的门禁仍单独绑定到同一 World::access。
+原生字段可见性和 getter/setter 边界保持；导入发布前重新绑定目标世界门禁并更新对象代次。
 
 C++ 头文件与实现并置于 src/game，Lua 文件位于 lua/game。Lua 包装表仅保存不可变身份和
 句柄；不得把血量、位置、计时等跨 Tick 缓存在脚本中。当前片段可用局部标量完成计算，
 例如 Unit.read_motion/write_motion 批量读取并提交运动结果，碰撞算法仍在 Lua。
 
 固定 Luax 候选使用 ClassBuilder 的显式 getter/setter 方法，不依赖复杂表达式中的原生属性
-读取。方法通过类表调用（例如 Unit.get_hp(player.health)）。方法检查线程、代次和写权限，
+读取。方法通过类表调用（例如 Unit.get_hp(player.health)）。绑定层检查线程、类型和代次，
+setter 再检查写权限及字段边界；原生 getter 保持现有读取语义。
 身份与配置引用没有 setter。导入和重开使旧组件句柄失效，Lua GC 不拥有原生对象。
+Lua 的 pose、motion/health、controls/ai 仍分别使用 Entity、Unit、Player/Monster 句柄，
+同一对象的不同视图共享状态和槽位代次，保留各自 TypeTag；不隐式转换 Lua 句柄类型。
 
 高频 FrameInput 不进入 Lua on_event；C++ 在 Tick 边界锁存输入并生成确认。Lua 用
 net.event 提交标量事件，C++ 暂存输出并在入口成功后提交。快照直接读取 C++ 状态生成

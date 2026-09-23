@@ -303,7 +303,7 @@
       "monster": {
         "spawn_id": "positive canonical cfg-range string; resolves to map.enemies spawn_id and matching cfg_id",
         "ai": {
-          "state": "patrol|chase|attack|dead",
+          "state": "spawn|patrol|chase|attack|dead; spawn requires full health at rest at configured origin",
           "attack_ticks": "integer [0,cfg.attack_ticks]"
         }
       },
@@ -520,6 +520,7 @@
                   "max": 16,
                   "values": [
                     "idle",
+                    "spawn",
                     "patrol",
                     "chase",
                     "attack",

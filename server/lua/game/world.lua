@@ -70,7 +70,11 @@ return function(deps)
         if string.sub(id, 1, 1) == ":" then
             return nil, string.sub(id, 2)
         end
-        return api.find(world, id)
+        local value = api.find(world, id)
+        if kind == "monster" then
+            monster_api.activate(value, content)
+        end
+        return value
     end
 
     -- 标记怪物移除，不在遍历过程中释放对象。

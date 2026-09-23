@@ -82,7 +82,9 @@ Android APK
 | Storage | SQLite 事务、去重、存档版本与完成通知；不决定游戏奖励 |
 | ReloadController | 开发脚本版本装载、状态快照校验、候选验证与安全切换 |
 
-实体、位置、血量、物品和计时只在 C++ World 及其组合对象中保存一份权威状态。
+实体、位置、血量、物品和计时只在 C++ World 拥有的对象中保存一份权威状态。
+Unit 继承 Entity，Player/Monster 继承 Unit，Player 继续组合 Weapon，Item 保持独立。
+Actor 保留具体类型的值存储，基类仅提供借用视图；Lua 类型化句柄和生命周期边界保持不变。
 Lua 持有受代次校验的句柄、不可变身份视图和不跨 Tick 的局部计算值；输出快照是拥有数据的临时投影。
 
 ### 2.2 线程与执行规则

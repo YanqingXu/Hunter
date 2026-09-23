@@ -314,6 +314,7 @@ void weapons(const hunter::Cfg& cfg, const Json& base)
     content = arena(base, 2800);
     content["map"]["solids"] = Json::array({
         {{"id", "101"}, {"x", 2400}, {"y", 0}, {"w", 100}, {"h", 3000}}});
+    content["map"]["enemies"][0]["patrol_min"] = 2800;
     Game wall(cfg, content);
     wall.start();
     wall.event(1, wall.input(0, false, true));
@@ -366,6 +367,208 @@ void weapons(const hunter::Cfg& cfg, const Json& base)
     check(events(reply, "shot") == 0, "released fire does not become held fire");
 }
 
+// 验证出生记录按独立 ID 解析，并约束可恢复的出生中间态。
+void monster_spawn(const hunter::Cfg& cfg, const Json& base)
+{
+    auto content = arena(base, 18000);
+    content["map"]["enemies"][0]["spawn_id"] = "9001";
+    content["map"]["enemies"].push_back({{"spawn_id", "77"}, {"cfg_id", "1"},
+        {"x", 21005}, {"y", 0}, {"patrol_min", 20995}, {"patrol_max", 21005}});
+    Game game(cfg, content);
+    game.start();
+    const auto started = game.state();
+    check(started["entities"]["2"]["spawn_id"] == "9001"
+        && started["entities"]["3"]["spawn_id"] == "77",
+        "spawn identity is independent of array order and entity identity");
+    check(started["entities"]["2"]["pose"]["x"] == 18000
+        && started["entities"]["3"]["pose"]["x"] == 21005
+        && started["entities"]["3"]["pose"]["facing"] == -1
+        && started["entities"]["2"]["ai"]["state"] == "patrol"
+        && started["entities"]["3"]["ai"]["state"] == "patrol",
+        "Lua spawn completes patrol initialization without a movement tick");
+    auto saved = started;
+    saved["entities"]["2"]["ai"]["state"] = "spawn";
+    Game resumed(cfg, content);
+    resumed.restore(saved);
+    resumed.steps();
+    check(resumed.state()["entities"]["2"]["ai"]["state"] == "patrol"
+        && resumed.state()["entities"]["2"]["pose"]["x"] == 18035
+        && resumed.state()["entities"]["3"]["pose"]["x"] == 20995,
+        "restored spawn completes before movement using its own patrol bounds");
+
+    for (u32 sample = 0; sample < 6; ++sample)
+    {
+        Game invalid(cfg, content);
+        auto corrupt = saved;
+        auto& enemy = corrupt["entities"]["2"];
+
+        if (sample == 0)
+        {
+            enemy["pose"]["x"] = 18001;
+        }
+        else if (sample == 1)
+        {
+            enemy["motion"]["vx"] = 1;
+        }
+        else if (sample == 2)
+        {
+            enemy["health"]["hp"] = 1;
+        }
+        else if (sample == 3)
+        {
+            enemy["ai"]["attack_ticks"] = 1;
+        }
+        else if (sample == 4)
+        {
+            enemy["ai"]["state"] = "dead";
+        }
+        else
+        {
+            enemy["ai"]["state"] = "unknown";
+        }
+
+        check(!invalid.script.import_state(corrupt.dump()),
+            "invalid spawn or live monster state must be rejected");
+    }
+}
+
+// 验证精确感知和攻击边界、移动后攻击顺序及冷却期间的状态转换。
+void monster_ranges(const hunter::Cfg& cfg, const Json& base)
+{
+    auto content = arena(base, 3200);
+    content["monsters"]["1"].update({{"detect_range", 1200}, {"attack_range", 100},
+        {"attack_ticks", 3}});
+    Game detected(cfg, content);
+    detected.start();
+    detected.steps();
+    check(detected.state()["entities"]["2"]["ai"]["state"] == "chase"
+        && detected.state()["entities"]["2"]["pose"]["x"] == 3165,
+        "exact detect endpoint begins chase toward player");
+
+    content["map"]["enemies"][0]["x"] = 3201;
+    Game outside(cfg, content);
+    outside.start();
+    outside.steps();
+    check(outside.state()["entities"]["2"]["ai"]["state"] == "patrol"
+        && outside.state()["entities"]["2"]["pose"]["x"] == 3236,
+        "one unit beyond detection continues patrol");
+
+    content["map"]["enemies"][0].update({{"x", 2136}, {"patrol_min", 1600},
+        {"patrol_max", 2600}});
+    Game approach(cfg, content);
+    approach.start();
+    approach.steps();
+    check(approach.state()["entities"]["2"]["ai"]["state"] == "chase"
+        && approach.state()["entities"]["2"]["pose"]["x"] == 2101
+        && approach.state()["entities"]["1"]["health"]["hp"] == 100,
+        "one unit beyond attack range after moving cannot attack");
+    approach.steps();
+    check(approach.state()["entities"]["2"]["ai"]["state"] == "attack"
+        && approach.state()["entities"]["2"]["ai"]["attack_ticks"] == 3
+        && approach.state()["entities"]["1"]["health"]["hp"] == 90,
+        "chase reaching melee range attacks in the same tick");
+
+    content["map"]["enemies"][0]["x"] = 2100;
+    Game attack(cfg, content);
+    attack.start();
+    attack.steps();
+    check(attack.state()["entities"]["2"]["ai"]["state"] == "attack"
+        && attack.state()["entities"]["2"]["pose"]["x"] == 2100
+        && attack.state()["entities"]["2"]["motion"]["vx"] == 0
+        && attack.state()["entities"]["2"]["pose"]["facing"] == -1
+        && attack.state()["entities"]["2"]["ai"]["attack_ticks"] == 3
+        && attack.state()["entities"]["1"]["health"]["hp"] == 90,
+        "exact attack endpoint faces player and stops before setting cooldown");
+    attack.steps(2);
+    check(attack.state()["entities"]["2"]["ai"]["attack_ticks"] == 1
+        && attack.state()["entities"]["1"]["health"]["hp"] == 90,
+        "cooldown counts ticks without repeating damage");
+    auto saved = attack.state();
+    saved["entities"]["1"]["pose"]["x"] = 5000;
+    attack.restore(saved);
+    attack.steps();
+    check(attack.state()["entities"]["2"]["ai"]["state"] == "patrol"
+        && attack.state()["entities"]["2"]["ai"]["attack_ticks"] == 0
+        && attack.state()["entities"]["1"]["health"]["hp"] == 90,
+        "leaving detection returns to patrol while cooldown expires");
+
+    content["monsters"]["1"]["speed"] = 1000;
+    content["map"]["enemies"][0]["x"] = 2150;
+    Game fast(cfg, content);
+    fast.start();
+    fast.steps();
+    check(fast.state()["entities"]["2"]["pose"]["x"] == 2000
+        && fast.state()["entities"]["2"]["ai"]["state"] == "attack"
+        && fast.state()["entities"]["1"]["health"]["hp"] == 90,
+        "fast chase stops at player instead of overshooting melee range");
+
+    content["monsters"]["1"]["detect_range"] = 2000;
+    Game above(cfg, content);
+    above.start();
+    saved = above.state();
+    saved["entities"]["1"]["pose"].update({{"x", 2150}, {"y", 1500}});
+    saved["entities"]["1"]["motion"]["grounded"] = false;
+    above.restore(saved);
+    above.steps(2);
+    check(above.state()["entities"]["2"]["ai"]["state"] == "chase"
+        && above.state()["entities"]["2"]["pose"]["x"] == 2150
+        && above.state()["entities"]["2"]["motion"]["vx"] == 0
+        && above.state()["entities"]["1"]["health"]["hp"] == 100,
+        "vertical separation prevents melee without horizontal chase oscillation");
+}
+
+// 验证局内仍有活怪时，死亡怪物清空冷却、停止运动且不能恢复为活动状态。
+void monster_dead(const hunter::Cfg& cfg, const Json& base)
+{
+    auto content = arena(base, 2800);
+    content["monsters"]["1"]["hp"] = 20;
+    content["map"]["enemies"].push_back({{"spawn_id", "77"}, {"cfg_id", "1"},
+        {"x", 18000}, {"y", 0}, {"patrol_min", 17500}, {"patrol_max", 18500}});
+    Game game(cfg, content);
+    game.start();
+    game.steps();
+    check(game.state()["entities"]["2"]["ai"]["attack_ticks"] == 60,
+        "living monster starts cooldown before lethal shot");
+    game.event(1, game.input(0, false, true));
+    const auto output = game.steps();
+    const auto saved = game.state();
+    const auto dead = saved["entities"]["2"];
+    check(saved["phase"] == "Playing" && dead["health"]["hp"] == 0
+        && dead["health"]["alive"] == false && dead["ai"]["state"] == "dead"
+        && dead["ai"]["attack_ticks"] == 0 && dead["motion"]["vx"] == 0
+        && dead["motion"]["vy"] == 0 && events(output, "death") == 1,
+        "lethal damage clears cooldown and stops the monster within an active match");
+    game.event(1, game.input());
+    game.steps(65);
+    check(game.state()["entities"]["2"] == dead
+        && game.state()["entities"]["1"]["health"]["hp"] == 90
+        && game.state()["entities"]["3"]["pose"] != saved["entities"]["3"]["pose"],
+        "dead monster stays frozen past its old cooldown while living monsters simulate");
+
+    for (u32 sample = 0; sample < 3; ++sample)
+    {
+        Game invalid(cfg, content);
+        auto corrupt = saved;
+        auto& enemy = corrupt["entities"]["2"];
+
+        if (sample == 0)
+        {
+            enemy["ai"]["attack_ticks"] = 1;
+        }
+        else if (sample == 1)
+        {
+            enemy["ai"]["state"] = "patrol";
+        }
+        else
+        {
+            enemy["motion"]["vx"] = 1;
+        }
+
+        check(!invalid.script.import_state(corrupt.dump()),
+            "dead monster cannot import an active state, cooldown or velocity");
+    }
+}
+
 // 验证怪物巡逻追击、攻击间隔、死亡终态以及保持连接序号的重开。
 void enemies(const hunter::Cfg& cfg, const Json& base)
 {
@@ -390,10 +593,14 @@ void enemies(const hunter::Cfg& cfg, const Json& base)
     Game narrow(cfg, narrow_content);
     narrow.start();
     narrow.steps();
-    check(narrow.state()["entities"]["2"]["pose"]["x"] == 18005,
+    check(narrow.state()["entities"]["2"]["pose"]["x"] == 18005
+        && narrow.state()["entities"]["2"]["motion"]["vx"] == 5
+        && narrow.state()["entities"]["2"]["pose"]["facing"] == -1,
         "patrol step stops exactly at right endpoint");
     narrow.steps();
-    check(narrow.state()["entities"]["2"]["pose"]["x"] == 17997,
+    check(narrow.state()["entities"]["2"]["pose"]["x"] == 17997
+        && narrow.state()["entities"]["2"]["motion"]["vx"] == -8
+        && narrow.state()["entities"]["2"]["pose"]["facing"] == 1,
         "patrol step stops exactly at left endpoint");
 
     for (u32 index = 0; index < 10; ++index)
@@ -413,6 +620,15 @@ void enemies(const hunter::Cfg& cfg, const Json& base)
     narrow.steps(2);
     check(narrow.state()["entities"]["2"]["pose"]["x"] == 17997,
         "returning enemy stops at nearest patrol endpoint");
+    outside = narrow.state();
+    outside["entities"]["2"]["pose"]["x"] = 18006;
+    outside["entities"]["2"]["ai"]["state"] = "chase";
+    narrow.restore(outside);
+    narrow.steps();
+    check(narrow.state()["entities"]["2"]["pose"]["x"] == 18005
+        && narrow.state()["entities"]["2"]["motion"]["vx"] == -1
+        && narrow.state()["entities"]["2"]["pose"]["facing"] == -1,
+        "right-side return shortens the final step to the patrol endpoint");
 
     Game attack(cfg, arena(base, 2800));
     attack.start();
@@ -719,6 +935,9 @@ int main(int argc, char** argv)
         session(cfg, content);
         movement(cfg, content);
         weapons(cfg, content);
+        monster_spawn(cfg, content);
+        monster_ranges(cfg, content);
+        monster_dead(cfg, content);
         enemies(cfg, content);
         persistence(cfg, content);
         std::cout << "gameplay contract passed\n";

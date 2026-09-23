@@ -4,3 +4,6 @@
 __pycache__/
 *.pyc
 /export/导出结果.log
+
+# 临时输出和生成的交付文件不进入源码库。
+/outputs/

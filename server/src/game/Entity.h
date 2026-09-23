@@ -1,4 +1,4 @@
-// 持有 Entity 的原生状态，通过受控属性供脚本访问。
+// 保存实体共有状态和借用的访问门禁；脚本仅通过受控句柄与显式方法访问。
 #pragma once
 
 #include "common/Types.h"

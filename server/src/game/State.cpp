@@ -59,7 +59,7 @@ void read_unit(Unit& unit, const Json& obj, const Json& cfg, const Json& map)
     fields(obj.at("pose"), {"x", "y", "facing"});
     fields(obj.at("motion"), {"vx", "vy", "grounded"});
     fields(obj.at("health"), {"hp", "max_hp", "alive"});
-    auto& entity = unit.entity;
+    Entity& entity = unit;
     const i32 width = cfg.at("width");
     const i32 height = cfg.at("height");
     entity.x = integer(obj["pose"]["x"], width / 2, map.at("width").get<i32>() - width / 2);
@@ -97,7 +97,7 @@ void read_player(Player& player, const Json& obj, const Json& content)
     fields(obj, {"id", "kind", "cfg_id", "pose", "pending_remove", "motion", "health",
         "player_id", "controls", "weapon", "reserve"});
     player.player_id = identity(obj["player_id"]);
-    require(player.player_id == 1 && !player.unit.entity.pending_remove
+    require(player.player_id == 1 && !player.pending_remove
         && obj["cfg_id"] == content["map"]["spawn"]["cfg_id"], "invalid_player");
     const auto& input = obj["controls"];
     fields(input, {"move_x", "aim_x", "aim_y", "jump", "fire", "fire_once", "reload"});
@@ -118,7 +118,7 @@ void read_player(Player& player, const Json& obj, const Json& content)
     player.weapon.shot_ticks = integer(gun["shot_ticks"], 0, cfg.at("fire_ticks"));
     player.weapon.reload_ticks = integer(gun["reload_ticks"], 0, cfg.at("reload_ticks"));
     player.reserve = integer(obj["reserve"], 0, cfg.at("reserve"));
-    require(player.unit.alive || (player.weapon.shot_ticks == 0
+    require(player.alive || (player.weapon.shot_ticks == 0
         && player.weapon.reload_ticks == 0), "dead_weapon_cooldown");
 }
 
@@ -128,22 +128,21 @@ void read_monster(Monster& monster, const Json& obj, const Json& content)
     fields(obj, {"id", "kind", "cfg_id", "pose", "pending_remove", "motion", "health",
         "spawn_id", "ai"});
     monster.spawn_id = cfg_id(obj["spawn_id"]);
-    bool found = false;
-
-    for (const auto& spawn : content["map"]["enemies"])
-    {
-        found = found || (spawn["spawn_id"] == obj["spawn_id"]
-            && spawn["cfg_id"] == obj["cfg_id"]);
-    }
-
-    require(found, "invalid_spawn_reference");
+    const auto* spawn = Monster::spawn_cfg(content, monster.get_spawn_id());
+    require(spawn && spawn->at("cfg_id") == obj["cfg_id"], "invalid_spawn_reference");
     fields(obj["ai"], {"state", "attack_ticks"});
     monster.state = obj["ai"]["state"].get<Str>();
     const auto& cfg = content.at("monsters").at(obj["cfg_id"].get<Str>());
+    monster.max_attack_ticks = cfg.at("attack_ticks");
     monster.attack_ticks = integer(obj["ai"]["attack_ticks"], 0, cfg.at("attack_ticks"));
-    require(monster.unit.alive ? (monster.state == "patrol" || monster.state == "chase"
+    require(monster.alive ? (monster.state == "spawn"
+        || monster.state == "patrol" || monster.state == "chase"
         || monster.state == "attack") : (monster.state == "dead" && monster.attack_ticks == 0),
         "invalid_monster_state");
+    require(monster.state != "spawn" || (monster.attack_ticks == 0 && monster.vx == 0
+        && monster.vy == 0 && monster.grounded && monster.hp == monster.max_hp
+        && monster.x == spawn->at("x") && monster.y == spawn->at("y")),
+        "invalid_spawn_state");
 }
 
 // 将完整文档解码到独立世界，发布前验证全部引用和状态不变量。
@@ -195,10 +194,10 @@ void read_world(World& world, const Json& doc)
         }
 
         auto& unit = actor.unit();
-        unit.entity.id = value;
-        unit.entity.kind = kind;
-        unit.entity.cfg_id = cfg_id(obj.at("cfg_id"));
-        unit.entity.pending_remove = boolean(obj.at("pending_remove"));
+        unit.id = value;
+        unit.kind = kind;
+        unit.cfg_id = cfg_id(obj.at("cfg_id"));
+        unit.pending_remove = boolean(obj.at("pending_remove"));
         const auto& cfg = world.content.at(kind == "player" ? "players" : "monsters")
             .at(obj["cfg_id"].get<Str>());
         read_unit(unit, obj, cfg, world.content.at("map"));
@@ -213,7 +212,7 @@ void read_world(World& world, const Json& doc)
         else
         {
             read_monster(std::get<Monster>(actor.value), obj, world.content);
-            alive += unit.alive && !unit.entity.pending_remove ? 1 : 0;
+            alive += unit.alive && !unit.pending_remove ? 1 : 0;
         }
 
         world.actors[index] = std::move(actor);
@@ -257,9 +256,9 @@ void read_world(World& world, const Json& doc)
     require(!(world.paused || world.phase != "Playing") || (player->move_x == 0
         && !player->jump && !player->fire && !player->fire_once && !player->reload),
         "inactive_controls");
-    require((world.phase == "Dead" && !player->unit.alive)
-        || (world.phase == "Cleared" && player->unit.alive && alive == 0)
-        || (world.phase == "Playing" && player->unit.alive && alive > 0), "invalid_phase_state");
+    require((world.phase == "Dead" && !player->alive)
+        || (world.phase == "Cleared" && player->alive && alive == 0)
+        || (world.phase == "Playing" && player->alive && alive > 0), "invalid_phase_state");
 }
 }
 
@@ -279,7 +278,7 @@ nlohmann::json World::document() const
     {
         const auto& actor = *actors[index];
         const auto& unit = actor.unit();
-        const auto& e = unit.entity;
+        const Entity& e = unit;
         Json obj = {{"id", e.get_id()}, {"kind", e.kind}, {"cfg_id", e.get_cfg_id()},
             {"pending_remove", e.pending_remove},
             {"pose", {{"x", e.x}, {"y", e.y}, {"facing", e.facing}}},
@@ -357,10 +356,7 @@ void World::load(const Str& text)
         if (actor)
         {
             actor->generation = candidate.next_generation();
-            auto& unit = actor->unit();
-            unit.access = &access;
-            unit.entity.access = &access;
-            std::visit([this](auto& value) { value.access = &access; }, actor->value);
+            actor->unit().access = &access;
             if (auto* player = std::get_if<Player>(&actor->value))
             {
                 player->weapon.access = &access;
