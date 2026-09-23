@@ -45,7 +45,7 @@ namespace
 template <typename T>
 using Handle = luax::bind::ActorObjectHandle<T>;
 
-// 借用对应组合组件；类类型不同的请求不能访问另一种对象。
+// 借用基类视图、具体对象或组件；句柄类型不同的请求不能相互替代。
 template <typename T>
 T* object(World& world, u32 slot)
 {
@@ -68,7 +68,7 @@ T* object(World& world, u32 slot)
         auto& actor = *world.actors[slot];
         if constexpr (std::is_same_v<T, Entity>)
         {
-            return &actor.unit().entity;
+            return static_cast<Entity*>(&actor.unit());
         }
         else if constexpr (std::is_same_v<T, Unit>)
         {

@@ -1,7 +1,82 @@
 # 服务端验证记录
 
-日期：2026-09-22。结果来自本轮实现与审查修复后的本机工作区验证。
+日期：2026-09-23。结果来自本轮实现与审查修复后的本机工作区验证。
 本记录区分实现、实际运行结果和后续平台验收；active intent 不等于完整路线阶段完成。
+
+## 原生对象单继承（2026-09-23）
+
+在当前怪物五态与边界实现之上，将 Unit 改为公开继承 Entity，Player/Monster 公开继承 Unit。
+实体继承链只保留 Entity 的 Access*，Weapon 仍组合持有；Actor 的 variant 值存储、ID、
+槽位代次、固定阶段移除、状态 v4 schema 和七类 Luax 显式契约保持。
+创建、候选导入、快照和句柄解析已适配基类视图，导入仍绑定目标 World::access 后才发布。
+base.md、plan.md 与 SRV-010 同步记录继承结构和借用边界。
+
+新增原生回归覆盖创建及导入后的基类引用、同一状态和门禁、具体类及 Weapon/Item setter、
+只读拒绝、运动字段正确提交、末参数非法时完全不写入，以及网络快照可见性。
+真实 Luax 夹具验证导入后各类 setter、Player 句柄不能传入 Unit 方法，并逐类检查
+Entity/Unit/Player/Monster/Weapon 旧句柄在导入和重开后失效。
+
+| 命令／检查 | 实际结果 |
+| --- | --- |
+| 迁移前两种 preset 的 object/entity/game 契约 | 各 **3/3 通过**，1.59／0.80 秒，基于已有二进制 |
+| `cmake --build --preset win-dev --parallel 8` | 开发构建成功；最终构建无 C++ 警告 |
+| `ctest --preset win-dev --output-on-failure` | **17/17 通过，66.28 秒** |
+| 最终开发构建及 `ctest --preset win-dev -R '^hunter_(object\|entity\|bundle)_contract$'` | 补齐五类失效断言后 **3/3 通过，8.23 秒**，重新生成签名测试制品 |
+| `cmake --build --preset win-bundle --parallel 8` | 生产模式构建成功，无 C++ 警告 |
+| `ctest --preset win-bundle --output-on-failure` | **16/16 通过，49.64 秒**，含最终夹具、耐久、进程和生产链接验证 |
+| 四个类的头文件与 `lua/contract.json` 对照 | **45 个契约方法签名保持**，完整头文件与方案示例一致 |
+| 修改范围的 100 列、Tab、行尾空白及 `git diff --check` | 通过；原生源码无旧 unit/entity 数据成员访问 |
+
+开发全套通过后，仅追加五类旧句柄失效断言和实现签名换行；随后重建开发版并定向验证
+object/entity/bundle，生产完整套件消费这批最终签名制品。构建和性能／耐久测试顺序运行。
+初次开发编译出现继承字段同名参数警告，已用实现局部参数 new_x/new_y/new_facing 消除，
+公开头文件签名、参数顺序、范围检查和先校验后写入的顺序保持不变。
+
+迁移前后均使用同一 Windows x64 Release 工具链、正式配置、默认预算和 600 Tick，
+每次运行默认及 64 实体两种场景，采样时没有同时执行本次构建或测试：
+
+| 模式／实体数 | 迁移前 p50／p95（µs） | 迁移后 p50／p95（µs） | 前后帧数／编码字节 |
+| --- | ---: | ---: | ---: |
+| 开发／3 | 281.9／343.9 | 284.7／335.6 | 200／26,916 |
+| 开发／64 | 5,917.2／6,896.9 | 5,883.5／6,393.6 | 200／490,558 |
+| Bundle／3 | 281.1／336.0 | 282.7／328.4 | 200／26,916 |
+| Bundle／64 | 5,895.7／6,802.2 | 5,885.1／6,416.1 | 200／490,558 |
+
+四次前后场景均完成并通过状态验证；帧数和编码字节一致。耗时为本机参考采样，不据此宣称
+继承本身带来性能提升或 Android 性能保证。
+
+日志在忽略目录 `build/`：`inheritance-baseline-{dev,bundle}-tests.log`、
+`inheritance-dev-build.log`、`inheritance-dev-final-build.log`、`inheritance-dev-tests.log`、
+`inheritance-dev-final-tests.log`、`inheritance-bundle-build.log`、`inheritance-bundle-tests.log`，
+以及 `inheritance-perf-{before,after}-{dev,bundle}.jsonl`。
+本次未修改生产 Lua 调用方式或类契约，保留工作区原有怪物改动；未运行 Android 或 Unity 验证。
+
+## 怪物五态与原生边界（2026-09-23）
+
+补齐 spawn/patrol/chase/attack/dead 生命周期，保持 C++ 权威状态与安全校验、Lua 玩法决策。
+原生创建和导入共用出生 ID、配置、整数坐标、巡逻范围、障碍和连续支撑校验；
+冷却按配置限制，死亡清零并禁止恢复活动状态。Lua 完成出生初始化、巡逻端点转向与截步、
+追击步长截断、范围判定及冷却攻击，原有玩家射击先于怪物攻击的顺序保持不变。
+
+新增原生与真实 Luax 用例覆盖非连续出生 ID、非法配置与导入失败原子性、五态往返、
+出生端点、窄区间和区外回归、检测与攻击的精确边界、追击防越位与同 X 竖直分离、
+冷却递减，以及 Playing 局内死怪持续静止、禁止复活和重新写入速度。
+
+| 命令／检查 | 实际结果 |
+| --- | --- |
+| `cmake --build --preset win-dev --parallel 8` | 开发构建成功 |
+| `ctest --preset win-dev --output-on-failure` | **17/17 通过，60.62 秒** |
+| `cmake --build --preset win-bundle --parallel 8` | 生产模式构建成功 |
+| `ctest --preset win-bundle --output-on-failure` | 首轮 **14/16 通过，67.48 秒**；耐久与进程集成失败 |
+| `ctest --preset win-bundle --rerun-failed --output-on-failure` | 原代码与预算复测 **2/2 通过，44.71 秒** |
+
+开发套件重新生成签名测试 Bundle，生产套件消费同一批制品。
+生产首轮 64 实体耐久在 Tick 731 触发 50 ms 脚本墙钟预算，进程集成在开局响应阶段出现
+receive_failed；检查时主机仍有大量并行编译进程。未调整代码或超时预算，单独重跑两项均通过；
+其余 14 项保留首轮通过证据，不将本次结果表述为一次完整生产套件全绿。
+日志在忽略目录 `build/monster-dev-build.log`、`build/monster-dev-tests.log`、
+`build/monster-bundle-build.log`、`build/monster-bundle-tests.log` 与 `build/monster-bundle-retest.log`。
+本次验证使用现有 Windows 构建目录；Android 与 Unity 验证边界保持不变。
 
 ## 独立 SQLite 持久化底座（2026-09-22）
 

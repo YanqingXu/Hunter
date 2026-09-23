@@ -1,4 +1,4 @@
-// 持有 Player 的原生状态，通过受控属性供脚本访问。
+// 在单位基类上增加玩家身份、输入和备用弹药；枪械仍由玩家组合持有。
 #pragma once
 
 #include "common/Types.h"
@@ -9,11 +9,9 @@
 namespace hunter
 {
 
-class Player
+class Player : public Unit
 {
 public:
-    Access* access = nullptr;
-    Unit unit;
     Weapon weapon;
     u64 player_id = 1;
     i32 reserve = 0;

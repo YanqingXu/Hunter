@@ -19,7 +19,7 @@ wire::Envelope World::snapshot() const
     {
         const auto& actor = *actors[index];
         const auto& unit = actor.unit();
-        const auto& entity = unit.entity;
+        const Entity& entity = unit;
         if (entity.pending_remove)
         {
             continue;

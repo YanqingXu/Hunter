@@ -6,20 +6,22 @@ namespace hunter
 {
 std::tuple<i64, i64, i64, i64, bool, i64, bool, bool> Unit::read_motion() const
 {
-    return {entity.x, entity.y, vx, vy, grounded, entity.facing, alive, entity.pending_remove};
+    return {x, y, vx, vy, grounded, facing, alive, pending_remove};
 }
 
-void Unit::write_motion(i64 x, i64 y, i64 new_vx, i64 new_vy, bool on_ground, i64 facing)
+void Unit::write_motion(i64 new_x, i64 new_y, i64 new_vx, i64 new_vy,
+    bool on_ground, i64 new_facing)
 {
     access->write();
-    range(x, 0, 100000);
-    range(y, 0, 100000);
+    range(new_x, 0, 100000);
+    range(new_y, 0, 100000);
     range(new_vx, -1000, 1000);
     range(new_vy, -1000, 1000);
-    require(facing == -1 || facing == 1, "invalid_facing");
-    entity.x = static_cast<i32>(x);
-    entity.y = static_cast<i32>(y);
-    entity.facing = static_cast<i32>(facing);
+    require(new_facing == -1 || new_facing == 1, "invalid_facing");
+    require((alive && hp > 0) || (new_vx == 0 && new_vy == 0), "dead_unit_motion");
+    x = static_cast<i32>(new_x);
+    y = static_cast<i32>(new_y);
+    facing = static_cast<i32>(new_facing);
     vx = static_cast<i32>(new_vx);
     vy = static_cast<i32>(new_vy);
     grounded = on_ground;
@@ -34,6 +36,7 @@ void Unit::set_vx(i64 value)
 {
     access->write();
     range(value, -1000, 1000);
+    require((alive && hp > 0) || value == 0, "dead_unit_motion");
     vx = static_cast<i32>(value);
 }
 
@@ -46,6 +49,7 @@ void Unit::set_vy(i64 value)
 {
     access->write();
     range(value, -1000, 1000);
+    require((alive && hp > 0) || value == 0, "dead_unit_motion");
     vy = static_cast<i32>(value);
 }
 
@@ -69,6 +73,7 @@ void Unit::set_hp(i64 value)
 {
     access->write();
     range(value, 0, max_hp);
+    require(value == 0 || (alive && hp > 0), "dead_unit_health");
     hp = static_cast<i32>(value);
 }
 
@@ -85,6 +90,7 @@ bool Unit::get_alive() const
 void Unit::set_alive(bool value)
 {
     access->write();
+    require(value == (hp > 0) && (alive || !value), "invalid_unit_alive");
     alive = value;
 }
 }

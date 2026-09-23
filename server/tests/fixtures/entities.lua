@@ -9,6 +9,40 @@ return function(deps)
     local api = {}
     local content = nil
 
+    -- 统一验证实体替换后，各层旧视图和枪械句柄全部失效。
+    local function stale_views(player, monster)
+        assert(not pcall(function() return Entity.get_x(player.pose) end), "entity handle stale")
+        assert(not pcall(function() return Unit.get_hp(player.health) end), "unit handle stale")
+        assert(not pcall(function() return Player.get_move_x(player.controls) end),
+            "player handle stale")
+        assert(not pcall(function() return Monster.get_state(monster.ai) end),
+            "monster handle stale")
+        assert(not pcall(function() return Weapon.get_ammo(player.weapon) end),
+            "weapon handle stale")
+    end
+
+    -- 导入后各类型句柄仍共享原生状态，并保持严格的类边界。
+    local function check_views(player, monster)
+        assert(not pcall(function() return Unit.get_hp(Player.find(player.id)) end),
+            "player handle cannot replace unit handle")
+        local x = Entity.get_x(player.pose) + 1
+        Entity.set_x(player.pose, x)
+        local motion_x = Unit.read_motion(player.motion)
+        assert(motion_x == x, "entity position visible through unit handle")
+        local hp = Unit.get_hp(player.health) - 1
+        Unit.set_hp(player.health, hp)
+        assert(Unit.get_hp(Unit.find(player.id)) == hp, "unit handles share health")
+        Player.set_move_x(player.controls, 1)
+        local ammo = Weapon.get_ammo(player.weapon) - 1
+        Weapon.set_ammo(player.weapon, ammo)
+        Monster.set_state(monster.ai, "patrol")
+        Monster.set_attack_ticks(monster.ai, 1)
+        assert(Player.get_move_x(player.controls) == 1
+            and Weapon.get_ammo(player.weapon) == ammo
+            and Monster.get_state(monster.ai) == "patrol"
+            and Monster.get_attack_ticks(monster.ai) == 1, "import rebinds concrete setters")
+    end
+
     -- 校验延迟移除、组件代次、重开和原生物品实例。
     local function lifecycle(world)
         local player = world_api.find(world, World.get_player_entity_id(world))
@@ -19,7 +53,12 @@ return function(deps)
         local before = World.save(world)
         local value, code = world_api.spawn(world, content, "monster", "999")
         assert(value == nil and code == "invalid_spawn" and World.save(world) == before,
-            "invalid spawn preserves allocator")
+            "unknown spawn preserves allocator")
+        for _, spawn_id in ipairs({"0", "02", "-1", "2147483648"}) do
+            assert(not pcall(function()
+                world_api.spawn(world, content, "monster", spawn_id)
+            end) and World.save(world) == before, "malformed spawn preserves allocator")
+        end
         assert(not world_api.remove(world, player.id), "player cannot be removed")
         Entity.set_x(removed.pose, Entity.get_x(player.pose) + 800)
         assert(world_api.remove(world, removed.id), "first removal accepted")
@@ -37,14 +76,15 @@ return function(deps)
         assert(not pcall(function() return Unit.get_hp(removed.health) end), "removed handle stale")
         assert(World.entity_id(world, 2) == survivor.id, "survivor order preserved")
         local fresh = world_api.spawn(world, content, "monster", spawn_id)
-        assert(fresh.id == "4", "fresh identity")
+        assert(fresh.id == "4" and Monster.get_state(fresh.ai) == "patrol"
+            and Monster.get_attack_ticks(fresh.ai) == 0, "fresh identity completes spawn")
         local saved = json.decode(World.save(world))
         saved.entity_ids = json.array({survivor.id, player.id, fresh.id})
         World.load(world, json.encode(saved))
-        assert(not pcall(function() return Player.get_move_x(player.controls) end),
-            "import stales components")
+        stale_views(player, survivor)
         player = world_api.find(world, World.get_player_entity_id(world))
         survivor = world_api.find(world, "3")
+        check_views(player, survivor)
         local old_x = Entity.get_x(survivor.pose)
         ai.move(world, content)
         assert(Entity.get_x(survivor.pose) == old_x + content.monsters[survivor.cfg_id].speed,
@@ -63,13 +103,13 @@ return function(deps)
         assert(Item.get_count(item) == 3, "item roundtrip")
         assert(World.remove_item(world, item_id), "remove item")
         assert(not pcall(function() return Item.get_count(item) end), "destroyed item stale")
-        local old_player = Player.find(World.get_player_entity_id(world))
+        player = world_api.find(world, World.get_player_entity_id(world))
+        survivor = world_api.find(world, "3")
         local old_ref = {match_id = World.get_match_id(world),
             entity_id = World.get_player_entity_id(world)}
         world_api.start(world, content,
             {req_id = "restart", after_match_id = World.get_match_id(world)})
-        assert(not pcall(function() return Player.get_move_x(old_player) end),
-            "restart stales player")
+        stale_views(player, survivor)
         assert(world_api.resolve(world, old_ref) == nil, "old match rejected")
         assert(World.valid(world), "valid restarted world")
     end

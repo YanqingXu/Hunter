@@ -18,10 +18,10 @@ struct Actor
     u32 generation = 0;
     std::variant<Player, Monster> value;
 
-    // 借用玩家或怪物共同的单位组件。
+    // 借用玩家或怪物的单位基类，不转移具体对象所有权。
     Unit& unit();
 
-    // 只读借用共同的单位组件。
+    // 只读借用单位基类，不复制权威状态。
     const Unit& unit() const;
 };
 

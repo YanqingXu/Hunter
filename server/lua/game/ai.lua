@@ -36,10 +36,14 @@ return function(deps)
     function api.move(world, content)
         local player = world_api.find(world, World.get_player_entity_id(world))
         local px, py = Unit.read_motion(player.motion)
+        local player_alive = Unit.get_alive(player.health)
         local player_cfg = content.players[player.cfg_id]
         for _, id in ipairs(world_api.ids(world)) do
             local enemy = world_api.find(world, id)
             if enemy ~= nil and enemy.kind == "monster" then
+                if Monster.get_state(enemy.ai) == "spawn" then
+                    monster_api.activate(enemy, content)
+                end
                 local x, y, vx, vy, grounded, facing, alive = Unit.read_motion(enemy.motion)
                 if alive then
                     local cfg = content.monsters[enemy.cfg_id]
@@ -51,27 +55,34 @@ return function(deps)
                         Monster.set_attack_ticks(enemy.ai, attack_ticks - 1)
                     end
                     local state = "patrol"
-                    if can_attack(x, y, px, py, cfg, player_cfg, content) then
+                    if player_alive and can_attack(x, y, px, py, cfg, player_cfg, content) then
                         state = "attack"
                         facing = px >= x and 1 or -1
                         direction = 0
-                    elseif math.abs(px - x) <= cfg.detect_range
+                    elseif player_alive and math.abs(px - x) <= cfg.detect_range
                         and math.abs(py - y) <= cfg.detect_range then
                         state = "chase"
-                        direction = px >= x and 1 or -1
+                        direction = px == x and 0 or (px > x and 1 or -1)
+                        distance = math.min(cfg.speed, math.abs(px - x))
                     else
                         direction, distance = patrol_move(x, facing, spawn, cfg.speed)
                     end
                     Monster.set_state(enemy.ai, state)
                     if direction ~= 0 and grounded and not movement.supported(enemy, cfg,
                         content.map, direction, distance) then
+                        facing = -direction
                         direction = 0
-                        facing = -facing
                     end
                     Entity.set_facing(enemy.pose, facing)
                     local moved = movement.step(enemy, cfg, content, direction, false, distance)
                     if direction ~= 0 and moved == 0 then
                         Entity.set_facing(enemy.pose, -direction)
+                    elseif state == "patrol" and moved ~= 0 then
+                        if x + moved == spawn.patrol_min then
+                            Entity.set_facing(enemy.pose, 1)
+                        elseif x + moved == spawn.patrol_max then
+                            Entity.set_facing(enemy.pose, -1)
+                        end
                     end
                 end
             end

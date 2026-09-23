@@ -8,12 +8,18 @@ namespace hunter
 {
 Unit& Actor::unit()
 {
-    return std::visit([](auto& value) -> Unit& { return value.unit; }, value);
+    return std::visit([](auto& value) -> Unit&
+    {
+        return static_cast<Unit&>(value);
+    }, value);
 }
 
 const Unit& Actor::unit() const
 {
-    return std::visit([](const auto& value) -> const Unit& { return value.unit; }, value);
+    return std::visit([](const auto& value) -> const Unit&
+    {
+        return static_cast<const Unit&>(value);
+    }, value);
 }
 
 void World::reset()
@@ -41,7 +47,7 @@ u32 World::slot(u64 id) const
 {
     for (const auto index : order)
     {
-        if (actors[index]->unit().entity.id == id)
+        if (actors[index]->unit().id == id)
         {
             return index;
         }
@@ -66,7 +72,7 @@ u32 World::item_slot(u64 id) const
 bool World::contains(const Str& id) const
 {
     const auto index = slot(read_id(id));
-    return index < 64 && !actors[index]->unit().entity.pending_remove;
+    return index < 64 && !actors[index]->unit().pending_remove;
 }
 
 i64 World::count() const
@@ -77,7 +83,7 @@ i64 World::count() const
 Str World::entity_id(i64 index) const
 {
     range(index, 1, count());
-    return std::to_string(actors[order[static_cast<usize>(index - 1)]]->unit().entity.id);
+    return std::to_string(actors[order[static_cast<usize>(index - 1)]]->unit().id);
 }
 
 void World::login()
@@ -138,15 +144,7 @@ Str World::spawn(const Str& kind, const Str& spawn_id)
     }
     else if (kind == "monster")
     {
-        for (const auto& entry : content.at("map").at("enemies"))
-        {
-            if (entry.at("spawn_id") == spawn_id)
-            {
-                spawn = &entry;
-                break;
-            }
-        }
-
+        spawn = Monster::spawn_cfg(content, spawn_id);
         if (!spawn)
         {
             return ":invalid_spawn";
@@ -169,8 +167,8 @@ Str World::spawn(const Str& kind, const Str& spawn_id)
     {
         actor.value = Monster{};
         auto& monster = std::get<Monster>(actor.value);
-        monster.access = &access;
         monster.spawn_id = static_cast<u32>(read_id(spawn_id));
+        monster.max_attack_ticks = cfgs.at(cfg_id).at("attack_ticks");
     }
     else
     {
@@ -181,7 +179,6 @@ Str World::spawn(const Str& kind, const Str& spawn_id)
         }
 
         auto& player = std::get<Player>(actor.value);
-        player.access = &access;
         player.weapon.access = &access;
         player.weapon.cfg_id = static_cast<u32>(read_id(gun_id));
         const auto& gun = content.at("weapons").at(gun_id);
@@ -194,13 +191,12 @@ Str World::spawn(const Str& kind, const Str& spawn_id)
     unit.access = &access;
     unit.hp = cfgs.at(cfg_id).at("hp");
     unit.max_hp = unit.hp;
-    unit.entity.access = &access;
-    unit.entity.id = last_entity_id + 1;
-    unit.entity.kind = kind;
-    unit.entity.cfg_id = static_cast<u32>(read_id(cfg_id));
-    unit.entity.x = spawn->at("x");
-    unit.entity.y = spawn->at("y");
-    unit.grounded = unit.entity.y == 0;
+    unit.id = last_entity_id + 1;
+    unit.kind = kind;
+    unit.cfg_id = static_cast<u32>(read_id(cfg_id));
+    unit.x = spawn->at("x");
+    unit.y = spawn->at("y");
+    unit.grounded = unit.y == 0;
     const i32 half = cfgs.at(cfg_id).at("width").get<i32>() / 2;
 
     for (const auto& solid : content.at("map").at("solids"))
@@ -209,8 +205,8 @@ Str World::spawn(const Str& kind, const Str& spawn_id)
         const i32 y = solid.at("y");
         const i32 w = solid.at("w");
         const i32 h = solid.at("h");
-        unit.grounded = unit.grounded || (unit.entity.y == y + h
-            && unit.entity.x - half < x + w && unit.entity.x + half > x);
+        unit.grounded = unit.grounded || (unit.y == y + h
+            && unit.x - half < x + w && unit.x + half > x);
     }
 
     u32 index = 0;
@@ -243,7 +239,7 @@ bool World::remove(const Str& id)
         return false;
     }
 
-    auto& entity = actors[index]->unit().entity;
+    Entity& entity = actors[index]->unit();
     if (entity.kind != "monster" || entity.pending_remove)
     {
         return false;
@@ -260,7 +256,7 @@ void World::flush()
     require(revision < std::numeric_limits<u32>::max(), "revision_exhausted");
     std::erase_if(order, [this](u32 index)
     {
-        if (!actors[index]->unit().entity.pending_remove)
+        if (!actors[index]->unit().pending_remove)
         {
             return false;
         }

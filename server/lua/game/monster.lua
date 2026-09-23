@@ -21,5 +21,14 @@ return function(deps)
         return value
     end
 
+    -- 完成原生已校验的出生流程，端点出生朝向巡逻区间内部。
+    function api.activate(value, content)
+        assert(Monster.get_state(value.ai) == "spawn", "monster already spawned")
+        local spawn = api.spawn_cfg(content, value.spawn_id)
+        assert(spawn ~= nil and spawn.cfg_id == value.cfg_id, "invalid monster spawn")
+        Entity.set_facing(value.pose, spawn.x == spawn.patrol_max and -1 or 1)
+        Monster.set_state(value.ai, "patrol")
+    end
+
     return api
 end
