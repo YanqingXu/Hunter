@@ -7,8 +7,7 @@ return function(deps)
     local api = {}
 
     -- 扣弹并沿当前瞄准方向命中最近目标；同距时墙优先、实体按稳定顺序。
-    local function shoot(world, content)
-        local player = world_api.find(world, World.get_player_entity_id(world))
+    local function shoot(world, content, player)
         local gun = player.weapon
         local cfg = content.weapons[Weapon.get_cfg_id(gun)]
         local input = player.controls
@@ -58,8 +57,8 @@ return function(deps)
     end
 
     -- 先完成旧冷却和换弹，再处理当前换弹与射击意图。
-    function api.step(world, content)
-        local player = world_api.find(world, World.get_player_entity_id(world))
+    function api.step(world, content, player)
+        player = player or world_api.find(world, World.find_player(world, World.get_player_id(world)))
         local gun = player.weapon
         local cfg = content.weapons[Weapon.get_cfg_id(gun)]
         if not Unit.get_alive(player.health) then
@@ -88,7 +87,7 @@ return function(deps)
         if (Player.get_fire(player.controls) or Player.get_fire_once(player.controls))
             and Weapon.get_reload_ticks(gun) == 0 and Weapon.get_shot_ticks(gun) == 0
             and Weapon.get_ammo(gun) > 0 then
-            shoot(world, content)
+            shoot(world, content, player)
         end
     end
 

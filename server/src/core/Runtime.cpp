@@ -3,6 +3,9 @@
 #include "common/Types.h"
 #include "core/BoundedQueue.h"
 #include "core/TickClock.h"
+#include "core/Session.h"
+#include "game/World.h"
+#include "storage/Storage.h"
 #include "net/Transport.h"
 #include "script/Script.h"
 #include "ContentSpec.h"
@@ -283,6 +286,10 @@ struct Runtime::Loop
                     {
                         reject("paused", queued->start_req().req_id());
                     }
+                    else if (queued->has_action_req())
+                    {
+                        reject("paused", queued->action_req().req_id());
+                    }
                 }
 
                 pending_seqs.clear();
@@ -292,7 +299,7 @@ struct Runtime::Loop
                     return;
                 }
 
-                if (!commit(script->event(4, R"({"v":4,"paused":true})")))
+                if (!commit(script->event(4, R"({"v":5,"paused":true})")))
                 {
                     return;
                 }
@@ -314,7 +321,7 @@ struct Runtime::Loop
 
                 if (was_paused)
                 {
-                    if (!commit(script->event(4, R"({"v":4,"paused":false})")))
+                    if (!commit(script->event(4, R"({"v":5,"paused":false})")))
                     {
                         return;
                     }
@@ -351,9 +358,18 @@ struct Runtime::Loop
     // 装载脚本并绑定端口，全部成功后发布本次实例的就绪信息。
     void start(const Str& req_id)
     {
+        if (storage)
+        {
+            auto evt = rsp("Error", req_id);
+            evt["code"] = "starting";
+            emit(std::move(evt));
+            return;
+        }
+
         try
         {
             const auto& cfg = shared.cfg;
+
             if (cfg.tick_hz != 60 || cfg.snapshot_hz != 20)
             {
                 throw std::runtime_error("invalid snapshot frequency");
@@ -361,8 +377,9 @@ struct Runtime::Loop
 
             instance = random_hex(16);
             token = random_hex(32);
+            instance_id = std::stoull(instance.substr(0, 16), nullptr, 16) | 1ULL;
             script = std::make_unique<Script>();
-            const nlohmann::json ctx = {{"v", 4},
+            const nlohmann::json ctx = {{"v", 5},
                 {"snapshot_every", cfg.tick_hz / cfg.snapshot_hz},
                 {"content", nlohmann::json::parse(content::json_text)}};
             auto out = script->open(cfg, ctx.dump());
@@ -377,7 +394,78 @@ struct Runtime::Loop
                 throw std::runtime_error(out ? "init must not emit network output" : out.error());
             }
 
-            net = std::make_unique<Transport>(io, cfg,
+            storage = std::make_unique<storage::Storage>(io, storage::StorageCfg{}, instance_id);
+            const auto accepted = storage->open(cfg.save_path, [this, req_id](storage::Rsp result)
+            {
+                if (stopped)
+                {
+                    return;
+                }
+
+                if (!result.result)
+                {
+                    start_failed(req_id, result.result.error().message);
+                    return;
+                }
+
+                const auto load = storage->load_player(local_profile(),
+                    [this, req_id](storage::Rsp loaded)
+                    {
+                        if (stopped)
+                        {
+                            return;
+                        }
+
+                        if (!loaded.result)
+                        {
+                            start_failed(req_id, loaded.result.error().message);
+                            return;
+                        }
+
+                        profile = std::get<storage::PlayerSave>(std::move(*loaded.result));
+                        open_transport(req_id);
+                    });
+
+                if (!load)
+                {
+                    start_failed(req_id, load.error().message);
+                }
+            });
+
+            if (!accepted)
+            {
+                throw std::runtime_error(accepted.error().message);
+            }
+        }
+        catch (const std::exception& err)
+        {
+            start_failed(req_id, err.what());
+        }
+    }
+
+    // 本地存档 V1 的身份入口；业务层只使用实际加载的 PlayerSave 身份。
+    u64 local_profile() const
+    {
+        return 1;
+    }
+
+    // 统一报告启动阶段失败并排空已接受的存档操作。
+    void start_failed(const Str& req_id, const Str& detail)
+    {
+        state = "Faulted";
+        auto evt = rsp("Error", req_id);
+        evt["code"] = "start_failed";
+        evt["detail"] = detail.substr(0, 512);
+        emit(std::move(evt));
+        stop("");
+    }
+
+    // 存档加载成功后才开放连接并发布 Ready，回调边界吸收异常。
+    void open_transport(const Str& req_id)
+    {
+        try
+        {
+            net = std::make_unique<Transport>(io, shared.cfg,
                 [this](wire::Envelope msg)
                 {
                     receive(std::move(msg));
@@ -392,12 +480,7 @@ struct Runtime::Loop
         }
         catch (const std::exception& err)
         {
-            state = "Faulted";
-            auto evt = rsp("Error", req_id);
-            evt["code"] = "start_failed";
-            evt["detail"] = Str(err.what()).substr(0, 512);
-            emit(std::move(evt));
-            stop("");
+            start_failed(req_id, err.what());
         }
     }
 
@@ -408,7 +491,7 @@ struct Runtime::Loop
         evt["port"] = port;
         evt["instance"] = instance;
         evt["token"] = token;
-        evt["protocol_version"] = 3;
+        evt["protocol_version"] = 4;
         evt["content_version"] = content::version;
         emit(std::move(evt));
     }
@@ -419,7 +502,8 @@ struct Runtime::Loop
         if (!authenticated)
         {
             const auto& hello = msg.hello();
-            if (!msg.has_hello() || hello.protocol_version() != 3
+
+            if (!msg.has_hello() || hello.protocol_version() != 4
                 || hello.content_version() != content::version
                 || hello.instance() != instance || hello.token() != token)
             {
@@ -428,10 +512,11 @@ struct Runtime::Loop
             }
 
             authenticated = true;
+            binding.bind(instance_id, profile.player_id);
             net->authenticate();
             wire::Envelope reply;
             auto* ack = reply.mutable_hello_ack();
-            ack->set_protocol_version(3);
+            ack->set_protocol_version(4);
             ack->set_content_version(Str(content::version));
             ack->set_instance(instance);
 
@@ -447,10 +532,16 @@ struct Runtime::Loop
             return;
         }
 
-        if (msg.has_login_req() || msg.has_start_req())
+        if (msg.has_save_req())
+        {
+            save_query(msg.save_req());
+            return;
+        }
+
+        if (msg.has_login_req() || msg.has_start_req() || msg.has_action_req())
         {
             const auto& req = msg.has_login_req() ? msg.login_req().req_id()
-                : msg.start_req().req_id();
+                : msg.has_start_req() ? msg.start_req().req_id() : msg.action_req().req_id();
 
             if (req.empty() || req.size() > 128)
             {
@@ -479,6 +570,13 @@ struct Runtime::Loop
         }
 
         const auto& input = msg.input();
+
+        if (!binding.resolve(binding.viewer().session_id, input.world_id(), input.match_id()))
+        {
+            reject("stale_match", "", input.seq(), input.match_id());
+            return;
+        }
+
         if (input.seq() <= received_seq)
         {
             if (last_ack && input.seq() == last_ack->ack().seq()
@@ -546,6 +644,17 @@ struct Runtime::Loop
     // 发送一条控制协议消息，无法保留关键输出时中止会话。
     bool send_msg(const wire::Envelope& msg)
     {
+        return send_to(binding.viewer().session_id, msg);
+    }
+
+    // 只向指定的当前认证会话发送，失效回调不得借唯一连接误投递。
+    bool send_to(u64 recipient, const wire::Envelope& msg)
+    {
+        if (!binding.accepts(recipient) || stopped || session == "Aborted" || !net)
+        {
+            return false;
+        }
+
         auto frame = encode_frame(msg, shared.cfg.max_frame_bytes);
         if (!frame || !net->send({std::move(*frame)}))
         {
@@ -568,6 +677,25 @@ struct Runtime::Loop
         {
             abort("script_error:" + out.error().substr(0, 256));
             return false;
+        }
+
+        for (auto& value : *out)
+        {
+            const auto& world = script->world();
+
+            if (value.message.has_login_rsp())
+            {
+                auto* reply = value.message.mutable_login_rsp();
+                reply->set_session_id(binding.viewer().session_id);
+                reply->set_world_id(world.world_id);
+                reply->set_player_entity_id(world.player_entity_id);
+            }
+            else if (value.message.has_start_rsp())
+            {
+                auto* reply = value.message.mutable_start_rsp();
+                reply->set_world_id(world.world_id);
+                reply->set_player_entity_id(world.player_entity_id);
+            }
         }
 
         auto frames = script_frames(*out, shared.cfg);
@@ -670,6 +798,11 @@ struct Runtime::Loop
     {
         for (usize count = 0; count < shared.cfg.max_inputs_per_tick; ++count)
         {
+            if (!script || stopped || session == "Aborted")
+            {
+                return;
+            }
+
             if (TickClock::Clock::now() >= deadline)
             {
                 break;
@@ -685,6 +818,13 @@ struct Runtime::Loop
             {
                 const auto& cmd = input->input();
                 pending_seqs.erase(cmd.seq());
+
+                if (!binding.resolve(binding.viewer().session_id, cmd.world_id(), cmd.match_id()))
+                {
+                    reject("stale_match", "", cmd.seq(), cmd.match_id());
+                    continue;
+                }
+
                 if (!commit(script->input(cmd, tick_id + 1)))
                 {
                     return;
@@ -693,12 +833,25 @@ struct Runtime::Loop
                 continue;
             }
 
-            nlohmann::json payload = {{"v", 4}};
+            if (input->has_start_req())
+            {
+                start_match(input->start_req());
+                continue;
+            }
+
+            if (input->has_action_req())
+            {
+                action(input->action_req());
+                continue;
+            }
+
+            nlohmann::json payload = {{"v", 5}};
             i64 event_id = 2;
             if (input->has_login_req())
             {
                 event_id = 2;
                 payload["req_id"] = input->login_req().req_id();
+                payload["player_id"] = std::to_string(profile.player_id);
             }
             else
             {
@@ -713,8 +866,497 @@ struct Runtime::Loop
             }
         }
 
+        if (!script || stopped || session == "Aborted")
+        {
+            return;
+        }
+
         ++tick_id;
-        commit(script->tick(tick_id, 1.0 / shared.cfg.tick_hz));
+
+        if (commit(script->tick(tick_id, 1.0 / shared.cfg.tick_hz)))
+        {
+            freeze_result();
+        }
+    }
+
+    // 在 Tick 边界申请持久局号，同请求只保留一次分配，完成后才创建世界。
+    void start_match(const wire::StartReq& req)
+    {
+        const auto& world = script->world();
+
+        if (world.player_id == 0)
+        {
+            reject("not_logged_in", req.req_id());
+            return;
+        }
+
+        if (pending_start)
+        {
+            if (pending_start->req_id() != req.req_id()
+                || pending_start->after_match_id() != req.after_match_id())
+            {
+                reject("start_pending", req.req_id());
+            }
+
+            return;
+        }
+
+        if (req.req_id() == world.last_req)
+        {
+            begin_match(req, world.match_id, world.world_id);
+            return;
+        }
+
+        if (req.after_match_id() != world.match_id)
+        {
+            reject("stale_match", req.req_id());
+            return;
+        }
+
+        if (world.phase == "Playing" || world.phase == "Settling" || save_busy)
+        {
+            reject("invalid_state", req.req_id());
+            return;
+        }
+
+        pending_start = req;
+        const auto previous_phase = world.phase;
+
+        if (!script->change([](World& value) { value.set_phase("Preparing"); }))
+        {
+            abort("prepare_failed");
+            return;
+        }
+
+        const auto accepted = storage->alloc_match([this, req, previous_phase](storage::Rsp result)
+        {
+            pending_start.reset();
+
+            if (stopped || !script || session == "Aborted")
+            {
+                return;
+            }
+
+            if (!script->change([&](World& value) { value.phase = previous_phase; }))
+            {
+                abort("prepare_failed");
+                return;
+            }
+
+            if (!result.result)
+            {
+                reject("alloc_failed", req.req_id());
+                return;
+            }
+
+            if (paused)
+            {
+                reject("paused", req.req_id());
+                return;
+            }
+
+            const auto match = std::get<storage::MatchId>(*result.result).value;
+            begin_match(req, match, ++next_world);
+        });
+
+        if (!accepted)
+        {
+            pending_start.reset();
+
+            if (!script->change([&](World& value) { value.phase = previous_phase; }))
+            {
+                abort("prepare_failed");
+                return;
+            }
+
+            reject("alloc_failed", req.req_id());
+        }
+    }
+
+    // 通过受版本约束的脚本入口创建对局，再关联接收者与世界身份。
+    void begin_match(const wire::StartReq& req, u64 match, u64 world_id)
+    {
+        const auto previous = script->world().match_id;
+        const nlohmann::json payload = {{"v", 5}, {"req_id", req.req_id()},
+            {"after_match_id", std::to_string(req.after_match_id())},
+            {"match_id", std::to_string(match)}, {"world_id", std::to_string(world_id)}};
+
+        if (!commit(script->event(3, payload.dump())))
+        {
+            return;
+        }
+
+        const auto& world = script->world();
+
+        if (world.match_id != previous)
+        {
+            binding.enter(world.world_id, world.match_id);
+            frozen.reset();
+            saved.reset();
+            save_state = "Idle";
+            save_error.clear();
+        }
+    }
+
+    // 原生低频操作仅在 Tick 边界执行，客户端不能提交结果或奖励列表。
+    void action(const wire::ActionReq& req)
+    {
+        const auto ctx = binding.resolve(binding.viewer().session_id,
+            req.world_id(), req.match_id());
+
+        if (!ctx || ctx->match_id == 0)
+        {
+            reject("stale_match", req.req_id());
+            return;
+        }
+
+        Str error;
+        const auto changed = script->change([&](World& world)
+        {
+            if (req.kind() == wire::ActionReq::PICKUP)
+            {
+                error = world.pickup(std::to_string(ctx->player_id), std::to_string(req.item_id()));
+            }
+            else if (req.kind() == wire::ActionReq::ABANDON)
+            {
+                if (world.phase != "Playing")
+                {
+                    error = "invalid_state";
+                    return;
+                }
+
+                world.finish("Abandoned");
+            }
+            else if (req.kind() != wire::ActionReq::BAG)
+            {
+                error = "invalid_request";
+            }
+        });
+
+        if (!changed)
+        {
+            abort("action_failed:" + changed.error());
+            return;
+        }
+
+        if (!error.empty())
+        {
+            reject(error, req.req_id());
+            return;
+        }
+
+        wire::Envelope reply;
+        auto& ack = *reply.mutable_action_rsp();
+        ack.set_req_id(req.req_id());
+        ack.set_world_id(ctx->world_id);
+        ack.set_match_id(ctx->match_id);
+        send_to(ctx->session_id, reply);
+
+        if (script)
+        {
+            send_to(ctx->session_id, script->world().snapshot(ctx->player_id));
+            freeze_result();
+        }
+    }
+
+    // 成功玩法入口之后一次冻结奖励；持久化线程不读取世界或脚本对象。
+    void freeze_result()
+    {
+        if (!script || frozen || script->world().phase != "Settling")
+        {
+            return;
+        }
+
+        const auto& world = script->world();
+        storage::CommitMatch req;
+        req.match_id = world.match_id;
+        req.player_id = world.player_id;
+        req.expected_revision = profile.revision;
+        req.outcome = world.raid.player_state;
+        req.content_key = Str(content::version);
+
+        if (req.outcome == "Extracted")
+        {
+            for (const auto& entry : world.items)
+            {
+                if (entry && entry->value.place == "Bag"
+                    && entry->value.owner_player_id == req.player_id)
+                {
+                    req.items.push_back({entry->value.cfg_id, entry->value.count});
+                }
+            }
+        }
+
+        frozen = std::move(req);
+        submit_result();
+    }
+
+    // 区分受理、失败和提交未知状态，保留同一冻结请求供查询与重试。
+    void save_failed(const storage::Error& error)
+    {
+        save_busy = false;
+        save_state = error.commit_unknown ? "Unknown" : "Failed";
+        save_error = error.message.substr(0, 128);
+        notify_save("");
+    }
+
+    // 使用已提交记录更新永久视图；重放结果不能重复附加物品。
+    void committed(storage::MatchResult result)
+    {
+        try
+        {
+            const auto doc = nlohmann::json::parse(result.result_json);
+            if (doc.at("player_id").get<u64>() != profile.player_id)
+            {
+                throw std::runtime_error("result_player_mismatch");
+            }
+
+            if (profile.revision < result.revision)
+            {
+                for (const auto& item : doc.at("items"))
+                {
+                    profile.items.push_back({item.at("item_uid").get<u64>(),
+                        item.at("cfg_id").get<u32>(), item.at("count").get<i32>(),
+                        result.match_id});
+                }
+
+                profile.revision = result.revision;
+                profile.last_match_id = result.match_id;
+            }
+
+            saved = std::move(result);
+            save_busy = false;
+            save_state = "Committed";
+            save_error.clear();
+
+            if (script && !stopped && script->world().match_id == saved->match_id)
+            {
+                const auto changed = script->change([](World& world)
+                {
+                    world.set_phase("Finished");
+                });
+
+                if (!changed)
+                {
+                    abort("finish_failed");
+                    return;
+                }
+            }
+
+            notify_save("");
+        }
+        catch (const std::exception& error)
+        {
+            save_failed({storage::Code::Internal, 0, true, error.what()});
+        }
+    }
+
+    // 提交完全相同的拥有型请求，Accepted 仅表示进入保存中。
+    void submit_result()
+    {
+        if (!frozen || save_busy || stopped)
+        {
+            return;
+        }
+
+        save_busy = true;
+        save_state = "Saving";
+        save_error.clear();
+        const auto accepted = storage->commit_match(*frozen, [this](storage::Rsp result)
+        {
+            if (result.result)
+            {
+                committed(std::get<storage::MatchResult>(std::move(*result.result)));
+            }
+            else
+            {
+                save_failed(result.result.error());
+            }
+        });
+
+        if (!accepted)
+        {
+            save_failed(accepted.error());
+            return;
+        }
+
+        notify_save("");
+    }
+
+    // 输出明确保存状态，不以请求受理冒充奖励到账。
+    void notify_save(const Str& req)
+    {
+        wire::Envelope reply;
+        auto& value = *reply.mutable_save_rsp();
+        value.set_req_id(req);
+        value.set_match_id(frozen ? frozen->match_id : profile.last_match_id);
+        value.set_state(save_state);
+        value.set_revision(profile.revision);
+        value.set_last_match_id(profile.last_match_id);
+        value.set_error_code(save_error);
+
+        if (saved)
+        {
+            value.set_result_json(saved->result_json);
+        }
+
+        send_msg(reply);
+    }
+
+    // 保存查询不依赖模拟 Tick，暂停期间仍能查询、分页和确认未知提交。
+    void save_query(const wire::SaveReq& req)
+    {
+        if (req.req_id().empty() || req.req_id().size() > 128 || !script
+            || script->world().player_id == 0)
+        {
+            reject("invalid_request", req.req_id());
+            return;
+        }
+
+        if (req.kind() == wire::SaveReq::STATUS)
+        {
+            notify_save(req.req_id());
+            return;
+        }
+
+        if (req.kind() == wire::SaveReq::STASH)
+        {
+            stash(req);
+            return;
+        }
+
+        if (req.kind() == wire::SaveReq::RETRY)
+        {
+            if (!frozen || req.match_id() != frozen->match_id || save_busy)
+            {
+                reject("invalid_state", req.req_id());
+                return;
+            }
+
+            if (save_state == "Committed")
+            {
+                notify_save(req.req_id());
+                return;
+            }
+        }
+        else if (req.kind() != wire::SaveReq::RESULT || req.match_id() == 0)
+        {
+            reject("invalid_request", req.req_id());
+            return;
+        }
+
+        const bool retry = req.kind() == wire::SaveReq::RETRY;
+        if (retry)
+        {
+            save_busy = true;
+        }
+
+        const auto recipient = binding.viewer().session_id;
+        const auto accepted = storage->find_match(req.match_id(),
+            [this, req, retry, recipient](storage::Rsp result)
+            {
+                if (retry)
+                {
+                    save_busy = false;
+                }
+
+                if (!result.result)
+                {
+                    if (retry && result.result.error().code == storage::Code::NotFound)
+                    {
+                        submit_result();
+                        notify_save(req.req_id());
+                    }
+                    else if (retry)
+                    {
+                        save_failed(result.result.error());
+                        notify_save(req.req_id());
+                    }
+                    else if (binding.accepts(recipient))
+                    {
+                        reject(result.result.error().code == storage::Code::NotFound
+                            ? "result_not_found" : "save_query_failed", req.req_id());
+                    }
+
+                    return;
+                }
+
+                auto value = std::get<storage::MatchResult>(std::move(*result.result));
+                const auto doc = nlohmann::json::parse(value.result_json, nullptr, false);
+                if (!doc.is_object() || !doc.contains("player_id")
+                    || !doc.at("player_id").is_number_integer()
+                    || doc.at("player_id").get<u64>() != profile.player_id)
+                {
+                    if (binding.accepts(recipient))
+                    {
+                        reject("result_not_found", req.req_id());
+                    }
+
+                    return;
+                }
+
+                if (retry)
+                {
+                    committed(std::move(value));
+                    notify_save(req.req_id());
+                    return;
+                }
+
+                wire::Envelope reply;
+                auto& out = *reply.mutable_save_rsp();
+                out.set_req_id(req.req_id());
+                out.set_match_id(value.match_id);
+                out.set_state("Committed");
+                out.set_result_json(value.result_json);
+                out.set_revision(value.revision);
+                out.set_last_match_id(profile.last_match_id);
+                send_to(recipient, reply);
+            });
+
+        if (!accepted)
+        {
+            if (retry)
+            {
+                save_failed(accepted.error());
+            }
+
+            reject("save_busy", req.req_id());
+        }
+    }
+
+    // 按稳定 UID 顺序分页永久仓库，revision 变化时拒绝继续旧页面。
+    void stash(const wire::SaveReq& req)
+    {
+        const usize limit = req.limit() == 0 ? 128 : req.limit();
+        if (limit > 128 || req.cursor() > profile.items.size()
+            || (req.cursor() > 0 && req.revision() == 0)
+            || (req.revision() != 0 && req.revision() != profile.revision))
+        {
+            reject("stale_revision_or_page", req.req_id());
+            return;
+        }
+
+        wire::Envelope reply;
+        auto& out = *reply.mutable_save_rsp();
+        out.set_req_id(req.req_id());
+        out.set_state("Committed");
+        out.set_revision(profile.revision);
+        out.set_last_match_id(profile.last_match_id);
+        const auto end = std::min<usize>(profile.items.size(),
+            static_cast<usize>(req.cursor()) + limit);
+
+        for (usize index = static_cast<usize>(req.cursor()); index < end; ++index)
+        {
+            const auto& item = profile.items[index];
+            auto& value = *out.add_items();
+            value.set_item_uid(item.item_uid);
+            value.set_cfg_id(item.cfg_id);
+            value.set_count(static_cast<u32>(item.count));
+            value.set_acquired_match_id(item.acquired_match_id);
+        }
+
+        out.set_next_cursor(end < profile.items.size() ? end : 0);
+        send_msg(reply);
     }
 
     // 终止当前会话并清空输入，不在新连接上恢复旧局。
@@ -726,6 +1368,7 @@ struct Runtime::Loop
         }
 
         session = "Aborted";
+        binding.clear();
         timer.cancel();
         inputs.clear();
         pending_seqs.clear();
@@ -813,9 +1456,27 @@ struct Runtime::Loop
 
         const bool closed = close_script("host_stop", req_id);
 
-        state = had_fault || !closed || shared.faulted ? "Faulted" : "Stopped";
-        emit(rsp("Stopped", req_id));
-        guard.reset();
+        const auto done = [this, req_id, had_fault, closed](storage::Rsp)
+        {
+            state = had_fault || !closed || shared.faulted ? "Faulted" : "Stopped";
+            emit(rsp("Stopped", req_id));
+            guard.reset();
+        };
+
+        if (storage)
+        {
+            const auto accepted = storage->stop(done);
+            if (!accepted)
+            {
+                shared.faulted = true;
+                emit({{"type", "Diagnostic"}, {"code", "storage_stop_rejected"}});
+                done({});
+            }
+        }
+        else
+        {
+            done({});
+        }
     }
 
     State& shared;
@@ -827,6 +1488,17 @@ struct Runtime::Loop
     Set<u64> pending_seqs;
     UPtr<Script> script;
     UPtr<Transport> net;
+    UPtr<storage::Storage> storage;
+    storage::PlayerSave profile;
+    Session binding;
+    u64 instance_id = 0;
+    u64 next_world = 0;
+    std::optional<wire::StartReq> pending_start;
+    std::optional<storage::CommitMatch> frozen;
+    std::optional<storage::MatchResult> saved;
+    Str save_state = "Idle";
+    Str save_error;
+    bool save_busy = false;
     std::optional<wire::Envelope> last_ack;
     Str state = "Starting";
     Str session = "Idle";

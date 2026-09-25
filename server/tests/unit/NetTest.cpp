@@ -31,7 +31,7 @@ nlohmann::json entity()
 void rejects(const Str& kind, const nlohmann::json& value, const hunter::Cfg& cfg)
 {
     const Vec<hunter::ScriptOut> out{
-        {"ack", R"({"v":3,"seq":"1","match_id":"1","applied_tick":"1"})"},
+        {"ack", R"({"v":4,"seq":"1","match_id":"1","applied_tick":"1"})"},
         {kind, value.dump()}};
     check(!hunter::script_frames(out, cfg), "invalid output rejects entire batch");
 }
@@ -39,18 +39,18 @@ void rejects(const Str& kind, const nlohmann::json& value, const hunter::Cfg& cf
 // 验证全部输出投影及最重要的精度、字段与容器边界。
 void outputs(const hunter::Cfg& cfg)
 {
-    const nlohmann::json ack = {{"v", 3}, {"seq", "18446744073709551615"},
+    const nlohmann::json ack = {{"v", 4}, {"seq", "18446744073709551615"},
         {"match_id", "18446744073709551615"}, {"applied_tick", "9223372036854775807"}};
-    const nlohmann::json snapshot = {{"v", 3}, {"tick_id", "9223372036854775807"},
+    const nlohmann::json snapshot = {{"v", 4}, {"tick_id", "9223372036854775807"},
         {"seq", "18446744073709551615"}, {"match_id", "1"}, {"phase", "Playing"},
         {"entities", nlohmann::json::array({entity()})}};
     const Vec<hunter::ScriptOut> good{
         {"ack", ack.dump()}, {"snapshot", snapshot.dump()},
-        {"login", R"({"v":3,"req_id":"l","player_id":"1","match_id":"0","phase":"Lobby"})"},
-        {"start", R"({"v":3,"req_id":"s","match_id":"1","phase":"Playing"})"},
-        {"event", R"({"v":3,"match_id":"1","event_id":"2","tick_id":"3","kind":"hit",)"
+        {"login", R"({"v":4,"req_id":"l","player_id":"1","match_id":"0","phase":"Lobby"})"},
+        {"start", R"({"v":4,"req_id":"s","match_id":"1","phase":"Playing"})"},
+        {"event", R"({"v":4,"match_id":"1","event_id":"2","tick_id":"3","kind":"hit",)"
             R"("actor_id":"1","target_id":"2","x":-100,"y":0,"amount":20})"},
-        {"error", R"({"v":3,"code":"stale_input","detail":"","req_id":"","seq":"9",)"
+        {"error", R"({"v":4,"code":"stale_input","detail":"","req_id":"","seq":"9",)"
             R"("match_id":"1"})"}};
     const auto frames = hunter::script_frames(good, cfg);
     check(frames && frames->size() == good.size(), "all output kinds encode");

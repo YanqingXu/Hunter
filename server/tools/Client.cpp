@@ -113,11 +113,12 @@ hunter::wire::Envelope command(const Json& doc)
     }
     else if (cmd == "input")
     {
-        fields(doc, {"cmd", "seq", "match_id", "move_x", "aim_x", "aim_y", "jump", "fire",
-            "reload"});
+        fields(doc, {"cmd", "seq", "match_id", "world_id", "move_x", "aim_x", "aim_y",
+            "jump", "fire", "reload"});
         auto* input = msg.mutable_input();
         input->set_seq(id(doc.at("seq"), true));
         input->set_match_id(id(doc.at("match_id"), true));
+        input->set_world_id(id(doc.at("world_id"), true));
         input->set_move_x(number(doc.at("move_x"), -1, 1));
         input->set_aim_x(number(doc.at("aim_x"), -1000, 1000));
         input->set_aim_y(number(doc.at("aim_y"), -1000, 1000));
@@ -128,6 +129,55 @@ hunter::wire::Envelope command(const Json& doc)
         if (input->aim_x() == 0 && input->aim_y() == 0)
         {
             throw std::runtime_error("zero_aim");
+        }
+    }
+    else if (cmd == "bag" || cmd == "pickup" || cmd == "abandon")
+    {
+        if (cmd == "pickup")
+        {
+            fields(doc, {"cmd", "req_id", "world_id", "match_id", "item_id"});
+        }
+        else
+        {
+            fields(doc, {"cmd", "req_id", "world_id", "match_id"});
+        }
+
+        auto& req = *msg.mutable_action_req();
+        req.set_req_id(req_id(doc.at("req_id")));
+        req.set_world_id(id(doc.at("world_id"), true));
+        req.set_match_id(id(doc.at("match_id"), true));
+        req.set_kind(cmd == "pickup" ? hunter::wire::ActionReq::PICKUP
+            : cmd == "abandon" ? hunter::wire::ActionReq::ABANDON : hunter::wire::ActionReq::BAG);
+
+        if (cmd == "pickup")
+        {
+            req.set_item_id(id(doc.at("item_id"), true));
+        }
+    }
+    else if (cmd == "status" || cmd == "retry" || cmd == "result" || cmd == "stash")
+    {
+        auto& req = *msg.mutable_save_req();
+        req.set_req_id(req_id(doc.at("req_id")));
+
+        if (cmd == "stash")
+        {
+            fields(doc, {"cmd", "req_id", "revision", "cursor", "limit"});
+            req.set_kind(hunter::wire::SaveReq::STASH);
+            req.set_revision(id(doc.at("revision"), false));
+            req.set_cursor(id(doc.at("cursor"), false));
+            req.set_limit(static_cast<u32>(number(doc.at("limit"), 0, 128)));
+        }
+        else if (cmd == "status")
+        {
+            fields(doc, {"cmd", "req_id"});
+            req.set_kind(hunter::wire::SaveReq::STATUS);
+        }
+        else
+        {
+            fields(doc, {"cmd", "req_id", "match_id"});
+            req.set_kind(cmd == "retry" ? hunter::wire::SaveReq::RETRY
+                : hunter::wire::SaveReq::RESULT);
+            req.set_match_id(id(doc.at("match_id"), true));
         }
     }
     else
@@ -146,7 +196,7 @@ Json entity(const hunter::wire::Entity& value)
         {"max_hp", value.max_hp()}, {"ammo", value.ammo()}, {"reserve", value.reserve()},
         {"reload_ticks", value.reload_ticks()}, {"grounded", value.grounded()},
         {"alive", value.alive()}, {"facing", value.facing()}, {"ai", value.ai()},
-        {"cfg_id", std::to_string(value.cfg_id())}};
+        {"cfg_id", std::to_string(value.cfg_id())}, {"attack_ticks", value.attack_ticks()}};
 }
 
 // 把服务端消息转换成一行 JSON；64 位标识统一保持规范十进制字符串。
@@ -164,6 +214,9 @@ Json response(const hunter::wire::Envelope& msg)
         const auto& value = msg.login_rsp();
         return {{"type", "login_rsp"}, {"req_id", value.req_id()},
             {"player_id", std::to_string(value.player_id())},
+            {"session_id", std::to_string(value.session_id())},
+            {"world_id", std::to_string(value.world_id())},
+            {"player_entity_id", std::to_string(value.player_entity_id())},
             {"match_id", std::to_string(value.match_id())}, {"phase", value.phase()}};
     }
 
@@ -171,6 +224,8 @@ Json response(const hunter::wire::Envelope& msg)
     {
         const auto& value = msg.start_rsp();
         return {{"type", "start_rsp"}, {"req_id", value.req_id()},
+            {"world_id", std::to_string(value.world_id())},
+            {"player_entity_id", std::to_string(value.player_entity_id())},
             {"match_id", std::to_string(value.match_id())}, {"phase", value.phase()}};
     }
 
@@ -186,6 +241,15 @@ Json response(const hunter::wire::Envelope& msg)
     {
         const auto& value = msg.snapshot();
         auto entities = Json::array();
+        auto items = Json::array();
+
+        for (const auto& item : value.items())
+        {
+            items.push_back({{"item_id", std::to_string(item.item_id())},
+                {"cfg_id", item.cfg_id()}, {"count", item.count()}, {"place", item.place()},
+                {"owner_player_id", std::to_string(item.owner_player_id())},
+                {"x", item.x()}, {"y", item.y()}});
+        }
 
         for (const auto& item : value.entities())
         {
@@ -194,6 +258,13 @@ Json response(const hunter::wire::Envelope& msg)
 
         return {{"type", "snapshot"}, {"tick_id", std::to_string(value.tick_id())},
             {"seq", std::to_string(value.seq())}, {"match_id", std::to_string(value.match_id())},
+            {"world_id", std::to_string(value.world_id())},
+            {"player_entity_id", std::to_string(value.player_entity_id())},
+            {"player_state", value.player_state()}, {"items", std::move(items)},
+            {"bag_slots", value.bag_slots()}, {"extract_id", value.extract_id()},
+            {"extract_ticks", value.extract_ticks()}, {"extract_reason", value.extract_reason()},
+            {"extract_remaining_ticks", value.extract_remaining_ticks()},
+            {"extract_unlocked", value.extract_unlocked()},
             {"phase", value.phase()}, {"entities", std::move(entities)}};
     }
 
@@ -221,6 +292,33 @@ Json response(const hunter::wire::Envelope& msg)
         return {{"type", "error"}, {"code", value.code()}, {"detail", value.detail()},
             {"req_id", value.req_id()}, {"seq", std::to_string(value.seq())},
             {"match_id", std::to_string(value.match_id())}};
+    }
+
+    if (msg.has_action_rsp())
+    {
+        const auto& value = msg.action_rsp();
+        return {{"type", "action_rsp"}, {"req_id", value.req_id()},
+            {"world_id", std::to_string(value.world_id())},
+            {"match_id", std::to_string(value.match_id())}};
+    }
+
+    if (msg.has_save_rsp())
+    {
+        const auto& value = msg.save_rsp();
+        auto items = Json::array();
+
+        for (const auto& item : value.items())
+        {
+            items.push_back({{"item_uid", std::to_string(item.item_uid())},
+                {"cfg_id", item.cfg_id()}, {"count", item.count()},
+                {"acquired_match_id", std::to_string(item.acquired_match_id())}});
+        }
+
+        return {{"type", "save_rsp"}, {"req_id", value.req_id()}, {"state", value.state()},
+            {"match_id", std::to_string(value.match_id())}, {"result_json", value.result_json()},
+            {"revision", std::to_string(value.revision())}, {"error_code", value.error_code()},
+            {"last_match_id", std::to_string(value.last_match_id())}, {"items", std::move(items)},
+            {"next_cursor", std::to_string(value.next_cursor())}};
     }
 
     throw std::runtime_error("unexpected_server_message");
@@ -447,6 +545,7 @@ void Client::write_output()
         while (offset < line.size() && !write_canceled_)
         {
             DWORD count = 0;
+
             if (!WriteFile(GetStdHandle(STD_OUTPUT_HANDLE), line.data() + offset,
                 static_cast<DWORD>(line.size() - offset), &count, nullptr) || count == 0)
             {
@@ -463,6 +562,7 @@ bool Client::submit(Str line)
 {
     {
         std::lock_guard lock(input_mutex_);
+
         if (inputs_.size() >= max_count || input_bytes_ + line.size() > queue_bytes)
         {
             request_stop("stdin_backpressure");
@@ -486,6 +586,7 @@ void Client::commands()
             Str line;
             {
                 std::lock_guard lock(input_mutex_);
+
                 if (inputs_.empty())
                 {
                     return;
@@ -516,7 +617,7 @@ void Client::commands()
 void Client::connect(const Json& ready)
 {
     if (!ready.is_object() || ready.at("type") != "Ready"
-        || number(ready.at("protocol_version"), 3, 3) != 3
+        || number(ready.at("protocol_version"), 4, 4) != 4
         || ready.at("content_version").get<Str>() != hunter::content::version)
     {
         throw std::runtime_error("ready_identity_mismatch");
@@ -532,7 +633,7 @@ void Client::connect(const Json& ready)
 
     hunter::wire::Envelope msg;
     auto* hello = msg.mutable_hello();
-    hello->set_protocol_version(3);
+    hello->set_protocol_version(4);
     hello->set_content_version(Str(hunter::content::version));
     hello->set_instance(instance_);
     hello->set_token(token);
@@ -655,7 +756,7 @@ void Client::read_body(usize size)
 
         if (!authed_)
         {
-            if (!msg->has_hello_ack() || msg->hello_ack().protocol_version() != 3
+            if (!msg->has_hello_ack() || msg->hello_ack().protocol_version() != 4
                 || msg->hello_ack().content_version() != hunter::content::version
                 || msg->hello_ack().instance() != instance_)
             {
@@ -700,6 +801,7 @@ bool Client::emit(const Json& value)
     auto line = value.dump() + "\n";
     {
         std::lock_guard lock(output_mutex_);
+
         if (outputs_.size() >= max_count || output_bytes_ + line.size() > queue_bytes)
         {
             return false;

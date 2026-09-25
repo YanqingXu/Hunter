@@ -83,22 +83,22 @@ def validate_node(node, depth=0):
 
 # 校验冻结消息形状并生成唯一原生描述，合法边界改动会直接反映到产物。
 def generate(doc):
-    if not isinstance(doc, dict) or type(doc.get("version")) is not int or doc["version"] != 4:
+    if not isinstance(doc, dict) or type(doc.get("version")) is not int or doc["version"] != 5:
         raise ValueError("unsupported contract version")
     state = doc.get("state")
-    if not isinstance(state, dict) or type(state.get("v")) is not int or state["v"] != 4:
-        raise ValueError("state schema must declare version 4")
+    if not isinstance(state, dict) or type(state.get("v")) is not int or state["v"] != 5:
+        raise ValueError("state schema must declare version 5")
     effect = doc.get("effect")
-    if not isinstance(effect, dict) or type(effect.get("v")) is not int or effect["v"] != 3:
-        raise ValueError("effect schema must declare version 3")
+    if not isinstance(effect, dict) or type(effect.get("v")) is not int or effect["v"] != 4:
+        raise ValueError("effect schema must declare version 4")
     host = doc.get("host_api")
     ctx = host.get("ctx") if isinstance(host, dict) else None
-    if not isinstance(ctx, dict) or type(ctx.get("v")) is not int or ctx["v"] != 4:
-        raise ValueError("context schema must declare version 4")
+    if not isinstance(ctx, dict) or type(ctx.get("v")) is not int or ctx["v"] != 5:
+        raise ValueError("context schema must declare version 5")
     input_spec = effect.get("input", {})
     if not isinstance(input_spec, dict) or type(input_spec.get("v")) is not int \
-            or input_spec["v"] != 3:
-        raise ValueError("input schema must declare version 3")
+            or input_spec["v"] != 4:
+        raise ValueError("input schema must declare version 4")
     schemas = effect.get("schemas")
     kinds = effect.get("kinds")
     if not isinstance(kinds, list) or len(kinds) != len(KINDS) or set(kinds) != KINDS:
@@ -109,8 +109,8 @@ def generate(doc):
         validate_node(node)
         if node["type"] != "object" or set(node["fields"]) != FIELDS[name]:
             raise ValueError("unsupported message fields")
-        if node["fields"]["v"] != {"type": "int", "min": 3, "max": 3}:
-            raise ValueError("all messages require integer version 3")
+        if node["fields"]["v"] != {"type": "int", "min": 4, "max": 4}:
+            raise ValueError("all messages require integer version 4")
         for field, spec in node["fields"].items():
             expected = ("id" if (field.endswith("_id") and field != "req_id")
                         or field in {"seq", "applied_tick"} else
@@ -144,7 +144,7 @@ def generate(doc):
             "#pragma once\n\n"
             '#include "common/Types.h"\n#include "hunter.pb.h"\n\n'
             "namespace hunter::schema\n{\n"
-            "inline constexpr i32 version = 3;\n"
+            "inline constexpr i32 version = 4;\n"
             'inline constexpr const char* outputs = R"SCHEMA(' + payload + ')SCHEMA";\n'
             + contract_hashes(doc) + native_checks(schemas) + "}\n")
 

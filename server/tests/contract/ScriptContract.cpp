@@ -69,7 +69,7 @@ Str fixture(const Str& init, const Str& event, const Str& shutdown = "return tru
 void failures(hunter::Cfg cfg)
 {
     cfg.source_path = fixture("return true", "net.emit('ack', "
-        "'{\"v\":3,\"seq\":\"1\",\"match_id\":\"1\",\"applied_tick\":\"1\"}'); error('failed')");
+        "'{\"v\":4,\"seq\":\"1\",\"match_id\":\"1\",\"applied_tick\":\"1\"}'); error('failed')");
     hunter::Script txn;
     take(txn.open(cfg, "{\"v\":1}"));
     check(!txn.event(1, "{}"), "failed call must discard earlier net.emit");
@@ -92,14 +92,14 @@ void failures(hunter::Cfg cfg)
     check(!table.event(1, "{}"), "table must not cross Host boundary");
 
     cfg.source_path = fixture("return true", "net.emit('ack', "
-        "'{\"v\":3,\"seq\":\"1\",\"match_id\":\"1\",\"applied_tick\":\"1\"}'); return true");
+        "'{\"v\":4,\"seq\":\"1\",\"match_id\":\"1\",\"applied_tick\":\"1\"}'); return true");
     cfg.max_outputs = 0;
     hunter::Script full;
     take(full.open(cfg, "{}"));
     check(!full.event(1, "{}"), "output reservation must reject saturated call buffer");
 
     cfg.source_path = fixture("return true", "local ok = pcall(function() "
-        "net.emit('ack', '{\"v\":3,\"seq\":\"1\",\"match_id\":\"1\","
+        "net.emit('ack', '{\"v\":4,\"seq\":\"1\",\"match_id\":\"1\","
         "\"applied_tick\":\"1\"}') end); return true");
     hunter::Script caught;
     take(caught.open(cfg, "{}"));
@@ -112,7 +112,7 @@ void failures(hunter::Cfg cfg)
     check(!ctx_probe.event(1, Str(cfg.max_json_bytes + 1, 'x')), "JSON boundary size limit");
 
     cfg.source_path = fixture("return true", "net.emit('ack', "
-        "'{\"v\":3,\"seq\":\"1\",\"match_id\":\"1\",\"applied_tick\":\"1\"}'); return true");
+        "'{\"v\":4,\"seq\":\"1\",\"match_id\":\"1\",\"applied_tick\":\"1\"}'); return true");
     cfg.native_work_budget = 10;
     hunter::Script native;
     take(native.open(cfg, "{}"));
@@ -130,20 +130,20 @@ void output_schema(hunter::Cfg cfg)
 {
     struct JsonOut { Str kind; Str payload; };
     const Vec<JsonOut> bad{
-        {"ack", R"({"v":3,"seq":"0","match_id":"1","applied_tick":"1"})"},
-        {"ack", R"({"v":3,"seq":"01","match_id":"1","applied_tick":"1"})"},
-        {"ack", R"({"v":3,"seq":1,"match_id":"1","applied_tick":"1"})"},
-        {"ack", R"({"v":3,"seq":"1","match_id":"1","applied_tick":"9223372036854775808"})"},
-        {"ack", R"({"v":3,"seq":"1","match_id":"1","applied_tick":"1","extra":0})"},
-        {"ack", R"({"v":3.0,"seq":"1","match_id":"1","applied_tick":"1"})"},
-        {"snapshot", R"({"v":3,"seq":"0","tick_id":"0","match_id":"1","phase":"Playing",)"
+        {"ack", R"({"v":4,"seq":"0","match_id":"1","applied_tick":"1"})"},
+        {"ack", R"({"v":4,"seq":"01","match_id":"1","applied_tick":"1"})"},
+        {"ack", R"({"v":4,"seq":1,"match_id":"1","applied_tick":"1"})"},
+        {"ack", R"({"v":4,"seq":"1","match_id":"1","applied_tick":"9223372036854775808"})"},
+        {"ack", R"({"v":4,"seq":"1","match_id":"1","applied_tick":"1","extra":0})"},
+        {"ack", R"({"v":4.0,"seq":"1","match_id":"1","applied_tick":"1"})"},
+        {"snapshot", R"({"v":4,"seq":"0","tick_id":"0","match_id":"1","phase":"Playing",)"
             R"("entities":[{}]})"},
-        {"error", R"({"v":3,"code":"rejected","detail":"","req_id":"","seq":"0"})"}};
+        {"error", R"({"v":4,"code":"rejected","detail":"","req_id":"","seq":"0"})"}};
 
     for (const auto& item : bad)
     {
         cfg.source_path = fixture("return true",
-            "net.emit('ack', '{\"v\":3,\"seq\":\"1\",\"match_id\":\"1\","
+            "net.emit('ack', '{\"v\":4,\"seq\":\"1\",\"match_id\":\"1\","
             "\"applied_tick\":\"1\"}'); net.emit('" + item.kind + "', payload); return true");
         hunter::Script script;
         take(script.open(cfg, "{}"));
@@ -152,11 +152,11 @@ void output_schema(hunter::Cfg cfg)
     }
 
     const Vec<JsonOut> good{
-        {"ack", R"({"v":3,"seq":"18446744073709551615","match_id":"1",)"
+        {"ack", R"({"v":4,"seq":"18446744073709551615","match_id":"1",)"
             R"("applied_tick":"9223372036854775807"})"},
-        {"snapshot", R"({"v":3,"seq":"0","tick_id":"0","match_id":"0","phase":"Lobby",)"
+        {"snapshot", R"({"v":4,"seq":"0","tick_id":"0","match_id":"0","phase":"Lobby",)"
             R"("entities":[]})"},
-        {"error", R"({"v":3,"code":"paused","detail":"","req_id":"","seq":"0","match_id":"0"})"}};
+        {"error", R"({"v":4,"code":"paused","detail":"","req_id":"","seq":"0","match_id":"0"})"}};
 
     for (const auto& item : good)
     {
@@ -323,15 +323,16 @@ int main(int argc, char** argv)
         cfg.source_path = argv[1];
 #endif
         hunter::Script script;
-        const nlohmann::json ctx = {{"v", 4}, {"snapshot_every", 3},
+        const nlohmann::json ctx = {{"v", 5}, {"snapshot_every", 3},
             {"content", nlohmann::json::parse(hunter::content::json_text)}};
         take(script.open(cfg, ctx.dump()));
         const auto logs = script.take_logs();
         check(!logs.empty(), "script diagnostics are observable after the entry returns");
         check(script.take_logs().empty(), "diagnostic extraction drains the bounded buffer");
-        auto out = take(script.event(2, R"({"v":4,"req_id":"login"})"));
+        auto out = take(script.event(2, R"({"v":5,"req_id":"login","player_id":"1"})"));
         check(out.size() == 1 && out[0].kind == "login", "local session login");
-        out = take(script.event(3, R"({"v":4,"req_id":"start","after_match_id":"0"})"));
+        out = take(script.event(3, R"({"v":5,"req_id":"start","after_match_id":"0",)"
+            R"("match_id":"1","world_id":"1"})"));
         check(out.size() == 2 && out[0].kind == "start" && out[1].kind == "snapshot",
             "start produces response and initial snapshot");
         hunter::wire::FrameInput input;
@@ -367,8 +368,9 @@ int main(int argc, char** argv)
         check(reopened["phase"] == "Unauthenticated" && reopened["tick_id"] == "0"
             && reopened["entities"].empty() && reopened["items"].empty(),
             "reopened session owns a fresh native world");
-        take(script.event(2, R"({"v":4,"req_id":"reopen"})"));
-        take(script.event(3, R"({"v":4,"req_id":"start","after_match_id":"0"})"));
+        take(script.event(2, R"({"v":5,"req_id":"reopen","player_id":"1"})"));
+        take(script.event(3, R"({"v":5,"req_id":"start","after_match_id":"0",)"
+            R"("match_id":"1","world_id":"1"})"));
         check(script.shutdown("reopened").has_value(), "reopened native world closes");
 #if !HUNTER_PRODUCTION
         failures(cfg);

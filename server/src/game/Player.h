@@ -13,7 +13,7 @@ class Player : public Unit
 {
 public:
     Weapon weapon;
-    u64 player_id = 1;
+    u64 player_id = 0;
     i32 reserve = 0;
     i32 move_x = 0;
     i32 aim_x = 1000;

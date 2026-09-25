@@ -59,10 +59,11 @@ target_compile_definitions(hunter_storage PRIVATE HUNTER_STORAGE_TESTING=0)
 set(HUNTER_GEN "${CMAKE_CURRENT_BINARY_DIR}/generated")
 file(MAKE_DIRECTORY "${HUNTER_GEN}" "${HUNTER_GEN}/csharp")
 add_custom_command(OUTPUT "${HUNTER_GEN}/content.json" "${HUNTER_GEN}/ContentSpec.h"
-    COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/../export/combat.py"
-        --source "${CMAKE_CURRENT_SOURCE_DIR}/../design/combat_demo.json"
+    COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/../export/demo.py"
+        --source "${CMAKE_CURRENT_SOURCE_DIR}/../design/demo/首版.xlsx"
         --output "${HUNTER_GEN}/content.json" --header "${HUNTER_GEN}/ContentSpec.h"
-    DEPENDS ../design/combat_demo.json ../export/combat.py tools/publish.py VERBATIM)
+    DEPENDS ../design/demo/首版.xlsx ../export/demo.py ../export/export.py
+        ../export/combat.py tools/publish.py VERBATIM)
 add_custom_target(hunter_content ALL DEPENDS
     "${HUNTER_GEN}/content.json" "${HUNTER_GEN}/ContentSpec.h")
 set(HUNTER_PROTO "${CMAKE_CURRENT_SOURCE_DIR}/../protobuf/hunter.proto")
@@ -108,7 +109,7 @@ add_custom_command(OUTPUT "${HUNTER_GEN}/SchemaSpec.h"
 add_library(hunter_script STATIC src/script/Script.cpp src/script/Async.cpp
     src/script/Objects.cpp src/game/Value.cpp src/game/Entity.cpp src/game/Unit.cpp
     src/game/Player.cpp src/game/Monster.cpp src/game/Weapon.cpp src/game/Item.cpp
-    src/game/World.cpp src/game/State.cpp src/game/Snapshot.cpp
+    src/game/World.cpp src/game/Raid.cpp src/game/State.cpp src/game/Snapshot.cpp
     src/script/Schema.cpp "${HUNTER_GEN}/SchemaSpec.h")
 add_dependencies(hunter_script hunter_content)
 hunter_target(hunter_script)
@@ -124,7 +125,7 @@ endif()
 add_library(hunter_server_core STATIC src/core/Runtime.cpp src/core/TickClock.cpp
     src/net/Protocol.cpp src/net/Transport.cpp)
 hunter_target(hunter_server_core)
-target_link_libraries(hunter_server_core PUBLIC hunter_script hunter_protocol)
+target_link_libraries(hunter_server_core PUBLIC hunter_script hunter_protocol hunter_storage)
 if(WIN32)
     target_link_libraries(hunter_server_core PRIVATE bcrypt)
     add_executable(hunter_server_desktop platform/desktop/Main.cpp)

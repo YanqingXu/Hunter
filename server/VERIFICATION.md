@@ -1,5 +1,58 @@
 # 服务端验证记录
 
+## 单人撤离持久化首版（2026-09-25）
+
+本轮实现 SRV-011 / V1-T01—T13；详见 [实施记录](V1_TASKS.md)。Windows x64 Release，
+VS 2026 / MSVC 14.50、配套 CMake 4.3.1；沿用固定 Luax、Protobuf、Asio 和 SQLite。
+基线提交 `083ac56`。改动前重新构建并运行开发全套 17/17（含 Bundle 制品契约）；
+不把旧验证记录当成本轮证据。改动前未单独重跑生产 Runtime，以下记录新版本实际结果。
+
+| 验证 | 实际结果与证据 |
+| --- | --- |
+| 最终开发／生产构建 | 两种模式成功，无 C++ 编译警告；`build/delivery-dev-build.log`、`delivery-prod-build.log` |
+| 开发完整 CTest | **24/24，164.13 秒**；`build/final-dev-tests.log` |
+| Bundle 完整 CTest | **23/23，167.87 秒**；`build/final-bundle-tests.log` |
+| 最终契约描述同步、重新签名 | schema/bundle **2/2，5.23 秒**；`build/delivery-bundle.log` |
+| 最终开发增量回归 | script/pve/process/demo **4/4，147.23 秒**；`build/delivery-dev-tests.log` |
+| 最终 Bundle 增量回归 | 上述场景及真实生产链接检查 **5/5，147.06 秒**；`build/delivery-prod-tests.log` |
+| 解压后的两种联调包 | 各一局真实战斗、拾取、撤离、保存、重启查询通过；`build/package-smoke.log` |
+
+完整 CTest 通过后，同步内部状态字段的契约描述，将耐久场景加强为**同一 Runtime 连续
+十局完整撤离，再独立启动十次查询持久结果**，并让诊断阻塞夹具显式使用临时存档。
+重新生成签名制品后运行上表的最终增量回归；没有用旧制品替代最终检查。
+随后仅补充交付文档与 C++ 控制结构空行，逐行确认非空代码行未改变，`git diff --check` 通过。
+
+真实流程使用正式 Excel 内容和生成的协议客户端，只发送移动、跳跃、射击、换弹、拾取等
+合法意图，不提供传送、改血或客户端奖励入口。验证永久 UID 唯一、revision 增长、重复结果
+逐字节一致、重启读取一致。另覆盖同一会话十次主动放弃、空奖励、旧世界拒绝、未完成局
+不结算、300+ 物品分页、旧 revision、损坏／未知版本原文件保留。
+
+`hunter_runtime_crash_integration` 在同一个桌面 Runtime/TCP 链路进入真实撤离后，分别于
+事务前、事务内、提交后回调前强杀；重启核对奖励整体不存在或完整存在以及 MatchId 不复用。
+另外注入一次写失败／提交未知，暂停期间查询并按冻结请求重试；提交幂等不重复发奖。
+事务内 Stop 和断连后 Stop 必须等待已接受事务及回调排空。故障钩子仅链接测试宿主，
+正式包不包含测试宿主。孤立 Storage 的 SQLITE_FULL、容量、线程和强杀契约仍保留。
+
+玩法风险由原生 raid 契约和真实 Luax pve 契约覆盖：替身身份、拾取距离、满包无部分变化、
+重复拾取、掉落一次、Boss 前摇躲避、仅解锁出口、暂停冻结、伤害／离区取消和末 Tick 死亡
+优先。原战斗、对象生命周期、脚本限制、背压与耐久契约继续运行。
+
+版本：网络 **v4**、内容 **v3**、Host／内部状态 **v5**、SQLite **V1**。
+内容身份：`demo-v3:79b1b12379ed4969c2bad2bdcec1577d0a53eee3e1451f3b4b031b59c9a5fde4`。
+首版工作簿来源与结构差异见 [内容说明](../design/demo/README.md)。
+
+联调包位于 `build/delivery/`，每包有逐文件 SHA-256 manifest；打包后检查 ZIP CRC、
+逐文件内容及独立目录真实运行。SHA-256：
+
+- `hunter-v1-source.zip`：`0b99b632544f84151779d5fdc3ac8258024364526abc3174023f790d55ac1668`
+- `hunter-v1-bundle.zip`：`48d713e8db269641387bd637730a1faf63c30f34d92c461ece43ece02db288e0`
+
+Bundle 使用公开测试向量签名，仅用于本地验证；正式发行须使用发行密钥。
+Unity、Android NDK／ARM64、Service/JNI/Binder、真机与离线整包本轮未验证，SRV-008
+继续延期。本轮不声明完整 Demo 发布完成，也不提供多人或局内崩溃续玩。
+
+---
+
 日期：2026-09-23。结果来自本轮实现与审查修复后的本机工作区验证。
 本记录区分实现、实际运行结果和后续平台验收；active intent 不等于完整路线阶段完成。
 

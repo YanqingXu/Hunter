@@ -18,10 +18,11 @@ CTest 名称；无前缀项在两种模式都必须存在。检查器从 CMake �
 | SRV-004 | [脚本桥接](modules/host.intent.md) | 同步输出事务、受限 Host 与异步探针 |
 | SRV-005 | [模块](modules/modules.intent.md) | 构建组装、原生状态与句柄视图、制品身份 |
 | SRV-006 | [热更新](modules/reload.intent.md) | deferred；安全点切换不在本轮 |
-| SRV-007 | [存档](modules/storage.intent.md) | 独立 SQLite 底座、异步事务、去重与强杀验证；玩法／宿主接入延期 |
-| SRV-008 | [PvE 验收](usecases/pve.intent.md) | deferred；完整撤离与 Android 真机尚待验收 |
+| SRV-007 | [存档](modules/storage.intent.md) | SQLite 异步事务；宿主与玩法接入由 SRV-011 扩展 |
+| SRV-008 | [PvE 验收](usecases/pve.intent.md) | deferred；完整 Demo 的 Unity 与 Android 真机尚待验收 |
 | SRV-009 | [基础战斗](usecases/combat.intent.md) | 基础对象组合、实体／配置 ID、枪械与伤害、普通怪和终态重开；Windows 验证 |
 | SRV-010 | [原生对象](modules/objects.intent.md) | C++ 权威状态、七类句柄绑定、原生高频网络与基础 Item |
+| SRV-011 | [单人撤离](usecases/demo.intent.md) | Windows 撤离、背包与真实存档闭环，进度见 V1_TASKS |
 
 `tools/verify_intents.py` 对照构建生成的目标清单与 CTest 注册信息检查 active 契约，
 并检查索引、唯一 ID、引用及依赖环。它核对注册名称，不检查测试源码内容或证明行为覆盖；

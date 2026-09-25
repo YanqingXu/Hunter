@@ -47,10 +47,11 @@ int main(int argc, char** argv)
         std::ifstream stream(argv[2]);
         const auto content = nlohmann::json::parse(stream);
         hunter::Script script;
-        take(script.open(cfg, nlohmann::json{{"v", 4}, {"snapshot_every", 3},
+        take(script.open(cfg, nlohmann::json{{"v", 5}, {"snapshot_every", 3},
             {"content", content}}.dump()));
-        take(script.event(2, R"({"v":4,"req_id":"login"})"));
-        take(script.event(3, R"({"v":4,"req_id":"start","after_match_id":"0"})"));
+        take(script.event(2, R"({"v":5,"req_id":"login","player_id":"1"})"));
+        take(script.event(3, R"({"v":5,"req_id":"start","after_match_id":"0",)"
+            R"("match_id":"1","world_id":"1"})"));
         take(script.event(5, "{}"));
 
         for (u32 batch = 0; batch < 8; ++batch)
@@ -68,6 +69,7 @@ int main(int argc, char** argv)
         {
             throw std::runtime_error("capacity boundary: " + boundary.error());
         }
+
         const auto saved = take(script.export_state());
         auto valid = script.import_state(saved);
         if (!valid)

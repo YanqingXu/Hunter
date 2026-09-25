@@ -5,21 +5,66 @@
 
 namespace hunter
 {
-wire::Envelope World::snapshot() const
+wire::Envelope World::snapshot(u64 observer) const
 {
     access.read();
+    require(observer == player_id, "invalid_observer");
     wire::Envelope out;
     auto& msg = *out.mutable_snapshot();
     msg.set_tick_id(tick_id);
     msg.set_seq(seq);
     msg.set_match_id(match_id);
     msg.set_phase(phase);
+    msg.set_world_id(world_id);
+    msg.set_player_entity_id(read_id(find_player(get_player_id())));
+    msg.set_player_state(raid.player_state);
+    msg.set_bag_slots(content.contains("bag") ? content.at("bag").at("slots").get<u32>() : 0);
+    msg.set_extract_id(raid.extract_id);
+    msg.set_extract_ticks(static_cast<u32>(raid.extract_ticks));
+    msg.set_extract_reason(raid.extract_reason);
+
+    if (content.contains("extracts"))
+    {
+        for (const auto& point : content.at("extracts"))
+        {
+            const auto spawn = read_id(point.at("boss_spawn_id").get<Str>());
+
+            for (const auto index : order)
+            {
+                const auto* monster = std::get_if<Monster>(&actors[index]->value);
+                if (monster && monster->spawn_id == spawn && !monster->alive)
+                {
+                    msg.set_extract_unlocked(true);
+                }
+            }
+
+            const i32 duration = point.at("hold_ticks");
+            msg.set_extract_remaining_ticks(static_cast<u32>(duration - raid.extract_ticks));
+        }
+    }
+
+    for (const auto& entry : items)
+    {
+        if (entry && entry->value.place != "None")
+        {
+            const auto& item = entry->value;
+            auto& value = *msg.add_items();
+            value.set_item_id(item.id);
+            value.set_cfg_id(item.cfg_id);
+            value.set_count(static_cast<u32>(item.count));
+            value.set_place(item.place);
+            value.set_owner_player_id(item.owner_player_id);
+            value.set_x(item.x);
+            value.set_y(item.y);
+        }
+    }
 
     for (const auto index : order)
     {
         const auto& actor = *actors[index];
         const auto& unit = actor.unit();
         const Entity& entity = unit;
+
         if (entity.pending_remove)
         {
             continue;
@@ -49,6 +94,7 @@ wire::Envelope World::snapshot() const
         else
         {
             value.set_ai(std::get<Monster>(actor.value).state);
+            value.set_attack_ticks(static_cast<u32>(std::get<Monster>(actor.value).attack_ticks));
         }
     }
 

@@ -43,8 +43,8 @@ void begin(hunter::World& world, const Json& cfg)
 {
     world.configure(cfg);
     world.access.writable = true;
-    world.login();
-    world.begin("monster_contract", "0");
+    world.login("1");
+    world.begin("monster_contract", "0", "1", "1");
     check(world.spawn("player", "") == "1", "monster test player");
 }
 
@@ -107,7 +107,7 @@ void check_views(hunter::World& world)
     rejects([&] { player.weapon.set_ammo(ammo); }, "weapon uses active readonly gate");
     rejects([&] { item.set_count(count); }, "item uses active readonly gate");
     world.access.writable = true;
-    const auto out = world.snapshot();
+    const auto out = world.snapshot(world.player_id);
 
     for (const auto& value : out.snapshot().entities())
     {
@@ -301,6 +301,7 @@ void monster_states()
         auto candidate = Json::parse(saved);
         auto& monster = candidate["entities"]["2"];
         monster["ai"]["state"] = state;
+
         if (Str(state) == "dead")
         {
             monster["health"]["hp"] = 0;
@@ -350,10 +351,10 @@ int main()
         monster_states();
         hunter::World world;
         world.configure(nlohmann::json::parse(hunter::content::json_text));
-        rejects([&] { world.login(); }, "readonly gate");
+        rejects([&] { world.login("1"); }, "readonly gate");
         world.access.writable = true;
-        world.login();
-        world.begin("start", "0");
+        world.login("1");
+        world.begin("start", "0", "1", "1");
         check(world.spawn("player", "") == "1", "player identity");
 
         for (const auto& spawn : world.content["map"]["enemies"])
@@ -365,7 +366,7 @@ int main()
         auto& player = std::get<hunter::Player>(world.actors[world.slot(1)]->value);
         const auto original_hp = player.hp;
         player.set_hp(original_hp - 1);
-        check(world.snapshot().snapshot().entities(0).hp() == original_hp - 1,
+        check(world.snapshot(world.player_id).snapshot().entities(0).hp() == original_hp - 1,
             "native mutation immediately visible in snapshot");
         hunter::wire::FrameInput input;
         input.set_seq(1);
@@ -425,7 +426,8 @@ int main()
         const auto exhausted = world.save();
         rejects([&] { world.create_item("42", 1); }, "item id exhaustion");
         check(world.save() == exhausted, "exhaustion preserves state");
-        check(hunter::validate_output(hunter::ScriptOut(world.snapshot()), 65536).has_value(),
+        const hunter::ScriptOut snapshot(world.snapshot(world.player_id));
+        check(hunter::validate_output(snapshot, 65536).has_value(),
             "typed native snapshot schema");
 
         bool wrong_thread = false;

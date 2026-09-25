@@ -73,6 +73,7 @@ bool read_hex(const nlohmann::json& value, std::array<std::byte, N>& bytes)
     }
 
     const auto& text = value.get_ref<const Str&>();
+
     if (text.size() != N * 2)
     {
         return false;
@@ -113,6 +114,7 @@ std::expected<luax::ProductionBundlePolicy, Str> read_policy(const Str& path)
     }
 
     luax::ProductionBundlePolicy policy;
+
     if (!read_hex(obj["public_key"], policy.publicKey))
     {
         return std::unexpected("invalid_bundle_public_key");
@@ -225,6 +227,7 @@ struct Script::Impl
                     + " peak=" + std::to_string(memory.peakBytes)
                     + " rejected=" + std::to_string(memory.lastRejectedRequestBytes)
                     + " gc=" + std::to_string(metrics->gc.completedCycles);
+
                 for (const auto& category : memory.categories)
                 {
                     error += " " + Str(luax::memoryCategoryName(category.category)) + "="
@@ -287,6 +290,7 @@ struct Script::Impl
 
                 auto work = ctx.consumeNativeWork(args[0].stringIf()->size()
                     + args[1].stringIf()->size());
+
                 if (!work)
                 {
                     host_fault = "native_work_exhausted";
@@ -329,9 +333,10 @@ struct Script::Impl
                     return std::unexpected(host_error(host_fault));
                 }
 
-                return stage(ctx, ScriptOut(world.snapshot()));
+                return stage(ctx, ScriptOut(world.snapshot(world.player_id)));
             })));
         result = isolate.registerHostNamespace(module, std::move(net));
+
         if (!result)
         {
             return result;
@@ -452,6 +457,7 @@ Script::~Script()
 std::expected<Vec<ScriptOut>, Str> Script::open(const Cfg& cfg, const Str& ctx_json)
 {
     auto& self = *impl_;
+
     if (self.owner != std::this_thread::get_id())
     {
         return std::unexpected("wrong_thread");
@@ -474,7 +480,7 @@ std::expected<Vec<ScriptOut>, Str> Script::open(const Cfg& cfg, const Str& ctx_j
         const auto ctx = nlohmann::json::parse(ctx_json);
         if (ctx.contains("content"))
         {
-            require(ctx.at("v") == 4 && ctx.size() == 3, "invalid_context_version");
+            require(ctx.at("v") == 5 && ctx.size() == 3, "invalid_context_version");
             self.snapshot_every = ctx.at("snapshot_every").get<u64>();
             require(self.snapshot_every >= 1 && self.snapshot_every <= 3600,
                 "invalid_snapshot_frequency");
@@ -504,6 +510,7 @@ std::expected<Vec<ScriptOut>, Str> Script::open(const Cfg& cfg, const Str& ctx_j
 
     rt_cfg.bundlePolicy = *policy;
 #else
+
     if (!cfg.bundle_path.empty())
     {
         auto policy = read_policy(cfg.policy_path);
@@ -531,6 +538,7 @@ std::expected<Vec<ScriptOut>, Str> Script::open(const Cfg& cfg, const Str& ctx_j
     self.isolate = *isolate;
     luax::Result<luax::ModuleHandle> module = std::unexpected(host_error("missing_artifact"));
 #if !HUNTER_PRODUCTION
+
     if (cfg.bundle_path.empty())
     {
         auto source = read_file(cfg.source_path, rt_cfg.maxSourceBytes);
@@ -622,6 +630,7 @@ std::expected<Vec<ScriptOut>, Str> Script::input(const wire::FrameInput& input, 
     {
         self.pending.emplace_back(self.world.input(input, applied_tick));
         self.world.access.writable = false;
+
         if (self.cfg.max_outputs == 0
             || self.pending.front().message.ByteSizeLong() > self.cfg.max_output_bytes)
         {
@@ -654,6 +663,7 @@ std::expected<Vec<ScriptOut>, Str> Script::tick(u64 tick_id, f64 dt_seconds)
     auto& self = *impl_;
     const bool game = !self.world.content.is_null();
     const auto previous_phase = self.world.phase;
+
     if (game)
     {
         if (tick_id <= self.world.tick_id || std::abs(dt_seconds - 1.0 / 60.0) > 0.000001)
@@ -668,7 +678,7 @@ std::expected<Vec<ScriptOut>, Str> Script::tick(u64 tick_id, f64 dt_seconds)
     if (invoked && *invoked && game
         && (previous_phase != self.world.phase || tick_id % self.snapshot_every == 0))
     {
-        ScriptOut snapshot(self.world.snapshot());
+        ScriptOut snapshot(self.world.snapshot(self.world.player_id));
         const auto bytes = snapshot.message.ByteSizeLong();
         if (self.pending.size() >= self.cfg.max_outputs
             || bytes > self.cfg.max_output_bytes - self.output_bytes)
@@ -726,9 +736,40 @@ std::expected<void, Str> Script::validate_state()
     return {};
 }
 
+const World& Script::world() const
+{
+    const auto guard = impl_->enter();
+    require(guard.has_value(), guard ? "" : guard.error());
+    return impl_->world;
+}
+
+std::expected<void, Str> Script::change(Func<void(World&)> action)
+{
+    auto& self = *impl_;
+    const auto guard = self.enter();
+    if (!guard)
+    {
+        return std::unexpected(guard.error());
+    }
+
+    self.world.access.writable = true;
+    try
+    {
+        action(self.world);
+        self.world.access.writable = false;
+        return {};
+    }
+    catch (const std::exception& error)
+    {
+        self.world.access.writable = false;
+        return std::unexpected(self.fail(error.what()));
+    }
+}
+
 Vec<Str> Script::take_logs() noexcept
 {
     auto& self = *impl_;
+
     if (self.owner != std::this_thread::get_id() || self.busy)
     {
         return {};
@@ -759,6 +800,7 @@ std::expected<ScriptStats, Str> Script::stats() const
 std::expected<void, Str> Script::shutdown(const Str& reason)
 {
     auto& self = *impl_;
+
     if (self.owner != std::this_thread::get_id())
     {
         return std::unexpected("wrong_thread");

@@ -41,12 +41,12 @@ def frame(tag, body):
 
 # 独立编码动作输入，验证生成客户端之外的真实线格式。
 def input_frame(seq, move=0, match=1, aim_x=1000, aim_y=0, jump=False,
-                fire=False, reload=False):
+                fire=False, reload=False, world=1):
     return frame(7, number(1, seq) + number(3, match)
                  + number(4, (move << 1) ^ (move >> 31))
                  + number(5, (aim_x << 1) ^ (aim_x >> 31))
                  + number(6, (aim_y << 1) ^ (aim_y >> 31))
-                 + number(7, int(jump)) + number(8, int(fire)) + number(9, int(reload)))
+                 + number(10, world) + number(7, int(jump)) + number(8, int(fire)) + number(9, int(reload)))
 
 
 # 有界解码 Protobuf varint，拒绝截断和超宽字段。
@@ -131,9 +131,10 @@ def wait_msg(conn, expected, limit=3):
 # 确认对端关闭或重置连接，不能把超时当作拒绝通过。
 def closed(conn):
     conn.settimeout(3)
+    deadline = time.monotonic() + 3
     try:
         while conn.recv(4096):
-            pass
+            assert time.monotonic() < deadline, "connection did not close"
     except (ConnectionResetError, ConnectionAbortedError):
         pass
 
@@ -148,6 +149,8 @@ class Server:
             cmd += ["--bundle", args.bundle, "--policy", args.policy]
         else:
             cmd += ["--source", args.source]
+        self.save_dir = tempfile.TemporaryDirectory(prefix="hunter-process-")
+        cmd += ["--save", str(Path(self.save_dir.name) / "save.sqlite")]
         self.argv = cmd + list(extra)
         self.proc = subprocess.Popen(self.argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                      stderr=subprocess.PIPE, text=True, bufsize=1)
@@ -219,7 +222,7 @@ class Server:
         else:
             self.conn.sendall(hello)
         ack = wait_msg(self.conn, 2)
-        assert ack[1] == 3 and ack[3].decode() == self.ready["instance"]
+        assert ack[1] == 4 and ack[3].decode() == self.ready["instance"]
         return self.conn
 
     # 请求退出并确保旧端口不再监听；stdin 保持打开以覆盖阻塞读取取消。
@@ -374,6 +377,7 @@ def saturation(args):
     try:
         srv.start()
         conn = srv.connect()
+        enter_game(conn)
         conn.sendall(b"".join(input_frame(i, 1) for i in range(1, 257)))
         closed(conn)
         assert srv.event("Error")["code"] == "input_backpressure"
@@ -403,7 +407,7 @@ def slow_reader(args):
         conn.connect(("127.0.0.1", srv.ready["port"]))
         srv.conn = conn
         conn.sendall(srv.hello())
-        assert wait_msg(conn, 2)[1] == 3
+        assert wait_msg(conn, 2)[1] == 4
         enter_game(conn)
         seq = 0
         for _ in range(10):
@@ -544,11 +548,11 @@ class Client:
         raise AssertionError(f"CLI missing {kind}")
 
     # 用 EOF 正常退出，失败时也只清理本测试创建的进程。
-    def close(self):
+    def close(self, allowed_codes=(0,)):
         try:
             if self.proc.poll() is None:
                 self.proc.stdin.close()
-                assert self.proc.wait(timeout=5) == 0, self.errors
+                assert self.proc.wait(timeout=5) in allowed_codes, self.errors
         finally:
             if self.proc.poll() is None:
                 self.proc.kill()
@@ -576,7 +580,7 @@ def combat_rounds(args):
             assert current != after
             if after != "0":
                 seq += 1
-                cli.send({"cmd": "input", "seq": str(seq), "match_id": after,
+                cli.send({"cmd": "input", "seq": str(seq), "match_id": after, "world_id": after,
                           "move_x": 0, "aim_x": 1000, "aim_y": 0,
                           "jump": False, "fire": True, "reload": False})
                 assert cli.wait("error")["code"] == "stale_match"
@@ -604,7 +608,7 @@ def combat_rounds(args):
                 move = (1 if player["x"] < 11500 else 0) if expected == "Dead" else (
                     0 if fire else 1)
                 seq += 1
-                cli.send({"cmd": "input", "seq": str(seq), "match_id": current,
+                cli.send({"cmd": "input", "seq": str(seq), "match_id": current, "world_id": current,
                           "move_x": move, "aim_x": aim_x, "aim_y": aim_y,
                           "jump": player["grounded"] and move != 0,
                           "fire": fire, "reload": player["ammo"] == 0})
@@ -694,7 +698,8 @@ def blocked_stderr(args, folder):
     source = script_fixture(folder, "blocked_stderr",
                             init="diagnostics.log(string.rep('x', 60000)); return true")
     for drain in (False, True):
-        proc = subprocess.Popen([args.exe, "--source", source, "--stop-ms", "100"],
+        proc = subprocess.Popen([args.exe, "--source", source, "--stop-ms", "100",
+                                 "--save", str(Path(folder) / "blocked.sqlite")],
                                 stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                 stderr=subprocess.PIPE)
         logger = None
@@ -812,7 +817,7 @@ def main():
     parser.add_argument("--bundle", default="")
     parser.add_argument("--policy", default="")
     args = parser.parse_args()
-    assert input_frame(1, -1) == bytes.fromhex("0000000b3a0908011801200128d00f")
+    assert input_frame(1, -1) == bytes.fromhex("0000000d3a0b08011801200128d00f5001")
     assert fields(bytes.fromhex("08011001")) == {1: 1, 2: 1}
     for index in range(10):
         round_trip(args, index)
