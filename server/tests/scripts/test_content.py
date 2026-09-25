@@ -24,7 +24,7 @@ class ContentTest(unittest.TestCase):
     # 规范内容与生成头必须使用完全相同的字节与哈希，键顺序不改变身份。
     def test_canonical_identity(self):
         data, header = CONTENT.artifacts(self.doc)
-        expected = b"combat-v2:" + hashlib.sha256(data).hexdigest().encode("ascii")
+        expected = b"combat-v3:" + hashlib.sha256(data).hexdigest().encode("ascii")
         self.assertIn(expected, header)
         self.assertIn(b'R"CONTENT(' + data + b')CONTENT"', header)
         self.assertNotIn(b"\n", data)

@@ -5,6 +5,7 @@
 #include "game/Player.h"
 #include "game/Monster.h"
 #include "game/Item.h"
+#include "game/Raid.h"
 #include "hunter.pb.h"
 #include <array>
 #include <optional>
@@ -49,6 +50,8 @@ public:
     u64 tick_id = 0;
     u64 seq = 0;
     u64 match_id = 0;
+    u64 world_id = 0;
+    Raid raid;
     u64 player_id = 0;
     u64 event_id = 0;
     Str phase = "Unauthenticated";
@@ -90,10 +93,40 @@ public:
     Str entity_id(i64 index) const;
 
     // 建立本地玩家会话身份。
-    void login();
+    void login(const Str& owner);
 
     // 重置局内对象并更新请求记录；配置和连接序号保持不变。
-    void begin(const Str& req, const Str& after);
+    void begin(const Str& req, const Str& after, const Str& match, const Str& world);
+
+    // 按持久玩家身份查找当前世界实体，不存在时返回零身份。
+    Str find_player(const Str& owner) const;
+
+    // 标记死亡怪物已生成掉落；重复调用不再产生奖励。
+    bool drop_once(const Str& actor);
+
+    // 使用世界拥有的随机状态生成闭区间一至上限的均匀整数。
+    i64 roll(i64 maximum);
+
+    // 校验总容量后按堆叠上限生成地面物品，坐标以毫米表示。
+    void drop(const Str& cfg_id, i64 count, i64 x, i64 y);
+
+    // 原子转移整份地面物品到操作者背包；失败返回错误码且不改变物品。
+    Str pickup(const Str& owner, const Str& item_id);
+
+    // 记录玩家受到正伤害的 Tick，用于撤离取消裁定。
+    void hurt(const Str& actor);
+
+    // 查询当前 Tick 是否发生过玩家受伤。
+    bool hurt_now() const;
+
+    // 读取已经累计的撤离游戏 Tick。
+    i64 get_extract_ticks() const;
+
+    // 写入服务端裁定的撤离点、进度及原因。
+    void set_extract(i64 id, i64 ticks, Str reason);
+
+    // 冻结局内动作并进入待保存阶段，成功持久化由 Runtime 确认。
+    void finish(Str outcome);
 
     // 创建合法实体；预期拒绝返回带冒号前缀的错误码且不消费身份。
     Str spawn(const Str& kind, const Str& spawn_id);
@@ -111,7 +144,7 @@ public:
     wire::Envelope input(const wire::FrameInput& input, u64 applied_tick);
 
     // 直接将当前原生状态投影为网络快照。
-    wire::Envelope snapshot() const;
+    wire::Envelope snapshot(u64 observer) const;
 
     // 分配事件身份并构造拥有数据的可靠事件。
     wire::Envelope event(const Str& kind, const Str& actor, const Str& target,

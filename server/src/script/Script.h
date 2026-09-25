@@ -9,6 +9,7 @@
 
 namespace hunter
 {
+class World;
 
 struct ScriptStats
 {
@@ -71,6 +72,12 @@ public:
 
     // 拥有线程在入口返回后提取日志；其他线程或同步重入返回空集合。
     Vec<Str> take_logs() noexcept;
+
+    // 借用入口外的只读权威世界，调用者不得保留到脚本关闭或重开之后。
+    const World& world() const;
+
+    // 所属线程在入口外修改原生业务状态，异常返回失败并中止后续入口。
+    std::expected<void, Str> change(Func<void(World&)> action);
 
     // 尽力释放全部 VM 资源并返回有界退出错误；重复调用保留相同终态与未提取日志。
     std::expected<void, Str> shutdown(const Str& reason);

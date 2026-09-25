@@ -34,7 +34,7 @@ return function(deps)
 
     -- 按稳定实体顺序移动，局部计算结果立即写回原生对象。
     function api.move(world, content)
-        local player = world_api.find(world, World.get_player_entity_id(world))
+        local player = world_api.target(world, "monster")
         local px, py = Unit.read_motion(player.motion)
         local player_alive = Unit.get_alive(player.health)
         local player_cfg = content.players[player.cfg_id]
@@ -55,7 +55,13 @@ return function(deps)
                         Monster.set_attack_ticks(enemy.ai, attack_ticks - 1)
                     end
                     local state = "patrol"
-                    if player_alive and can_attack(x, y, px, py, cfg, player_cfg, content) then
+                    local windup = cfg.windup or 0
+                    local recover = cfg.recover or 0
+                    local remaining = Monster.get_attack_ticks(enemy.ai)
+                    if windup > 0 and remaining > cfg.attack_ticks - windup - recover then
+                        state = remaining >= cfg.attack_ticks - windup and "windup" or "recover"
+                        direction = 0
+                    elseif player_alive and can_attack(x, y, px, py, cfg, player_cfg, content) then
                         state = "attack"
                         facing = px >= x and 1 or -1
                         direction = 0
@@ -91,7 +97,7 @@ return function(deps)
 
     -- 玩家射击之后才执行仍然存活的怪物近战，玩家死亡后停止后续攻击。
     function api.attack(world, content)
-        local player = world_api.find(world, World.get_player_entity_id(world))
+        local player = world_api.target(world, "monster")
         if not Unit.get_alive(player.health) then
             return
         end
@@ -101,11 +107,21 @@ return function(deps)
             local enemy = world_api.find(world, id)
             if enemy ~= nil and enemy.kind == "monster" then
                 local x, y, vx, vy, grounded, facing, alive = Unit.read_motion(enemy.motion)
-                if alive and Monster.get_attack_ticks(enemy.ai) == 0 then
+                if alive then
                     local cfg = content.monsters[enemy.cfg_id]
-                    if can_attack(x, y, px, py, cfg, player_cfg, content) then
-                        Monster.set_state(enemy.ai, "attack")
+                    local remaining = Monster.get_attack_ticks(enemy.ai)
+                    local windup = cfg.windup or 0
+                    local hit = false
+                    if remaining == 0 and can_attack(x, y, px, py, cfg, player_cfg, content) then
+                        Monster.set_state(enemy.ai, windup > 0 and "windup" or "attack")
                         Monster.set_attack_ticks(enemy.ai, cfg.attack_ticks)
+                        hit = windup == 0
+                    elseif windup > 0 and remaining == cfg.attack_ticks - windup then
+                        Monster.set_state(enemy.ai, "recover")
+                        hit = can_attack(x, y, px, py, cfg, player_cfg, content)
+                    end
+
+                    if hit then
                         damage.apply(world, enemy, player, cfg.damage)
                         if not Unit.get_alive(player.health) then
                             return

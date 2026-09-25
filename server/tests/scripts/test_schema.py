@@ -23,7 +23,7 @@ class SchemaTest(unittest.TestCase):
     # 输出消息及实体的全部字段和 ID 极值来自唯一正式描述。
     def test_current_contract(self):
         header = SCHEMA.generate(self.doc)
-        self.assertIn("version = 3", header)
+        self.assertIn("version = 4", header)
         self.assertIn('"max":"18446744073709551615"', header)
         self.assertIn('"max":"9223372036854775807"', header)
         self.assertIn('"max":64,"type":"array"', header)
@@ -48,7 +48,7 @@ class SchemaTest(unittest.TestCase):
             (("effect", "schemas", "ack", "fields", "seq", "min"), "01"),
             (("effect", "schemas", "ack", "fields", "applied_tick", "max"),
              "9223372036854775808"),
-            (("effect", "schemas", "ack", "fields", "v", "max"), 4),
+            (("effect", "schemas", "ack", "fields", "v", "max"), 5),
             (("effect", "schemas", "ack", "fields", "v", "min"), True),
             (("effect", "schemas", "ack", "fields", "seq"), {"type": "bool"}),
             (("effect", "schemas", "snapshot", "fields", "entities", "max"), 65),

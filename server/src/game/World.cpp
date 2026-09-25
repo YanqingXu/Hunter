@@ -32,7 +32,7 @@ void World::configure(const nlohmann::json& cfg)
 {
     access.read();
     require(content.is_null(), "already_configured");
-    require(cfg.is_object() && cfg.at("v") == 2 && cfg.at("tick_hz") == 60, "invalid_content");
+    require(cfg.is_object() && cfg.at("v") == 3 && cfg.at("tick_hz") == 60, "invalid_content");
     content = cfg;
     content_key = cfg.dump();
 }
@@ -86,26 +86,36 @@ Str World::entity_id(i64 index) const
     return std::to_string(actors[order[static_cast<usize>(index - 1)]]->unit().id);
 }
 
-void World::login()
+void World::login(const Str& owner)
 {
     access.write();
     require(phase == "Unauthenticated", "invalid_state");
-    player_id = 1;
+    const auto id = read_id(owner);
+    require(id > 0 && id <= static_cast<u64>(std::numeric_limits<i64>::max()),
+        "invalid_player_id");
+    player_id = id;
     phase = "Lobby";
 }
 
-void World::begin(const Str& req, const Str& after)
+void World::begin(const Str& req, const Str& after, const Str& match, const Str& world)
 {
     access.write();
     require(!req.empty() && req.size() <= 128 && read_id(after) == match_id,
         "invalid_start");
-    require(match_id < std::numeric_limits<u64>::max()
-        && revision < std::numeric_limits<u32>::max(), "identity_exhausted");
+    const auto assigned = read_id(match);
+    const auto next_world = read_id(world);
+    require(assigned > match_id && assigned <= static_cast<u64>(std::numeric_limits<i64>::max())
+        && next_world > world_id && revision < std::numeric_limits<u32>::max(),
+        "identity_exhausted");
     actors = {};
     items = {};
     order.clear();
     ++revision;
-    last_after = match_id++;
+    last_after = match_id;
+    match_id = assigned;
+    world_id = next_world;
+    raid = {};
+    raid.random = static_cast<u32>(match_id ^ (match_id >> 32)) | 1U;
     last_match = match_id;
     last_req = req;
     player_entity_id = 0;
@@ -117,6 +127,7 @@ void World::begin(const Str& req, const Str& after)
 Str World::spawn(const Str& kind, const Str& spawn_id)
 {
     access.write();
+
     if (phase != "Playing" || paused)
     {
         return ":invalid_state";
@@ -133,6 +144,7 @@ Str World::spawn(const Str& kind, const Str& spawn_id)
     }
 
     const nlohmann::json* spawn = nullptr;
+
     if (kind == "player")
     {
         if (player_entity_id != 0 || !spawn_id.empty())
@@ -145,6 +157,7 @@ Str World::spawn(const Str& kind, const Str& spawn_id)
     else if (kind == "monster")
     {
         spawn = Monster::spawn_cfg(content, spawn_id);
+
         if (!spawn)
         {
             return ":invalid_spawn";
@@ -157,12 +170,14 @@ Str World::spawn(const Str& kind, const Str& spawn_id)
 
     const auto cfg_id = spawn->at("cfg_id").get<Str>();
     const auto& cfgs = content.at(kind == "player" ? "players" : "monsters");
+
     if (!cfgs.contains(cfg_id))
     {
         return ":invalid_cfg";
     }
 
     Actor actor;
+
     if (kind == "monster")
     {
         actor.value = Monster{};
@@ -210,6 +225,7 @@ Str World::spawn(const Str& kind, const Str& spawn_id)
     }
 
     u32 index = 0;
+
     while (actors[index])
     {
         ++index;
@@ -222,6 +238,7 @@ Str World::spawn(const Str& kind, const Str& spawn_id)
     order.push_back(index);
     ++revision;
     ++last_entity_id;
+
     if (kind == "player")
     {
         player_entity_id = last_entity_id;
@@ -240,6 +257,7 @@ bool World::remove(const Str& id)
     }
 
     Entity& entity = actors[index]->unit();
+
     if (entity.kind != "monster" || entity.pending_remove)
     {
         return false;
@@ -298,6 +316,7 @@ wire::Envelope World::input(const wire::FrameInput& input, u64 applied_tick)
         && input.aim_y() >= -1000 && input.aim_y() <= 1000
         && (input.aim_x() != 0 || input.aim_y() != 0), "invalid_input");
     Str error;
+
     if (input.seq() <= seq)
     {
         error = "stale_input";
@@ -305,6 +324,7 @@ wire::Envelope World::input(const wire::FrameInput& input, u64 applied_tick)
     else
     {
         seq = input.seq();
+
         if (phase == "Unauthenticated")
         {
             error = "not_logged_in";
@@ -320,6 +340,7 @@ wire::Envelope World::input(const wire::FrameInput& input, u64 applied_tick)
     }
 
     wire::Envelope out;
+
     if (!error.empty())
     {
         auto& msg = *out.mutable_error();
@@ -355,6 +376,7 @@ Str World::create_item(const Str& cfg_id, i64 count)
     require(match_id != 0, "invalid_state");
     require(last_item_id < std::numeric_limits<u64>::max(), "item_id_exhausted");
     u32 index = 0;
+
     while (index < items.size() && items[index])
     {
         ++index;
@@ -447,7 +469,8 @@ bool World::get_paused() const
 void World::set_phase(Str value)
 {
     access.write();
-    require(value == "Playing" || value == "Dead" || value == "Cleared", "invalid_phase");
+    require(value == "Preparing" || value == "Playing" || value == "Settling" || value == "Finished"
+        || value == "Aborted" || value == "Dead" || value == "Cleared", "invalid_phase");
     phase = std::move(value);
 }
 

@@ -97,7 +97,7 @@ void read_player(Player& player, const Json& obj, const Json& content)
     fields(obj, {"id", "kind", "cfg_id", "pose", "pending_remove", "motion", "health",
         "player_id", "controls", "weapon", "reserve"});
     player.player_id = identity(obj["player_id"]);
-    require(player.player_id == 1 && !player.pending_remove
+    require(player.player_id > 0 && !player.pending_remove
         && obj["cfg_id"] == content["map"]["spawn"]["cfg_id"], "invalid_player");
     const auto& input = obj["controls"];
     fields(input, {"move_x", "aim_x", "aim_y", "jump", "fire", "fire_once", "reload"});
@@ -137,7 +137,8 @@ void read_monster(Monster& monster, const Json& obj, const Json& content)
     monster.attack_ticks = integer(obj["ai"]["attack_ticks"], 0, cfg.at("attack_ticks"));
     require(monster.alive ? (monster.state == "spawn"
         || monster.state == "patrol" || monster.state == "chase"
-        || monster.state == "attack") : (monster.state == "dead" && monster.attack_ticks == 0),
+        || monster.state == "attack" || monster.state == "windup" || monster.state == "recover")
+        : (monster.state == "dead" && monster.attack_ticks == 0),
         "invalid_monster_state");
     require(monster.state != "spawn" || (monster.attack_ticks == 0 && monster.vx == 0
         && monster.vy == 0 && monster.grounded && monster.hp == monster.max_hp
@@ -150,13 +151,42 @@ void read_world(World& world, const Json& doc)
 {
     fields(doc, {"v", "tick_id", "seq", "match_id", "player_id", "event_id", "phase",
         "paused", "content_key", "entities", "entity_ids", "player_entity_id",
-        "last_entity_id", "last_start", "items", "last_item_id"});
-    integer(doc["v"], 4, 4);
+        "last_entity_id", "last_start", "items", "last_item_id", "world_id", "raid"});
+    integer(doc["v"], 5, 5);
     require(doc["content_key"] == world.content_key, "content_identity_mismatch");
     world.tick_id = identity(doc["tick_id"]);
     require(world.tick_id <= static_cast<u64>(std::numeric_limits<i64>::max()), "invalid_tick");
     world.seq = identity(doc["seq"]);
     world.match_id = identity(doc["match_id"]);
+    world.world_id = identity(doc["world_id"]);
+    const auto& raid = doc.at("raid");
+    fields(raid, {"player_state", "random", "dropped", "extract_id", "extract_ticks",
+        "extract_reason", "damage_tick"});
+    world.raid.player_state = raid.at("player_state").get<Str>();
+    require(world.raid.player_state == "Alive" || world.raid.player_state == "Dead"
+        || world.raid.player_state == "Extracted" || world.raid.player_state == "Abandoned",
+        "invalid_player_state");
+    const auto random = identity(raid.at("random"));
+    require(random > 0 && random <= 4294967295ULL, "invalid_random");
+    world.raid.random = static_cast<u32>(random);
+    world.raid.extract_id = static_cast<u32>(integer(raid.at("extract_id"), 0, 2147483647));
+    world.raid.extract_ticks = integer(raid.at("extract_ticks"), 0, 36000);
+    world.raid.extract_reason = raid.at("extract_reason").get<Str>();
+    require(world.raid.extract_reason == "locked" || world.raid.extract_reason == "outside"
+        || world.raid.extract_reason == "hurt" || world.raid.extract_reason == "dead"
+        || world.raid.extract_reason == "counting" || world.raid.extract_reason == "complete",
+        "invalid_extract_reason");
+    world.raid.damage_tick = identity(raid.at("damage_tick"));
+    require(world.raid.damage_tick <= world.tick_id, "invalid_damage_tick");
+    require(raid.at("dropped").is_array() && raid.at("dropped").size() <= 64,
+        "invalid_drop_index");
+
+    for (const auto& value : raid.at("dropped"))
+    {
+        const auto id = identity(value);
+        require(id > 0 && world.raid.dropped.insert(id).second, "invalid_drop_identity");
+    }
+
     world.player_id = identity(doc["player_id"]);
     world.event_id = identity(doc["event_id"]);
     world.phase = doc["phase"].get<Str>();
@@ -188,6 +218,7 @@ void read_world(World& world, const Json& doc)
         const auto kind = obj.at("kind").get<Str>();
         require(kind == "player" || kind == "monster", "invalid_entity_kind");
         Actor actor;
+
         if (kind == "monster")
         {
             actor.value = Monster{};
@@ -217,6 +248,7 @@ void read_world(World& world, const Json& doc)
 
         world.actors[index] = std::move(actor);
         world.order.push_back(index);
+
         if (kind == "player")
         {
             player = &std::get<Player>(world.actors[index]->value);
@@ -230,19 +262,56 @@ void read_world(World& world, const Json& doc)
     for (auto entry = items.begin(); entry != items.end(); ++entry)
     {
         const auto& obj = entry.value();
-        fields(obj, {"id", "cfg_id", "count"});
+        fields(obj, {"id", "cfg_id", "count", "place", "x", "y", "owner_player_id"});
         ItemSlot item;
         item.value.id = identity(obj["id"]);
         require(item.value.id != 0 && obj["id"] == entry.key()
             && item.value.id <= world.last_item_id, "invalid_item_identity");
         item.value.cfg_id = cfg_id(obj["cfg_id"]);
         item.value.count = integer(obj["count"], 1, 2147483647);
+        item.value.place = obj.at("place").get<Str>();
+        item.value.owner_player_id = identity(obj.at("owner_player_id"));
+        require(item.value.owner_player_id == (item.value.place == "Bag" ? world.player_id : 0),
+            "invalid_item_owner");
+        require(item.value.place == "None" || item.value.place == "Ground"
+            || item.value.place == "Bag", "invalid_item_place");
+        item.value.x = integer(obj.at("x"), 0, world.content.at("map").at("width"));
+        item.value.y = integer(obj.at("y"), 0, world.content.at("map").at("height"));
+
+        if (item.value.place != "None")
+        {
+            const auto& cfg = world.content.at("items").at(item.value.get_cfg_id());
+            require(item.value.count <= cfg.at("max_stack"), "invalid_stack");
+        }
+
         world.items[index++] = item;
     }
 
-    if (world.phase == "Unauthenticated" || world.phase == "Lobby")
+    usize bag_count = 0;
+
+    for (const auto& item : world.items)
     {
-        require(world.player_id == (world.phase == "Lobby" ? 1ULL : 0ULL)
+        if (item && item->value.place == "Bag")
+        {
+            ++bag_count;
+        }
+    }
+
+    require(bag_count == 0 || (world.content.contains("bag")
+        && bag_count <= world.content.at("bag").at("slots").get<usize>()), "invalid_bag_capacity");
+
+    for (const auto id : world.raid.dropped)
+    {
+        require(id <= world.last_entity_id, "invalid_drop_identity");
+        const auto slot = world.slot(id);
+        require(slot == world.actors.size() || (world.actors[slot]->unit().kind == "monster"
+            && !world.actors[slot]->unit().alive), "invalid_drop_source");
+    }
+
+    if (world.phase == "Unauthenticated" || world.phase == "Lobby"
+        || (world.phase == "Preparing" && world.match_id == 0))
+    {
+        require((world.phase != "Unauthenticated" ? world.player_id > 0 : world.player_id == 0)
             && world.match_id == 0 && world.order.empty() && world.player_entity_id == 0
             && world.last_entity_id == 0 && world.last_req.empty() && world.last_after == 0
             && world.last_match == 0 && items.empty() && world.last_item_id == 0,
@@ -250,29 +319,44 @@ void read_world(World& world, const Json& doc)
         return;
     }
 
-    require(player && world.player_id == 1 && world.match_id != 0 && !world.last_req.empty()
+    require(player && world.player_id == player->player_id && world.world_id > 0
+        && world.match_id != 0 && !world.last_req.empty()
         && world.last_match == world.match_id && world.last_after < world.match_id
-        && world.last_after + 1 == world.match_id, "invalid_match_state");
+        , "invalid_match_state");
     require(!(world.paused || world.phase != "Playing") || (player->move_x == 0
         && !player->jump && !player->fire && !player->fire_once && !player->reload),
         "inactive_controls");
     require((world.phase == "Dead" && !player->alive)
         || (world.phase == "Cleared" && player->alive && alive == 0)
-        || (world.phase == "Playing" && player->alive && alive > 0), "invalid_phase_state");
+        || (world.phase == "Playing" && player->alive
+            && (alive > 0 || world.content.contains("extracts")))
+        || ((world.phase == "Settling" || world.phase == "Finished" || world.phase == "Preparing")
+            && world.raid.player_state != "Alive"
+            && (player->alive == (world.raid.player_state != "Dead"))), "invalid_phase_state");
 }
 }
 
 nlohmann::json World::document() const
 {
     access.read();
-    Json doc = {{"v", 4}, {"tick_id", get_tick_id()}, {"seq", get_seq()},
+    Json doc = {{"v", 5}, {"tick_id", get_tick_id()}, {"seq", get_seq()},
         {"match_id", get_match_id()}, {"player_id", get_player_id()},
+        {"world_id", std::to_string(world_id)},
         {"event_id", std::to_string(event_id)}, {"phase", phase}, {"paused", paused},
         {"content_key", content_key}, {"player_entity_id", get_player_entity_id()},
         {"last_entity_id", get_last_entity_id()}, {"last_item_id", std::to_string(last_item_id)},
         {"last_start", {{"req_id", last_req}, {"after_match_id", get_last_after()},
             {"match_id", std::to_string(last_match)}}}, {"entities", Json::object()},
         {"entity_ids", Json::array()}, {"items", Json::object()}};
+    doc["raid"] = {{"player_state", raid.player_state},
+        {"random", std::to_string(raid.random)}, {"dropped", Json::array()},
+        {"extract_id", raid.extract_id}, {"extract_ticks", raid.extract_ticks},
+        {"extract_reason", raid.extract_reason}, {"damage_tick", std::to_string(raid.damage_tick)}};
+
+    for (const auto id : raid.dropped)
+    {
+        doc["raid"]["dropped"].push_back(std::to_string(id));
+    }
 
     for (const auto index : order)
     {
@@ -284,6 +368,7 @@ nlohmann::json World::document() const
             {"pose", {{"x", e.x}, {"y", e.y}, {"facing", e.facing}}},
             {"motion", {{"vx", unit.vx}, {"vy", unit.vy}, {"grounded", unit.grounded}}},
             {"health", {{"hp", unit.hp}, {"max_hp", unit.max_hp}, {"alive", unit.alive}}}};
+
         if (const auto* p = std::get_if<Player>(&actor.value))
         {
             obj["player_id"] = p->get_player_id();
@@ -311,7 +396,9 @@ nlohmann::json World::document() const
         {
             const auto& value = item->value;
             doc["items"][value.get_id()] = {{"id", value.get_id()},
-                {"cfg_id", value.get_cfg_id()}, {"count", value.count}};
+                {"cfg_id", value.get_cfg_id()}, {"count", value.count},
+                {"place", value.place}, {"x", value.x}, {"y", value.y},
+                {"owner_player_id", std::to_string(value.owner_player_id)}};
         }
     }
 
@@ -357,6 +444,7 @@ void World::load(const Str& text)
         {
             actor->generation = candidate.next_generation();
             actor->unit().access = &access;
+
             if (auto* player = std::get_if<Player>(&actor->value))
             {
                 player->weapon.access = &access;

@@ -118,7 +118,7 @@ def cfg_table(value, name):
 # 检查所有值域、配置引用及实际体型对应的出生和巡逻几何。
 def validate(doc):
     fields(doc, "v tick_hz map players weapons monsters", "content")
-    integer(doc["v"], 2, 2, "v")
+    integer(doc["v"], 3, 3, "v")
     integer(doc["tick_hz"], 60, 60, "tick_hz")
     for name in ("players", "monsters", "weapons"):
         cfg_table(doc[name], name)
@@ -198,7 +198,7 @@ def canonical(doc):
 # 从规范字节派生版本并生成可直接嵌入宿主的只读常量。
 def artifacts(doc):
     data = canonical(doc)
-    version = "combat-v2:" + hashlib.sha256(data.encode("utf-8")).hexdigest()
+    version = "combat-v3:" + hashlib.sha256(data.encode("utf-8")).hexdigest()
     header = ("// 从 design/combat_demo.json 校验生成的共享内容及身份；禁止手工修改。\n"
               "#pragma once\n\n#include <string_view>\n\nnamespace hunter::content\n{\n"
               f'inline constexpr std::string_view version = "{version}";\n'

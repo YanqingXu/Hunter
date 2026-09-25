@@ -14,6 +14,10 @@ public:
     u64 id = 0;
     u32 cfg_id = 0;
     i32 count = 1;
+    Str place = "None";
+    u64 owner_player_id = 0;
+    i32 x = 0;
+    i32 y = 0;
 
     // 读取id，不转移对象所有权。
     Str get_id() const;

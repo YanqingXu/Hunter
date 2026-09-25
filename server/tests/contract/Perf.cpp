@@ -65,10 +65,11 @@ int main(int argc, char** argv)
             cfg.source_path = argv[1];
 #endif
             hunter::Script script;
-            take(script.open(cfg, nlohmann::json{{"v", 4}, {"snapshot_every", 3},
+            take(script.open(cfg, nlohmann::json{{"v", 5}, {"snapshot_every", 3},
                 {"content", content}}.dump()));
-            take(script.event(2, R"({"v":4,"req_id":"login"})"));
-            take(script.event(3, R"({"v":4,"req_id":"start","after_match_id":"0"})"));
+            take(script.event(2, R"({"v":5,"req_id":"login","player_id":"1"})"));
+            take(script.event(3, R"({"v":5,"req_id":"start","after_match_id":"0",)"
+            R"("match_id":"1","world_id":"1"})"));
             Vec<f64> times;
             usize bytes = 0;
             usize frames = 0;

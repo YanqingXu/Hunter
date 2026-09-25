@@ -108,7 +108,8 @@ return function(deps)
         local old_ref = {match_id = World.get_match_id(world),
             entity_id = World.get_player_entity_id(world)}
         world_api.start(world, content,
-            {req_id = "restart", after_match_id = World.get_match_id(world)})
+            {req_id = "restart", after_match_id = World.get_match_id(world),
+                match_id = "2", world_id = "2"})
         stale_views(player, survivor)
         assert(world_api.resolve(world, old_ref) == nil, "old match rejected")
         assert(World.valid(world), "valid restarted world")

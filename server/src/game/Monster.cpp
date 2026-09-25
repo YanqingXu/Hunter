@@ -130,7 +130,7 @@ void Monster::set_state(Str value)
 {
     access->write();
     require(value == "spawn" || value == "patrol" || value == "chase" || value == "attack"
-        || value == "dead", "invalid_ai");
+        || value == "dead" || value == "windup" || value == "recover", "invalid_ai");
     require((state != "dead" || value == "dead") && (value != "spawn" || state == "spawn"),
         "invalid_monster_transition");
     require(value == "dead" ? (!alive && hp == 0) : (alive && hp > 0),

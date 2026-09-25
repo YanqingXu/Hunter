@@ -1,9 +1,12 @@
 # 配置导出工具
 
-本目录有两个独立工具：`export.py` 将 Excel 导出为服务端 Lua；`combat.py` 保持现有灰盒
-JSON 构建流程。两者均只依赖 Python 3 标准库，策划使用已打包的 Windows EXE 即可，无需安装
-Python。**Lua 配置尚未接入运行时**，修改 Excel
-并导出不会改变当前游戏，客户端导出也尚未实现。
+服务端首版构建使用 `demo.py`，复用 `export.py` 读取 `design/demo/首版.xlsx`，生成统一
+JSON、C++ 头文件和内容摘要；修改该工作簿后重新构建即可改变正式玩法。
+该适配器校验地图 2 的出生、技能、枪械、Boss、掉落、堆叠、容量和撤离引用。
+工作簿来源及与现行策划表的区别见 [首版内容说明](../design/demo/README.md)。
+
+原 `export.py` 的 Excel → Lua 桌面导表工具继续保留；这些普通 Lua 配置不在运行时执行。
+`combat.py` 只生成灰盒回归夹具。三个 Python 工具均只依赖标准库。
 
 ## 策划使用：改清单，双击导出
 

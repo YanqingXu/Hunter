@@ -96,13 +96,29 @@
         "game.weapon",
         "game.snapshot",
         "game.ai",
-        "game.item"
+        "game.item",
+        "game.loot",
+        "game.settlement"
       ]
     },
     {
       "name": "game.item",
       "file": "game/item.lua",
       "deps": []
+    },
+    {
+      "name": "game.loot",
+      "file": "game/loot.lua",
+      "deps": [
+        "game.world"
+      ]
+    },
+    {
+      "name": "game.settlement",
+      "file": "game/settlement.lua",
+      "deps": [
+        "game.world"
+      ]
     }
   ]
 }

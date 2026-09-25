@@ -20,6 +20,7 @@ bool normalize_id(nlohmann::json& value, const nlohmann::json& spec)
     }
 
     const auto& text = value.get_ref<const Str&>();
+
     if (text.empty() || (text.size() > 1 && text.front() == '0'))
     {
         return false;
@@ -80,6 +81,7 @@ bool valid_string(const nlohmann::json& value, const nlohmann::json& spec)
     }
 
     const auto& text = value.get_ref<const Str&>();
+
     if (text.size() < spec.at("min").get<usize>() || text.size() > spec.at("max").get<usize>())
     {
         return false;
@@ -105,6 +107,7 @@ bool valid_string(const nlohmann::json& value, const nlohmann::json& spec)
 bool normalize(nlohmann::json& value, const nlohmann::json& spec)
 {
     const auto& type = spec.at("type").get_ref<const Str&>();
+
     if (type == "id")
     {
         return normalize_id(value, spec);
@@ -146,6 +149,7 @@ bool normalize(nlohmann::json& value, const nlohmann::json& spec)
     if (type == "object")
     {
         const auto& fields = spec.at("fields");
+
         if (!value.is_object() || value.size() != fields.size())
         {
             return false;
@@ -321,7 +325,8 @@ std::expected<void, Str> validate_output(const ScriptOut& out, usize max_bytes)
 
 nlohmann::json output_json(const ScriptOut& out)
 {
-    nlohmann::json result = {{"v", 3}};
+    nlohmann::json result = {{"v", 4}};
+
     if (out.message.has_ack())
     {
         const auto& msg = out.message.ack();

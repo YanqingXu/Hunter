@@ -66,6 +66,7 @@ T* object(World& world, u32 slot)
         }
 
         auto& actor = *world.actors[slot];
+
         if constexpr (std::is_same_v<T, Entity>)
         {
             return static_cast<Entity*>(&actor.unit());
@@ -275,6 +276,16 @@ luax::Status register_objects(World& world, const luax::Isolate& isolate,
     type.method("get_match_id", &World::get_match_id);
     type.method("get_player_id", &World::get_player_id);
     type.method("get_player_entity_id", &World::get_player_entity_id);
+    type.method("find_player", &World::find_player);
+    type.method("drop_once", &World::drop_once);
+    type.method("roll", &World::roll);
+    type.method("drop", &World::drop);
+    type.method("pickup", &World::pickup);
+    type.method("hurt", &World::hurt);
+    type.method("hurt_now", &World::hurt_now);
+    type.method("get_extract_ticks", &World::get_extract_ticks);
+    type.method("set_extract", &World::set_extract);
+    type.method("finish", &World::finish);
     type.method("get_last_entity_id", &World::get_last_entity_id);
     type.method("get_last_req", &World::get_last_req);
     type.method("get_last_after", &World::get_last_after);

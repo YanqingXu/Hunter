@@ -17,6 +17,7 @@ return function(deps)
         local health = target.health
         local amount = math.min(damage, Unit.get_hp(health))
         Unit.set_hp(health, Unit.get_hp(health) - amount)
+        World.hurt(world, target.id)
         world_api.emit(world, "hit", source.id, target.id,
             Entity.get_x(target.pose), Entity.get_y(target.pose), amount)
         if Unit.get_hp(health) == 0 then

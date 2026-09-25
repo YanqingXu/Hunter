@@ -11,6 +11,7 @@
 #include <charconv>
 #include <cstdlib>
 #include <iostream>
+#include <filesystem>
 #include <thread>
 
 #ifdef _WIN32
@@ -29,6 +30,7 @@ usize read_stdin(char* data, usize size, const std::atomic<bool>& canceled)
 {
 #ifdef _WIN32
     DWORD count = 0;
+
     if (canceled || !ReadFile(GetStdHandle(STD_INPUT_HANDLE), data,
         static_cast<DWORD>(size), &count, nullptr))
     {
@@ -37,6 +39,7 @@ usize read_stdin(char* data, usize size, const std::atomic<bool>& canceled)
 
     return count;
 #else
+
     while (!canceled)
     {
         pollfd fd{STDIN_FILENO, POLLIN, 0};
@@ -210,6 +213,10 @@ hunter::Cfg parse_cfg(i32 argc, char** argv)
         {
             cfg.policy_path = value;
         }
+        else if (name == "--save")
+        {
+            cfg.save_path = value;
+        }
         else if (name == "--handshake-ms")
         {
             cfg.handshake_timeout_ms = static_cast<u32>(parse_limit(value, 60000));
@@ -230,6 +237,28 @@ hunter::Cfg parse_cfg(i32 argc, char** argv)
         {
             throw std::runtime_error("unknown argument: " + name);
         }
+    }
+
+    if (cfg.save_path.empty())
+    {
+        wchar_t root[32768]{};
+        const auto length = GetEnvironmentVariableW(L"LOCALAPPDATA", root, 32768);
+        if (length == 0 || length >= 32768)
+        {
+            throw std::runtime_error("LOCALAPPDATA missing; pass --save explicitly");
+        }
+
+        const auto path = std::filesystem::path(root) / "Hunter" / "save.sqlite";
+        const auto text = path.u8string();
+        cfg.save_path.assign(text.begin(), text.end());
+    }
+
+    const auto path = std::filesystem::path(
+        std::u8string(cfg.save_path.begin(), cfg.save_path.end()));
+
+    if (path.has_parent_path())
+    {
+        std::filesystem::create_directories(path.parent_path());
     }
 
     return cfg;

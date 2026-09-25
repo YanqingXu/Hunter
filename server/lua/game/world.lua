@@ -43,6 +43,14 @@ return function(deps)
         return value
     end
 
+    -- 首版怪物目标选择入口，目标身份来自世界归属而非固定实体编号。
+    function api.target(world, faction)
+        if faction ~= "monster" then
+            return nil
+        end
+        return api.find(world, World.find_player(world, World.get_player_id(world)))
+    end
+
     -- 跨阶段引用同时检查局次和实体身份。
     function api.resolve(world, ref)
         if not state.fields(ref, {"match_id", "entity_id"})
@@ -90,7 +98,7 @@ return function(deps)
 
     -- 重建局内对象，保留连接序号和全局 Tick。
     function api.start(world, content, request)
-        World.begin(world, request.req_id, request.after_match_id)
+        World.begin(world, request.req_id, request.after_match_id, request.match_id, request.world_id)
         assert(api.spawn(world, content, "player") ~= nil, "player spawn failed")
         for _, spawn in ipairs(content.map.enemies) do
             assert(api.spawn(world, content, "monster", spawn.spawn_id) ~= nil,
@@ -108,7 +116,7 @@ return function(deps)
         if World.get_phase(world) ~= "Playing" then
             return
         end
-        local player = api.find(world, World.get_player_entity_id(world))
+        local player = api.find(world, World.find_player(world, World.get_player_id(world)))
         if not Unit.get_alive(player.health) then
             World.set_phase(world, "Dead")
         else

@@ -68,7 +68,7 @@ struct Game
     Game(const hunter::Cfg& cfg, Json data) : content(std::move(data))
     {
         const auto output = take(script.open(cfg,
-            Json{{"v", 4}, {"snapshot_every", 3}, {"content", content}}.dump()));
+            Json{{"v", 5}, {"snapshot_every", 3}, {"content", content}}.dump()));
         check(output.empty(), "init must not send network output");
     }
 
@@ -89,7 +89,19 @@ struct Game
             return take(script.input(input, std::stoull(payload["applied_tick"].get<Str>())));
         }
 
-        payload["v"] = 4;
+        if (id == 2)
+        {
+            payload["player_id"] = "1";
+        }
+
+        if (id == 3)
+        {
+            const auto next = std::stoull(payload.at("after_match_id").get<Str>()) + 1;
+            payload["match_id"] = std::to_string(next);
+            payload["world_id"] = std::to_string(next);
+        }
+
+        payload["v"] = 5;
         return take(script.event(id, payload.dump()));
     }
 

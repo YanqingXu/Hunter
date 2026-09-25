@@ -1,5 +1,5 @@
 {
-  "version": 4,
+  "version": 5,
   "host_api": {
     "net.emit": {
       "args": [
@@ -42,7 +42,7 @@
     },
     "entry_returns": "boolean true except export_state returns string",
     "ctx": {
-      "v": 4,
+      "v": 5,
       "snapshot_every": "integer [1,3600]",
       "content": "validated exported content object"
     },
@@ -204,8 +204,8 @@
           "contains": "bool contains(const Str& id) const",
           "count": "i64 count() const",
           "entity_id": "Str entity_id(i64 index) const",
-          "login": "void login()",
-          "begin": "void begin(const Str& req, const Str& after)",
+          "login": "void login(const Str& owner)",
+          "begin": "void begin(const Str& req, const Str& after, const Str& match, const Str& world)",
           "spawn": "Str spawn(const Str& kind, const Str& spawn_id)",
           "remove": "bool remove(const Str& id)",
           "flush": "void flush()",
@@ -215,7 +215,17 @@
           "remove_item": "bool remove_item(const Str& id)",
           "save": "Str save() const",
           "load": "void load(const Str& text)",
-          "valid": "bool valid() const"
+          "valid": "bool valid() const",
+          "find_player": "Str find_player(const Str& owner) const",
+          "drop_once": "bool drop_once(const Str& actor)",
+          "roll": "i64 roll(i64 maximum)",
+          "drop": "void drop(const Str& cfg_id, i64 count, i64 x, i64 y)",
+          "pickup": "Str pickup(const Str& owner, const Str& item_id)",
+          "hurt": "void hurt(const Str& actor)",
+          "hurt_now": "bool hurt_now() const",
+          "get_extract_ticks": "i64 get_extract_ticks() const",
+          "set_extract": "void set_extract(i64 id, i64 ticks, Str reason)",
+          "finish": "void finish(Str outcome)"
         },
         "ownership": "World",
         "handle": "type + slot + generation + owner + module epoch + capability",
@@ -248,13 +258,23 @@
     ]
   },
   "state": {
-    "v": 4,
+    "v": 5,
     "tick_id": "canonical decimal string [0,9223372036854775807]",
     "seq": "canonical decimal string [0,18446744073709551615]",
     "match_id": "canonical decimal string [0,18446744073709551615]",
+    "world_id": "canonical decimal string; scoped by session, increases for each new world",
+    "raid": {
+      "player_state": "Alive|Dead|Extracted|Abandoned",
+      "random": "canonical decimal uint32 string [1,4294967295]",
+      "dropped": "unique array of dead monster identities, at most 64",
+      "extract_id": "integer exit configuration id or zero",
+      "extract_ticks": "integer accumulated ticks [0,36000]",
+      "extract_reason": "locked|outside|hurt|dead|counting|complete",
+      "damage_tick": "canonical decimal tick string <= tick_id"
+    },
     "player_id": "canonical decimal string [0,18446744073709551615]",
     "event_id": "canonical decimal string [0,18446744073709551615]",
-    "phase": "Unauthenticated|Lobby|Playing|Dead|Cleared",
+    "phase": "Unauthenticated|Lobby|Preparing|Playing|Settling|Finished|Aborted; Dead/Cleared only in combat regression fixture",
     "paused": "boolean",
     "content_key": "canonical JSON encoding of complete immutable content; exact import match",
     "entities": {
@@ -303,7 +323,7 @@
       "monster": {
         "spawn_id": "positive canonical cfg-range string; resolves to map.enemies spawn_id and matching cfg_id",
         "ai": {
-          "state": "spawn|patrol|chase|attack|dead; spawn requires full health at rest at configured origin",
+          "state": "spawn|patrol|chase|attack|windup|recover|dead; spawn requires full health at rest at configured origin",
           "attack_ticks": "integer [0,cfg.attack_ticks]"
         }
       },
@@ -328,24 +348,30 @@
       "sole player resolves from player_entity_id and matches initial player and weapon cfg",
       "death zeros motion and own cooldowns; monster ai becomes dead",
       "paused or terminal player controls are neutral; terminal motion is zero",
-      "Dead requires dead player; Cleared requires live player and no active live monsters; Playing requires live player and active live monsters",
+      "Playing requires live player; Boss death only unlocks exit; Settling/Finished require a final player outcome; Dead/Cleared remain regression fixture phases",
       "inactive phases have empty entities and indices and zero allocator and player entity id",
-      "match_id is last_start.after_match_id + 1; existing request and sequence invariants retained"
+      "match_id is allocated persistently and exceeds last_start.after_match_id; existing request and sequence invariants retained"
     ],
     "items": {
       "max": 64,
       "key": "positive canonical uint64 string matching instance id",
       "fields": {
         "id": "positive uint64 string <= last_item_id",
-        "cfg_id": "canonical decimal string [1,2147483647]; no item cfg lookup in this increment",
-        "count": "integer [1,2147483647]"
+        "cfg_id": "canonical decimal string [1,2147483647]; Ground/Bag resolve content.items",
+        "count": "integer [1,2147483647]; Ground/Bag bounded by MaxStack",
+        "place": "None|Ground|Bag; None only for native object regression fixtures",
+        "owner_player_id": "canonical decimal player id for Bag, otherwise zero",
+        "x": "integer map coordinate; Bag uses zero",
+        "y": "integer map coordinate; Bag uses zero"
       }
     },
     "last_item_id": "canonical uint64 string; per-match high water, never reused",
-    "owner": "C++ World; Lua retains immutable identity and generation-checked handles only"
+    "owner": "C++ World; Lua retains immutable identity and generation-checked handles only",
+    "world_id": "server assigned runtime identity, nonzero for an active match",
+    "raid": "native player_state/random/dropped/extract_id/extract_ticks/extract_reason/damage_tick"
   },
   "effect": {
-    "v": 3,
+    "v": 4,
     "events": {
       "input": 1,
       "login": 2,
@@ -353,7 +379,7 @@
       "pause": 4
     },
     "input": {
-      "v": 3,
+      "v": 4,
       "seq": "positive uint64 decimal string",
       "match_id": "positive uint64 decimal string",
       "applied_tick": "nonnegative i64 decimal string",
@@ -379,8 +405,8 @@
         "fields": {
           "v": {
             "type": "int",
-            "min": 3,
-            "max": 3
+            "min": 4,
+            "max": 4
           },
           "seq": {
             "type": "id",
@@ -404,8 +430,8 @@
         "fields": {
           "v": {
             "type": "int",
-            "min": 3,
-            "max": 3
+            "min": 4,
+            "max": 4
           },
           "tick_id": {
             "type": "id",
@@ -431,7 +457,11 @@
               "Lobby",
               "Playing",
               "Dead",
-              "Cleared"
+              "Cleared",
+              "Preparing",
+              "Settling",
+              "Finished",
+              "Aborted"
             ]
           },
           "entities": {
@@ -524,7 +554,9 @@
                     "patrol",
                     "chase",
                     "attack",
-                    "dead"
+                    "dead",
+                    "windup",
+                    "recover"
                   ]
                 },
                 "cfg_id": {
@@ -542,8 +574,8 @@
         "fields": {
           "v": {
             "type": "int",
-            "min": 3,
-            "max": 3
+            "min": 4,
+            "max": 4
           },
           "req_id": {
             "type": "string",
@@ -569,7 +601,11 @@
               "Lobby",
               "Playing",
               "Dead",
-              "Cleared"
+              "Cleared",
+              "Preparing",
+              "Settling",
+              "Finished",
+              "Aborted"
             ]
           }
         }
@@ -579,8 +615,8 @@
         "fields": {
           "v": {
             "type": "int",
-            "min": 3,
-            "max": 3
+            "min": 4,
+            "max": 4
           },
           "req_id": {
             "type": "string",
@@ -601,7 +637,11 @@
               "Lobby",
               "Playing",
               "Dead",
-              "Cleared"
+              "Cleared",
+              "Preparing",
+              "Settling",
+              "Finished",
+              "Aborted"
             ]
           }
         }
@@ -611,8 +651,8 @@
         "fields": {
           "v": {
             "type": "int",
-            "min": 3,
-            "max": 3
+            "min": 4,
+            "max": 4
           },
           "match_id": {
             "type": "id",
@@ -673,8 +713,8 @@
         "fields": {
           "v": {
             "type": "int",
-            "min": 3,
-            "max": 3
+            "min": 4,
+            "max": 4
           },
           "code": {
             "type": "string",
