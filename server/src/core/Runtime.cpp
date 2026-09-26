@@ -83,7 +83,7 @@ struct Runtime::State
     std::condition_variable changed;
     BoundedQueue<Str> commands;
     BoundedQueue<Str> events;
-    std::optional<Str> terminal;
+    Opt<Str> terminal;
     std::thread thread;
     asio::io_context* io = nullptr;
     Func<void()> drain;
@@ -706,7 +706,7 @@ struct Runtime::Loop
     }
 
     // 校验并一次提交成功入口的全部输出，失败后不再使用脚本状态。
-    bool commit(std::expected<Vec<ScriptOut>, Str> out)
+    bool commit(Expect<Vec<ScriptOut>, Str> out)
     {
         if (!flush_logs())
         {
@@ -751,7 +751,7 @@ struct Runtime::Loop
             return true;
         }
 
-        std::optional<wire::Envelope> ack;
+        Opt<wire::Envelope> ack;
 
         for (const auto& frame : *frames)
         {
@@ -1109,7 +1109,7 @@ struct Runtime::Loop
             {"target_id", std::to_string(target)},
             {"action_seq", std::to_string(req.action_seq())}};
         auto output = script->event(5, payload.dump());
-        std::optional<wire::Envelope> response;
+        Opt<wire::Envelope> response;
 
         if (output)
         {
@@ -1586,14 +1586,14 @@ struct Runtime::Loop
     ActionLog actions;
     u64 instance_id = 0;
     u64 next_world = 0;
-    std::optional<wire::StartReq> pending_start;
+    Opt<wire::StartReq> pending_start;
     bool pending_start_discarded = false;
-    std::optional<storage::CommitMatch> frozen;
-    std::optional<storage::MatchResult> saved;
+    Opt<storage::CommitMatch> frozen;
+    Opt<storage::MatchResult> saved;
     Str save_state = "Idle";
     Str save_error;
     bool save_busy = false;
-    std::optional<wire::Envelope> last_ack;
+    Opt<wire::Envelope> last_ack;
     Str state = "Starting";
     Str session = "Idle";
     Str instance;
@@ -1675,7 +1675,7 @@ bool Runtime::submit(Str line)
     return true;
 }
 
-std::optional<Str> Runtime::next_evt(u32 timeout_ms)
+Opt<Str> Runtime::next_evt(u32 timeout_ms)
 {
     std::unique_lock lock(state_->mutex);
     state_->changed.wait_for(lock, std::chrono::milliseconds(timeout_ms), [this]

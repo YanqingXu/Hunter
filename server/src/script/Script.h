@@ -47,31 +47,31 @@ public:
     Script& operator=(const Script&) = delete;
 
     // 注册只读能力并加载源码或签名 Bundle，成功后调用 init。
-    std::expected<Vec<ScriptOut>, Str> open(const Cfg& cfg, const Str& ctx_json);
+    Expect<Vec<ScriptOut>, Str> open(const Cfg& cfg, const Str& ctx_json);
 
     // 在 Tick 边界执行低频 JSON 控制，失败时中止当前会话。
-    std::expected<Vec<ScriptOut>, Str> event(i64 event_id, const Str& payload_json);
+    Expect<Vec<ScriptOut>, Str> event(i64 event_id, const Str& payload_json);
 
     // 只读调用 Lua 展开并验证配装，业务拒绝不分配局号、不修改世界。
-    std::expected<wire::Loadout, Str> check_loadout(const wire::Loadout& input);
+    Expect<wire::Loadout, Str> check_loadout(const wire::Loadout& input);
 
     // 在 Tick 边界原生处理输入及确认，不执行 Lua 或 JSON 编解码。
-    std::expected<Vec<ScriptOut>, Str> input(const wire::FrameInput& input, u64 applied_tick);
+    Expect<Vec<ScriptOut>, Str> input(const wire::FrameInput& input, u64 applied_tick);
 
     // 使用精确整数 Tick 和固定秒数步长推进一次脚本。
-    std::expected<Vec<ScriptOut>, Str> tick(u64 tick_id, f64 dt_seconds);
+    Expect<Vec<ScriptOut>, Str> tick(u64 tick_id, f64 dt_seconds);
 
     // 在禁止输出的能力下导出带版本的状态 JSON。
-    std::expected<Str, Str> export_state();
+    Expect<Str, Str> export_state();
 
     // 在禁止输出的能力下导入状态，失败后禁止继续执行本局。
-    std::expected<void, Str> import_state(const Str& snapshot_json);
+    Expect<void, Str> import_state(const Str& snapshot_json);
 
     // 在禁止输出的能力下检查当前状态。
-    std::expected<void, Str> validate_state();
+    Expect<void, Str> validate_state();
 
     // 在拥有线程的入口边界读取原生内存和回收指标，供验证与诊断使用。
-    std::expected<ScriptStats, Str> stats() const;
+    Expect<ScriptStats, Str> stats() const;
 
     // 拥有线程在入口返回后提取日志；其他线程或同步重入返回空集合。
     Vec<Str> take_logs() noexcept;
@@ -80,10 +80,10 @@ public:
     const World& world() const;
 
     // 所属线程在入口外修改原生业务状态，异常返回失败并中止后续入口。
-    std::expected<void, Str> change(Func<void(World&)> action);
+    Expect<void, Str> change(Func<void(World&)> action);
 
     // 尽力释放全部 VM 资源并返回有界退出错误；重复调用保留相同终态与未提取日志。
-    std::expected<void, Str> shutdown(const Str& reason);
+    Expect<void, Str> shutdown(const Str& reason);
 
 private:
     struct Impl;

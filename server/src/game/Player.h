@@ -29,8 +29,8 @@ public:
     i32 other_reserve = 0;
     i32 weapon_count = 1;
     i32 active_weapon = 1;
-    std::array<u32, 2> ammo_cfg_ids{};
-    std::array<ToolSlot, 8> tools{};
+    Arr<u32, 2> ammo_cfg_ids{};
+    Arr<ToolSlot, 8> tools{};
     Vec<i32> health_segments;
     u64 last_tool_instance = 0;
     u64 use_instance = 0;

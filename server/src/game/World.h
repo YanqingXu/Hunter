@@ -72,8 +72,8 @@ public:
     Raid raid;
     wire::Loadout pending_loadout;
     wire::Loadout active_loadout;
-    std::array<bool, 32> used_scenes{};
-    std::array<Projectile, 16> projectiles{};
+    Arr<bool, 32> used_scenes{};
+    Arr<Projectile, 16> projectiles{};
     u64 last_projectile_id = 0;
     u64 action_seq = 0;
     u64 player_id = 0;
@@ -88,9 +88,9 @@ public:
     u64 last_match = 0;
     u32 serial = 0;
     u32 revision = 1;
-    std::array<std::optional<Actor>, 64> actors;
+    Arr<Opt<Actor>, 64> actors;
     Vec<u32> order;
-    std::array<std::optional<ItemSlot>, 64> items;
+    Arr<Opt<ItemSlot>, 64> items;
 
     // 保存已经验证的候选配装，由下一次开局消费。
     void prepare_loadout(const wire::Loadout& input);

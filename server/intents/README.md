@@ -34,3 +34,25 @@ CTest 名称；无前缀项在两种模式都必须存在。检查器从 CMake �
 
 先修改契约和适用规则，明确所有权与失败语义；新增能暴露实际风险的测试；
 实现后运行关联测试，最后同步状态与实际命令。未运行的平台检查不得写成通过。
+
+## 公共结果类型约定
+
+`src/common/Types.h` 统一提供 `Expect<T, E>` 与 `Unexpect<E>`，分别等价于
+`std::expected<T, E>` 与 `std::unexpected<E>`。本次迁移覆盖 `src/` 的全部引用，
+保留成功值、错误值、`void` 返回及 `Unexpect(error)` 的模板参数推导语义；
+线程、所有权、失败路径、协议和 ABI 不变。验证使用 Windows 开发构建及既有
+会话、脚本、网络、核心与存档契约，不新增业务行为。
+
+2026-09-26 验证：使用构建缓存指定的 VS 2026 CMake 执行
+`cmake --build --preset win-dev --parallel 8` 成功；
+`ctest --preset win-dev -R "hunter_(session|script|async|net|core|storage|intent).*"`
+通过 9/9。`src/` 共替换 154 处，原始拼写仅保留在别名定义中；Android 未验证。
+
+后续容器与视图迁移：在 `Types.h` 定义 `Arr<T, N>`、`Opt<T>`、
+`Span<T, N = std::dynamic_extent>` 与 `StrView`，替换 `src/` 对应引用。
+数组容量、可选值状态、视图的只读限定和借用生命周期保持不变；保留数组与视图的
+模板参数推导，并同时支持固定和动态长度视图。验证使用开发构建及相关既有契约。
+
+2026-09-26 容器与视图验证：VS 2026 CMake 的 `win-dev` 构建成功，
+相关 CTest 契约通过 17/17，测试输出见 `build/short-types-tests.log`。
+`src/` 本轮替换 39 处，原始拼写仅保留在别名定义中，差异检查通过；Android 未验证。

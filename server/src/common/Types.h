@@ -13,6 +13,11 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <functional>
+#include <expected>
+#include <array>
+#include <optional>
+#include <span>
+#include <string_view>
 
 
 /// 动态数组容器
@@ -38,6 +43,9 @@ using Set = std::set<T>;
 // 字符串类型别名
 using Str = std::string;
 
+// 只读字符串视图（不持有数据）
+using StrView = std::string_view;
+
 // 整型类型别名
 using i8 = std::int8_t;
 using u8 = std::uint8_t;
@@ -55,6 +63,18 @@ using usize = std::size_t;
 using f32 = float;
 using f64 = double;
 
+/// 固定长度数组
+template<typename T, usize N>
+using Arr = std::array<T, N>;
+
+/// 连续内存视图（不持有数据，默认动态长度）
+template<typename T, usize N = std::dynamic_extent>
+using Span = std::span<T, N>;
+
+/// 可选值
+template<typename T>
+using Opt = std::optional<T>;
+
 /// 共享指针（引用计数）
 template<typename T>
 using Ptr = std::shared_ptr<T>;
@@ -70,5 +90,13 @@ using UPtr = std::unique_ptr<T>;
 /// 函数对象类型
 template<typename Signature>
 using Func = std::function<Signature>;
+
+/// 成功值或错误结果
+template<typename T, typename E>
+using Expect = std::expected<T, E>;
+
+/// 显式错误结果
+template<typename E>
+using Unexpect = std::unexpected<E>;
 
 #endif // 结束类型定义头文件保护

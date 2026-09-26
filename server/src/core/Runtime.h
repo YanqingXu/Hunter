@@ -27,7 +27,7 @@ public:
     bool submit(Str line);
 
     // 等待并移出下一个控制事件，超时或已排空时返回空值。
-    std::optional<Str> next_evt(u32 timeout_ms);
+    Opt<Str> next_evt(u32 timeout_ms);
 
     // 从任意宿主线程幂等请求退出；非空错误码使终态失败，不等待管道或逻辑线程。
     void stop(Str reason = {});

@@ -60,7 +60,7 @@ private:
     SendQueue send_;
     Func<void(wire::Envelope)> on_msg_;
     Func<void(Str)> on_close_;
-    std::array<u8, 4> head_{};
+    Arr<u8, 4> head_{};
     Str body_;
     bool stopped_ = false;
     bool used_ = false;

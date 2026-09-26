@@ -6,13 +6,13 @@
 
 namespace hunter
 {
-std::expected<Frame, Str> encode_frame(const wire::Envelope& msg, usize max_bytes)
+Expect<Frame, Str> encode_frame(const wire::Envelope& msg, usize max_bytes)
 {
     const auto size = msg.ByteSizeLong();
     if (size == 0 || size > max_bytes
         || size > static_cast<usize>(std::numeric_limits<i32>::max()))
     {
-        return std::unexpected("frame_size");
+        return Unexpect("frame_size");
     }
 
     Frame frame;
@@ -27,13 +27,13 @@ std::expected<Frame, Str> encode_frame(const wire::Envelope& msg, usize max_byte
 
     if (!msg.SerializeToArray(frame.bytes.data() + 4, static_cast<i32>(size)))
     {
-        return std::unexpected("frame_encode");
+        return Unexpect("frame_encode");
     }
 
     return frame;
 }
 
-std::expected<wire::Envelope, Str> decode_frame(const Str& bytes, usize max_bytes)
+Expect<wire::Envelope, Str> decode_frame(const Str& bytes, usize max_bytes)
 {
     wire::Envelope msg;
     if (bytes.empty() || bytes.size() > max_bytes
@@ -41,13 +41,13 @@ std::expected<wire::Envelope, Str> decode_frame(const Str& bytes, usize max_byte
         || !msg.ParseFromArray(bytes.data(), static_cast<i32>(bytes.size()))
         || msg.body_case() == wire::Envelope::BODY_NOT_SET)
     {
-        return std::unexpected("frame_decode");
+        return Unexpect("frame_decode");
     }
 
     return msg;
 }
 
-std::expected<Vec<Frame>, Str> script_frames(const Vec<ScriptOut>& out, const Cfg& cfg)
+Expect<Vec<Frame>, Str> script_frames(const Vec<ScriptOut>& out, const Cfg& cfg)
 {
     Vec<Frame> frames;
     usize bytes = 0;
@@ -59,19 +59,19 @@ std::expected<Vec<Frame>, Str> script_frames(const Vec<ScriptOut>& out, const Cf
             const auto valid = validate_output(item, cfg.max_frame_bytes);
             if (!valid)
             {
-                return std::unexpected(valid.error());
+                return Unexpect(valid.error());
             }
 
             auto frame = encode_frame(item.message, cfg.max_frame_bytes);
             if (!frame)
             {
-                return std::unexpected(frame.error());
+                return Unexpect(frame.error());
             }
 
             if (frames.size() >= cfg.max_outputs
                 || frame->bytes.size() > cfg.max_output_bytes - bytes)
             {
-                return std::unexpected("output_batch_limit");
+                return Unexpect("output_batch_limit");
             }
 
             bytes += frame->bytes.size();
@@ -80,7 +80,7 @@ std::expected<Vec<Frame>, Str> script_frames(const Vec<ScriptOut>& out, const Cf
     }
     catch (const std::exception&)
     {
-        return std::unexpected("output_schema");
+        return Unexpect("output_schema");
     }
 
     return frames;
