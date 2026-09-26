@@ -398,7 +398,8 @@ def saturation(args):
 
 # 使用真实小接收窗口的客户端停止读包，让操作系统发送缓存与服务端队列逐步饱和。
 def slow_reader(args):
-    srv = Server(args, ["--queue-count", "4096", "--send-bytes", "1024"])
+    # 单 Tick 的 ACK 与快照突发需要正常余量；256 帧上限仍保证读端阻塞后有界失败。
+    srv = Server(args, ["--queue-count", "4096", "--send-bytes", "65536"])
     try:
         srv.start()
         conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -441,7 +442,8 @@ def slow_reader(args):
 
         assert failure is not None, "slow TCP reader did not produce bounded backpressure"
         assert failure["code"] == "send_backpressure", failure
-        assert seq - first_unread >= 256, "failed before the slow-reader buffers filled"
+        unread_count = seq - first_unread + 1
+        assert unread_count >= 256, f"failed before slow-reader buffers filled: {unread_count}"
         closed(conn)
         srv.stop()
     finally:
@@ -670,14 +672,15 @@ def client_lifecycle(args):
         srv.cleanup()
 
 
-# 创建有完整中文说明的七入口脚本，仅用于开发 Runtime 的故障注入。
-def script_fixture(folder, name, init="return true", event="return true",
-                   shutdown="return true"):
-    entries = (("init", "ctx", init), ("on_event", "id, payload", event),
-               ("tick", "id, dt", "return true"), ("export_state", "", "return '{}'"),
-               ("import_state", "value", "return true"),
-               ("validate_state", "", "return true"), ("shutdown", "reason", shutdown))
-    lines = ["-- 验证宿主失败与调度边界的隔离探针，不实现玩法。"]
+# 保留正式 Lua 配置加载与 v7 契约，仅包装开发 Runtime 的退出和诊断故障。
+def script_fixture(folder, name, source, init="return true", shutdown="return true"):
+    original = Path(source).read_text(encoding="utf-8").rstrip()
+    assert original.endswith("return true"), "assembled source must have one final return"
+    lines = [original[:-len("return true")],
+             "-- 隔离故障探针复用正式初始化，不绕过内容安装或配装入口。",
+             "local game_init = init"]
+    entries = (("init", "ctx", "assert(game_init(ctx)); " + init),
+               ("shutdown", "reason", shutdown))
     for entry, params, body in entries:
         lines += ["", "-- 执行本场景指定的同步入口行为。", f"function {entry}({params})"]
         lines += ["    " + line for line in body.splitlines()]
@@ -708,6 +711,7 @@ def numeric_args(args):
 # 在 stderr 真正阻塞时再送入超限行，验证输入错误不依赖诊断写入完成。
 def blocked_stderr(args, folder):
     source = script_fixture(folder, "blocked_stderr",
+                            args.source,
                             init="diagnostics.log(string.rep('x', 60000)); return true")
     for drain in (False, True):
         proc = subprocess.Popen([args.exe, "--source", source, "--stop-ms", "100",
@@ -754,6 +758,7 @@ def shutdown_results(args, folder):
                                ("error", "error('shutdown_probe_failure')", True),
                                ("log", "return true", False)):
         source = script_fixture(folder, "shutdown_" + name,
+                                args.source,
                                 shutdown="diagnostics.log('shutdown_probe_log'); " + body)
         srv = Server(args, source=source)
         try:
@@ -771,6 +776,7 @@ def shutdown_results(args, folder):
             srv.cleanup()
 
     source = script_fixture(folder, "abort_shutdown",
+                            args.source,
                             shutdown="diagnostics.log('abort_shutdown_log'); return false")
     srv = Server(args, source=source)
     try:

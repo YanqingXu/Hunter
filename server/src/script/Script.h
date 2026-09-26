@@ -52,6 +52,9 @@ public:
     // 在 Tick 边界执行低频 JSON 控制，失败时中止当前会话。
     std::expected<Vec<ScriptOut>, Str> event(i64 event_id, const Str& payload_json);
 
+    // 只读调用 Lua 展开并验证配装，业务拒绝不分配局号、不修改世界。
+    std::expected<wire::Loadout, Str> check_loadout(const wire::Loadout& input);
+
     // 在 Tick 边界原生处理输入及确认，不执行 Lua 或 JSON 编解码。
     std::expected<Vec<ScriptOut>, Str> input(const wire::FrameInput& input, u64 applied_tick);
 

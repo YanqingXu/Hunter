@@ -18,7 +18,14 @@ return function(deps)
                     if World.roll(world, 10000) <= entry.chance then
                         local count = entry.min_count
                             + World.roll(world, entry.max_count - entry.min_count + 1) - 1
-                        World.drop(world, entry.cfg_id, count,
+                        local stacks = json.array({})
+                        local maximum = content.items[entry.cfg_id].max_stack
+                        while count > 0 do
+                            local amount = math.min(count, maximum)
+                            stacks[#stacks + 1] = amount
+                            count = count - amount
+                        end
+                        World.drop(world, entry.cfg_id, json.encode(stacks),
                             Entity.get_x(enemy.pose), Entity.get_y(enemy.pose))
                     end
                 end

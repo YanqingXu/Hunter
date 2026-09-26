@@ -10,18 +10,20 @@ verification: ["hunter_assemble_contract", "hunter_script_contract", "tools:hunt
 
 ## 目标与非目标
 
-构建期将显式依赖的 Luax 工厂组装为一个 ModuleHandle，导出七个生命周期入口。
-框架承载 SRV-009 的会话、运动、枪械和普通怪模块，不实现存档或热更新。
+构建期将显式依赖的 Luax 工厂和配置表组装为一个 ModuleHandle，导出生命周期及只读查询入口。
+框架承载 SRV-009 至 SRV-013 的玩法模块与配置加载；不实现热更新。
 
 ## 不变量
 
-- `modules.json` schema 为 `{version:1,entry:"main",modules:[{name,file,deps}]}`。
+- `modules.json` schema 为 `{version:1,entry:"main",modules:[{name,file,deps,kind}]}`。
   模块名为点分标识符；文件相对于清单目录；依赖按名字注入工厂的 `deps` 表。
 - 拒绝重名、缺失依赖、环、绝对路径、父目录路径和符号链接逃逸。无依赖节点按模块名排序，
   入口必须依赖全部传递使用的模块，生成源和行号映射不包含工作区绝对路径。
-- 功能文件返回接收 `deps` 的工厂；入口也返回工厂。模块表不跨 Host；只导出七个函数。
-- C++ World 独占可变玩法状态；脚本模块只持有代际句柄、不可变身份索引及局部计算值。
-- Lua 文件和清单路径必须全小写，并检查文件系统实际路径大小写一致。
+- 功能文件以 `factory` 返回接收 `deps` 的工厂；配置 `data` 文件返回表。配置清单由导表产生，
+  只通过显式依赖注入使用；模块表不跨 Host。
+- C++ World 独占可变玩法状态；脚本模块只持有代际句柄、不可变身份索引、只读配置及局部计算值。
+- 玩法 Lua 文件和清单路径必须全小写；独立配置表保留源表英文名称大小写。
+  两类文件均检查实际路径大小写与各自目录边界。
 - 序号为规范 uint64 十进制字符串；
   Tick 为非负有符号 64 位整数的精确字符串。导入先完整验证，再替换状态。
 
@@ -33,21 +35,21 @@ verification: ["hunter_assemble_contract", "hunter_script_contract", "tools:hunt
 ## 接口与值语义
 
 入口为 `init(ctx_json)`、`on_event(event_id,payload_json)`、`tick(tick_id,dt_seconds)`、
-`export_state()`、`import_state(snapshot_json)`、`validate_state()`、`shutdown(reason)`。
-除导出返回 JSON 字符串外均返回 `true`；失败抛出脚本错误。
+`export_state()`、`import_state(snapshot_json)`、`validate_state()`、`shutdown(reason)`，
+以及只读 `check_loadout(request_json)`。导出与配装查询返回 JSON 字符串，其余返回 `true`。
 
-初始化上下文为 `{v:4,snapshot_every:3,content:共享配置}`；内容 v2 在会话中只读。
-低频事件 2～4 处理登录、开局及暂停；动作直接由 C++ input 接口处理，字段以 SRV-009 为准。
+初始化上下文为 `{v:7,snapshot_every:3}`；内容 v4 从组装进脚本的独立 Lua 表读取。
+低频事件 2～5 处理登录、开局、暂停及动作；高频输入由 C++ input 接口锁存。
 每 `snapshot_every` Tick 输出权威快照，开局和终态立即补充快照。
 内部导出状态还包括动作锁存、冷却、AI、请求去重与分配器；导入先完整验证再替换。
-内部状态 v4 独立描述实体组件、ID 字典和遍历索引，不引用网络字段作为内部 schema。
+内部状态 v7 独立描述实体组件、ID 字典和遍历索引，不引用网络字段作为内部 schema。
 校验实体 ID 唯一性、索引完整性、配置/出生引用、玩家引用、分配高水位及阶段关系。
 导出状态只保存身份和数据；旧状态版本拒绝，无迁移。C++ 负责网络投影，snapshot.lua 只发出请求。
-状态新增至多 64 个 Item 实例及独立 ID 高水位；不包含物品玩法或配置加载。
-Hunter 契约、上下文与内部状态为 v4；网络输出及协议保持 v3，内容 v2，清单 v1。
+状态新增至多 64 个 Item 实例及独立 ID 高水位；玩法与配置解析由 Lua 执行，C++ 保留结构、句柄及原子发布。
+Hunter 契约、上下文与内部状态为 v7；网络输出及协议保持 v5，内容 v4，清单 v1。
 签名 identity 从更新后的契约重新派生，不修改固定 Luax 的兼容版本常量。
 生产加载将四项应用摘要与编译时契约核对，旧 Bundle 与旧 policy 也不能成对绕过。
-宿主提供原生对象方法、`net.event`、`net.snapshot`，以及低频 `net.emit`、`cfg.get`、日志接口。
+宿主提供原生对象方法、`net.event`、`net.snapshot`，以及低频 `net.emit`、`cfg.get`、`cfg.install`、日志接口。
 
 ## 失败、取消与退出
 

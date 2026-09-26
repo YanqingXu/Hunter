@@ -3,7 +3,7 @@
 #include "core/Cfg.h"
 #include "game/World.h"
 #include "script/Script.h"
-#include "ContentSpec.h"
+#include "../fixtures/ScriptCfg.h"
 #include <iostream>
 #include <stdexcept>
 
@@ -38,7 +38,7 @@ T take(std::expected<T, Str> result)
 // 保留正式配置字段，只冻结远处怪物以隔离需要精确计时的场景。
 Json content()
 {
-    auto value = Json::parse(hunter::content::json_text);
+    auto value = hunter::test_content();
 
     for (auto& monster : value["monsters"])
     {
@@ -61,11 +61,12 @@ struct Game
     Game(const hunter::Cfg& cfg, Json data = content(),
         const hunter::wire::Loadout& loadout = {})
     {
-        take(script.open(cfg, Json{{"v", 6}, {"snapshot_every", 3},
-            {"content", std::move(data)}}.dump()));
-        take(script.event(2, R"({"v":6,"req_id":"login","player_id":"1"})"));
-        take(script.change([&](hunter::World& world) { world.prepare_loadout(loadout); }));
-        take(script.event(3, R"({"v":6,"req_id":"start","after_match_id":"0",
+        take(script.open(hunter::test_cfg(cfg, data),
+            Json{{"v", 7}, {"snapshot_every", 3}}.dump()));
+        take(script.event(2, R"({"v":7,"req_id":"login","player_id":"1"})"));
+        const auto accepted = take(script.check_loadout(loadout));
+        take(script.change([&](hunter::World& world) { world.prepare_loadout(accepted); }));
+        take(script.event(3, R"({"v":7,"req_id":"start","after_match_id":"0",
             "match_id":"1","world_id":"1"})"));
     }
 
@@ -120,7 +121,7 @@ struct Game
     // 调用与 Runtime 相同的动作桥接并返回明确业务拒绝。
     Str action(const Str& kind, i32 slot = 0, u32 target = 0)
     {
-        const auto result = take(script.event(5, Json{{"v", 6}, {"req_id", "action"},
+        const auto result = take(script.event(5, Json{{"v", 7}, {"req_id", "action"},
             {"kind", kind}, {"slot", slot}, {"target_id", std::to_string(target)},
             {"action_seq", std::to_string(++action_seq)}}.dump()));
 
@@ -145,7 +146,7 @@ struct Game
     {
         const auto saved = take(script.export_state());
         take(script.import_state(saved));
-        check(take(script.export_state()) == saved, "v6 state roundtrip");
+        check(take(script.export_state()) == saved, "v7 state roundtrip");
     }
 };
 
@@ -201,8 +202,10 @@ void ladders(const hunter::Cfg& cfg)
         "exit does not replay old fire or jump");
     game.roundtrip();
     auto data = content();
-    data["map"]["solids"] = Json::array({{{"id", "904"}, {"x", 6100}, {"y", 2000},
-        {"w", 600}, {"h", 300}}});
+    data["map"]["solids"] = Json::array({
+        {{"id", "904"}, {"x", 6100}, {"y", 2500}, {"w", 600}, {"h", 300}},
+        {{"id", "905"}, {"x", 6100}, {"y", 1900}, {"w", 600}, {"h", 100}}});
+    data["scenes"][0]["h"] = 2000;
     Game blocked(cfg, data);
     blocked.setup([](hunter::Player& player, hunter::World&) { player.x = 4700; });
     check(blocked.action("interact", 0, 1).empty(), "blocked top fixture enters ladder");
@@ -210,14 +213,14 @@ void ladders(const hunter::Cfg& cfg)
     check(blocked.player().ladder_id == 1 && blocked.player().y == 0,
         "stationary endpoint does not trigger automatic exit");
     blocked.input(0, false, false, false, false, false, 1000, 0, 1);
-    blocked.steps(15);
-    check(blocked.player().ladder_id == 1 && blocked.player().y == 1500,
+    blocked.steps(20);
+    check(blocked.player().ladder_id == 1 && blocked.player().y == 2000,
         "blocked standing space at top keeps player on ladder");
     check(blocked.action("interact", 0, 1) == "action_locked",
         "blocked endpoint cannot bypass geometry through interaction");
     blocked.roundtrip();
     blocked.input(0, false, false, false, false, false, 1000, 0, -1);
-    blocked.steps(15);
+    blocked.steps(20);
     check(blocked.player().ladder_id == 0 && blocked.player().y == 0
         && blocked.player().grounded, "downward movement exits at clear bottom");
     blocked.roundtrip();
@@ -229,7 +232,7 @@ void pause_aim(const hunter::Cfg& cfg)
     Game game(cfg);
     game.input(-1, false, true, false, false, false, -1000, -1000);
     game.steps();
-    take(game.script.event(4, R"({"v":6,"paused":true})"));
+    take(game.script.event(4, R"({"v":7,"paused":true})"));
     check(game.player().prone && game.player().facing == -1
         && game.player().aim_x <= 0 && game.player().aim_y >= 0,
         "pause keeps prone aim in the local forward upper quadrant");
@@ -256,7 +259,14 @@ void barriers(const hunter::Cfg& cfg)
         "nonpenetrable cover blocks all downstream targets");
     data["scenes"][0]["x"] = 3700;
     data["scenes"][0]["penetrable"] = true;
+    data["map"]["enemies"][0]["x"] = 4300;
+    data["map"]["enemies"][0]["patrol_min"] = 4299;
+    data["map"]["enemies"][0]["patrol_max"] = 4301;
     Game same_plane(cfg, data);
+    same_plane.setup([](hunter::Player&, hunter::World& world)
+    {
+        world.actors[1]->unit().x = 3999;
+    });
     same_plane.input(0, false, false, false, true);
     same_plane.steps();
     check(same_plane.script.world().actors[1]->unit().hp == 924,

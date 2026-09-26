@@ -24,7 +24,8 @@ C++ World 独占全部可变状态，Lua 只持句柄与局部计算。逻辑线
 
 ## 接口与版本
 
-协议v5、内容v4、Host及状态v6；旧协议与内部状态拒绝，旧SQLite档案继续可读。
+协议v5、内容v4、Host及状态v7；旧协议与内部状态拒绝，旧SQLite档案继续可读。
+SRV-012 的 v6 实施记录保留；当前配置来源与职责边界由 SRV-013 升级。
 StartReq增加Loadout，缺省为角色1、血段[50,50,25,25]、枪[1,3]、默认弹[1,3]、
 工具[30001,30002]、消费品[30004,30006]。先完整校验，再分配持久MatchId。
 同请求改变配装返回冲突。槽位一基：武器1至2，常规工具1至4、消费品5至8。
@@ -32,7 +33,7 @@ FrameInput增加move_y、run、prone，保持已有单调输入序号和身份�
 ActionReq增加action_seq、slot、target_id及切枪／选工具／近战／使用／交互。
 动作序号连接内单调，缓存最多128条响应；淘汰不降低处理水位，旧序号不重新执行。
 暂停作废已排队动作并通知动作水位；恢复不重放。
-低频脚本事件5为v6、req_id、kind、slot、target_id、action_seq；身份仍用十进制字符串。
+低频脚本事件5为v7、req_id、kind、slot、target_id、action_seq；身份仍用十进制字符串。
 成功输出action包含v5、req_id、world_id、match_id、action_seq，业务拒绝输出error。
 
 ## 玩法规则

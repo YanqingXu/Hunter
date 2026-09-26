@@ -122,7 +122,7 @@ i64 Player::get_stamina() const
 void Player::set_stamina(i64 value)
 {
     access->write();
-    range(value, 0, 100);
+    range(value, 0, 1000000);
     stamina = static_cast<i32>(value);
 }
 
@@ -437,22 +437,7 @@ void Player::change_tool(i64 slot, const Str& tool_cfg_id, i64 count)
         return;
     }
 
-    require(world && world->content.at("tools").contains(tool_cfg_id), "invalid_tool_cfg");
-    const auto& source = world->content.at("tools").at(tool_cfg_id);
-    const Str tool_kind = source.at("kind");
-    require(tool_kind == "knife" || tool_kind == "medkit"
-        || tool_kind == "needle" || tool_kind == "bomb",
-        "invalid_tool_kind");
-    const bool consumable = tool_kind == "needle" || tool_kind == "bomb";
-    require(consumable == (slot > 4), "invalid_tool_slot");
-    require(count <= source.at("uses").get<i32>() && (!consumable || count > 0),
-        "invalid_tool_count");
-
-    for (usize index = 0; index < tools.size(); ++index)
-    {
-        require(index == static_cast<usize>(slot - 1) || tools[index].cfg_id != cfg,
-            "duplicate_tool");
-    }
+    require(cfg <= 2147483647, "invalid_tool_cfg");
 
     if (tool.cfg_id != cfg)
     {
@@ -468,25 +453,21 @@ void Player::change_tool(i64 slot, const Str& tool_cfg_id, i64 count)
 
     tool.cfg_id = static_cast<u32>(cfg);
     tool.count = static_cast<i32>(count);
-    tool.maximum = source.at("uses");
-    tool.consumable = consumable;
-    tool.unlimited = tool_kind == "knife";
-    tool.projectile = tool_kind == "bomb";
 }
 
-bool Player::start_use(i64 slot, i64 ticks)
+bool Player::start_use(i64 slot, i64 ticks, bool projectile)
 {
     access->write();
     range(slot, 1, 8);
     range(ticks, 1, 36000);
     const auto& tool = tools[static_cast<usize>(slot - 1)];
 
-    if (use_slot != 0 || tool.cfg_id == 0 || (!tool.unlimited && tool.count <= 0))
+    if (use_slot != 0 || tool.cfg_id == 0 || tool.count <= 0)
     {
         return false;
     }
 
-    if (tool.projectile)
+    if (projectile)
     {
         require(world != nullptr, "missing_world");
         reserved_projectile = world->reserve_projectile();
@@ -520,7 +501,7 @@ void Player::cancel_use()
     use_instance = 0;
 }
 
-bool Player::finish_use()
+bool Player::finish_use(i64 count, bool clear)
 {
     access->write();
 
@@ -531,18 +512,17 @@ bool Player::finish_use()
 
     auto& tool = tools[static_cast<usize>(use_slot - 1)];
 
-    if (tool.instance != use_instance || tool.cfg_id == 0 || (!tool.unlimited && tool.count <= 0))
+    if (tool.instance != use_instance || tool.cfg_id == 0 || tool.count <= 0)
     {
         cancel_use();
         return false;
     }
 
-    if (!tool.unlimited)
-    {
-        --tool.count;
-    }
+    range(count, 0, tool.count);
+    require(!clear || count == 0, "invalid_tool_clear");
+    tool.count = static_cast<i32>(count);
 
-    if (tool.consumable && tool.count == 0)
+    if (clear)
     {
         tool = {};
         selected_slot = 0;

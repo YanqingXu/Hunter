@@ -10,9 +10,9 @@ verification: ["hunter_script_contract", "dev:hunter_async_contract"]
 
 ## 目标与非目标
 
-真实 Luax Runtime 执行七个同步入口；提供只读 `net/cfg/diagnostics` namespace、
+真实 Luax Runtime 执行七个生命周期入口和只读配装校验入口；提供只读 `net/cfg/diagnostics` namespace、
 受预算约束的调用和调用级输出事务。独立 Asio 异步适配验证 continuation 与 detached completion。
-桥接不决定玩法，不实现存档、热更新或跨代次活动 continuation 迁移；玩法由 SRV-009 定义。
+桥接不决定玩法，不实现存档、热更新或跨代次活动 continuation 迁移；玩法由 SRV-009、SRV-011、SRV-012 与 SRV-013 定义。
 
 ## 不变量、线程与所有权
 
@@ -27,12 +27,15 @@ Script 不可复制；所有入口拒绝错误线程与同步重入。普通 tab
 `Script::open/event/input/tick` 返回持有原生 Protobuf 消息的 ScriptOut 数组；export_state 返回 JSON 字符串。
 input 在 C++ 处理，Lua on_event 仅处理低频控制；stats 在入口边界提供内存和 GC 指标。
 脚本 init/on_event/tick/import_state/validate_state/shutdown 返回 true，export_state 返回 string。
-Host `net.emit(kind,payload)` 接受契约列明的 v3 登录、开局、确认、快照、事件和错误 JSON；
+Host `net.emit(kind,payload)` 接受契约列明的 v5 登录、开局、确认、快照、事件和错误 JSON；
 ID、seq/tick_id 为十进制字符串，
 字段集合、数值范围以 `lua/contract.json` 为权威；构建时生成共享 schema 常量，Script 和
 Protocol 使用同一生成的原生字段校验器，拒绝 Ack 零序号、非法实体、有符号范围外 Tick 和多余字段。
 实体投影必须携带 cfg_id 十进制字符串，范围为 1～2147483647，转换为 Protobuf uint32。
-`cfg.get()` 返回初始化上下文的副本；`diagnostics.log()` 缓冲有限诊断。
+`cfg.get()` 返回 v7 初始化上下文（仅版本与快照频率）的副本；`diagnostics.log()` 缓冲有限诊断。
+`cfg.install(content_json,bounds_json)` 仅在 init 内成功一次，规范化内容只用于计算摘要后释放，
+原生保存有限结构投影。`check_loadout` 在禁止写状态和输出的能力下调用 Lua，业务拒绝返回
+错误码，成功返回规范配装；Runtime 在其成功之后才申请局号。
 拥有线程在入口返回后通过 `take_logs()` 移交日志；宿主再通过有界队列交给输出线程。
 事件类型 event_id 与 Tick ID 使用 Luax integer，超出 i64 范围时明确拒绝。
 输入序号在高频路径使用原生 uint64；JSON 状态往返仍使用十进制字符串。

@@ -2,7 +2,7 @@
 #include "common/Types.h"
 #include "game/World.h"
 #include "script/Schema.h"
-#include "ContentSpec.h"
+#include "../fixtures/NativeWorld.h"
 #include <iostream>
 #include <limits>
 #include <stdexcept>
@@ -39,13 +39,14 @@ void rejects(F&& operation, const Str& detail)
 }
 
 // 建立独立的已开局世界，保留怪物创建给各边界用例。
-void begin(hunter::World& world, const Json& cfg)
+void begin(hunter::World& world)
 {
-    world.configure(cfg);
+    hunter::test::configure(world);
     world.access.writable = true;
     world.login("1");
+    world.prepare_loadout(hunter::test::loadout());
     world.begin("monster_contract", "0", "1", "1");
-    check(world.spawn("player", "") == "1", "monster test player");
+    check(hunter::test::spawn(world, "player") == "1", "monster test player");
 }
 
 // 验证各层借用同一权威状态与门禁，运动提交保持原子性和网络可见性。
@@ -123,11 +124,11 @@ void check_views(hunter::World& world)
 void inherited_views()
 {
     hunter::World world;
-    begin(world, Json::parse(hunter::content::json_text));
+    begin(world);
 
     for (const auto spawn_id : {"2", "3"})
     {
-        const auto id = world.spawn("monster", spawn_id);
+        const auto id = hunter::test::spawn(world, "monster", spawn_id);
         const auto slot = world.slot(hunter::read_id(id));
         auto& monster = std::get<hunter::Monster>(world.actors[slot]->value);
         monster.set_state("patrol");
@@ -141,97 +142,86 @@ void inherited_views()
     check_views(world);
 }
 
-// 验证非法出生配置在创建与导入时都被拒绝，并保留对象、身份与代次。
-void reject_spawn_cfg(const Json& cfg, const Str& saved)
-{
-    hunter::World world;
-    begin(world, cfg);
-    const auto before = world.document();
-    const auto revision = world.revision;
-    const auto serial = world.serial;
-    rejects([&] { world.spawn("monster", "2"); }, "malformed spawn cfg rejected");
-    check(world.document() == before && world.revision == revision && world.serial == serial,
-        "failed spawn preserves world and allocators");
-    auto candidate = Json::parse(saved);
-    candidate["content_key"] = cfg.dump();
-    rejects([&] { world.load(candidate.dump()); }, "malformed spawn cfg import rejected");
-    check(world.document() == before && world.revision == revision && world.serial == serial,
-        "failed spawn cfg import preserves world and handles");
-}
-
-// 覆盖出生引用、严格整数、完整体型及巡逻扫掠区的几何边界。
+// 验证宿主初始化参数的结构和数值范围，失败不能消费身份或代次。
 void spawn_bounds()
 {
-    const auto cfg = Json::parse(hunter::content::json_text);
     hunter::World world;
-    begin(world, cfg);
+    begin(world);
     const auto before = world.document();
     const auto revision = world.revision;
     const auto serial = world.serial;
-
-    for (const auto id : {"", "0", "02", "-2", "+2", "2.0", "2147483648",
-        "18446744073709551616"})
-    {
-        rejects([&] { world.spawn("monster", id); }, "invalid spawn identity");
-        check(world.document() == before && world.revision == revision && world.serial == serial,
-            "invalid spawn identity preserves world and allocators");
-    }
-
-    check(world.spawn("monster", "2147483647") == ":invalid_spawn",
-        "missing canonical spawn is an expected rejection");
-    check(world.document() == before && world.revision == revision && world.serial == serial,
-        "missing spawn preserves world and allocators");
-    check(world.spawn("monster", "2") == "2", "failed spawn does not consume identity");
-    check(world.spawn("monster", "3") == "3", "second spawn identity");
-    const auto saved = world.save();
 
     for (const auto& patch : Vec<Json>{
         {{"spawn_id", "02"}}, {{"spawn_id", "0"}}, {{"spawn_id", 2}},
         {{"spawn_id", "2147483648"}}, {{"x", 12000.5}}, {{"y", false}},
-        {{"patrol_min", 11000.5}}, {{"patrol_max", true}},
-        {{"patrol_min", 12000}, {"patrol_max", 12000}},
-        {{"patrol_min", 13000}, {"patrol_max", 14000}},
-        {{"patrol_min", 0}}, {{"patrol_max", 24000}},
-        {{"patrol_min", 14000}, {"patrol_max", 11000}},
-        {{"patrol_max", 16000}}, {{"y", 1}}, {{"y", 10000}},
-        {{"x", 15000}, {"patrol_min", 14500}, {"patrol_max", 16000}},
-        {{"x", 6000}, {"y", 1500}, {"patrol_min", 5300}, {"patrol_max", 7000}},
-        {{"x", 4900}, {"y", 1500}, {"patrol_min", 4900}, {"patrol_max", 6000}}})
+        {{"x", 0}}, {{"x", 24000}}, {{"y", 10000}}, {{"hp", 0}},
+        {{"width", 599}}, {{"height", 0}}, {{"grounded", 1}}, {{"extra", 1}}})
     {
-        auto bad = cfg;
-        bad["map"]["enemies"][0].update(patch);
-        reject_spawn_cfg(bad, saved);
+        auto spec = hunter::test::monster_spec("2");
+        spec.update(patch);
+        rejects([&] { world.spawn("monster", spec.dump()); }, "invalid spawn spec rejected");
+        check(world.document() == before && world.revision == revision && world.serial == serial,
+            "invalid spawn preserves world and allocators");
     }
 
-    auto duplicate = cfg;
-    duplicate["map"]["enemies"].push_back(duplicate["map"]["enemies"][0]);
-    reject_spawn_cfg(duplicate, saved);
-    auto missing = cfg;
-    missing["map"]["enemies"][0].erase("patrol_min");
-    reject_spawn_cfg(missing, saved);
-
-    auto platform = cfg;
-    platform["map"]["enemies"][0].update({{"spawn_id", "2147483647"},
-        {"x", 6000}, {"y", 1500}, {"patrol_min", 5300}, {"patrol_max", 6900}});
-    hunter::World above;
-    begin(above, platform);
-    check(above.spawn("monster", "2147483647") == "2", "maximum spawn identity");
-    const auto& monster = std::get<hunter::Monster>(above.actors[above.slot(2)]->value);
-    check(monster.grounded && monster.y == 1500,
-        "complete platform support allows spawn");
-    const auto supported = above.save();
-    above.load(supported);
-    check(above.save() == supported, "supported spawn roundtrip");
+    check(hunter::test::spawn(world, "monster", "2") == "2",
+        "failed spawn does not consume identity");
+    auto spec = hunter::test::monster_spec("2147483647");
+    spec["x"] = 6000;
+    spec["y"] = 1500;
+    check(world.spawn("monster", spec.dump()) == "3", "maximum spawn identity");
+    const auto saved = world.save();
+    world.load(saved);
+    check(world.save() == saved, "structural spawn roundtrip");
 }
 
-// 验证原生怪物状态写入、配置冷却上限、死亡收尾与单位不可复活边界。
+// 持久身份沿用生命周期的有符号范围，失败候选保留活动对象和句柄代次。
+void persistent_identity_bounds()
+{
+    hunter::World world;
+    begin(world);
+    world.create_item("42", 1);
+    const auto saved = world.save();
+    const auto revision = world.revision;
+    const auto serial = world.serial;
+    const auto actor_slot = world.slot(1);
+    const auto item_slot = world.item_slot(1);
+    const auto* actor = &*world.actors[actor_slot];
+    const auto* item = &*world.items[item_slot];
+    const auto actor_generation = actor->generation;
+    const auto item_generation = item->generation;
+
+    for (const Str field : {"match_id", "player_id"})
+    {
+        auto candidate = Json::parse(saved);
+        candidate[field] = "9223372036854775808";
+
+        if (field == "match_id")
+        {
+            candidate["last_start"]["match_id"] = candidate[field];
+        }
+        else
+        {
+            candidate["entities"]["1"]["player_id"] = candidate[field];
+        }
+
+        rejects([&] { world.load(candidate.dump()); }, "persistent identity overflow rejected");
+        check(world.save() == saved && world.revision == revision && world.serial == serial,
+            "identity rejection preserves world and allocators");
+        check(&*world.actors[actor_slot] == actor && &*world.items[item_slot] == item
+            && actor->generation == actor_generation && item->generation == item_generation,
+            "identity rejection preserves object handles");
+    }
+}
+
+// 验证原生怪物状态写入、通用冷却上限、死亡收尾与单位不可复活边界。
 void monster_bounds()
 {
     hunter::World world;
-    begin(world, Json::parse(hunter::content::json_text));
-    check(world.spawn("monster", "2") == "2", "monster boundary spawn");
+    begin(world);
+    check(hunter::test::spawn(world, "monster", "2") == "2", "monster boundary spawn");
     auto& monster = std::get<hunter::Monster>(world.actors[world.slot(2)]->value);
-    const i64 cooldown = world.content["monsters"]["1"]["attack_ticks"];
+    const i64 cooldown = 3600;
     check(monster.get_state() == "spawn" && monster.get_attack_ticks() == 0,
         "native monster begins in spawn");
     monster.set_state("spawn");
@@ -289,9 +279,9 @@ void monster_bounds()
 void monster_states()
 {
     hunter::World world;
-    begin(world, Json::parse(hunter::content::json_text));
-    world.spawn("monster", "2");
-    world.spawn("monster", "3");
+    begin(world);
+    hunter::test::spawn(world, "monster", "2");
+    hunter::test::spawn(world, "monster", "3");
     const auto saved = world.save();
     world.load(saved);
     check(world.save() == saved, "spawn state roundtrip");
@@ -309,7 +299,7 @@ void monster_states()
         }
         else
         {
-            monster["ai"]["attack_ticks"] = world.content["monsters"]["1"]["attack_ticks"];
+            monster["ai"]["attack_ticks"] = 60;
         }
 
         world.load(candidate.dump());
@@ -322,14 +312,14 @@ void monster_states()
 
     for (const auto& patch : Vec<Json>{
         {{"ai", {{"state", "unknown"}}}}, {{"ai", {{"attack_ticks", 1}}}},
-        {{"pose", {{"x", 12001}}}}, {{"motion", {{"vx", 1}}}},
+        {{"motion", {{"vx", 1}}}},
         {{"health", {{"hp", 59}}}}, {{"motion", {{"grounded", false}}}},
         {{"spawn_id", "02"}}, {{"spawn_id", "2147483648"}},
-        {{"spawn_id", "99"}}, {{"ai", {{"state", "dead"}}}},
+        {{"ai", {{"state", "dead"}}}},
         {{"ai", {{"state", "patrol"}}}, {"health", {{"hp", 0}, {"alive", false}}}},
         {{"ai", {{"state", "dead"}, {"attack_ticks", 1}}},
             {"health", {{"hp", 0}, {"alive", false}}}},
-        {{"ai", {{"state", "attack"}, {"attack_ticks", 61}}}}})
+        {{"ai", {{"state", "attack"}, {"attack_ticks", 3601}}}}})
     {
         auto candidate = Json::parse(saved);
         candidate["entities"]["2"].merge_patch(patch);
@@ -340,47 +330,29 @@ void monster_states()
 }
 }
 
-// 使用正式配置运行原生对象及 Item 的完整状态往返。
+// 使用隔离结构夹具运行原生对象及 Item 的完整状态往返。
 int main()
 {
     try
     {
         inherited_views();
         spawn_bounds();
+        persistent_identity_bounds();
         monster_bounds();
         monster_states();
         hunter::World world;
-        world.configure(nlohmann::json::parse(hunter::content::json_text));
+        hunter::test::configure(world);
         rejects([&] { world.login("1"); }, "readonly gate");
         world.access.writable = true;
         world.login("1");
+        world.prepare_loadout(hunter::test::loadout());
         world.begin("start", "0", "1", "1");
-        check(world.spawn("player", "") == "1", "player identity");
+        check(hunter::test::spawn(world, "player") == "1", "player identity");
 
-        for (const auto& spawn : world.content["map"]["enemies"])
+        for (const auto spawn_id : {"2", "3"})
         {
-            check(world.spawn("monster", spawn["spawn_id"]).front() != ':', "monster identity");
+            hunter::test::spawn(world, "monster", spawn_id);
         }
-
-        check(world.valid(), "initial native world");
-        auto& player = std::get<hunter::Player>(world.actors[world.slot(1)]->value);
-        const auto original_hp = player.hp;
-        player.set_hp(original_hp - 1);
-        check(world.snapshot(world.player_id).snapshot().entities(0).hp() == original_hp - 1,
-            "native mutation immediately visible in snapshot");
-        hunter::wire::FrameInput input;
-        input.set_seq(1);
-        input.set_match_id(1);
-        input.set_aim_x(1000);
-        input.set_jump(true);
-        check(world.input(input, 1).has_ack(), "native input ack");
-        input.set_seq(2);
-        input.set_jump(false);
-        input.set_fire(true);
-        check(world.input(input, 1).ack().seq() == 2 && player.jump && player.fire_once,
-            "input edges coalesce");
-        check(world.input(input, 1).error().code() == "stale_input", "native deduplication");
-        world.clear_input();
 
         const auto id = world.create_item("42", 2);
         auto& item = world.items[world.item_slot(hunter::read_id(id))]->value;

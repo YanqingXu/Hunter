@@ -60,6 +60,50 @@ class AssembleContract(unittest.TestCase):
         self.assertIn('function on_event(event_id, payload_json)', source)
         self.assertTrue(source.endswith("\nreturn true\n"))
 
+    # 数据表保留源表大小写，组装时读取返回值而不把数据表当成工厂调用。
+    def test_explicit_data_modules(self):
+        path = self.manifest([{"name": "main", "file": "main.lua", "kind": "factory",
+                               "deps": ["cfg.tables"]}])
+        cfg = self.root / "generated"
+        cfg.mkdir()
+        (cfg / "Player.lua").write_text('return {[1] = {Name = "角色"}}\n', encoding="utf-8")
+        (cfg / "Tables.lua").write_text(
+            'return function(deps) return {Player = deps["cfg.player"]} end\n', encoding="utf-8")
+        data = {"version": 1, "entry": "cfg.tables", "modules": [
+            {"name": "cfg.player", "file": "Player.lua", "kind": "data", "deps": []},
+            {"name": "cfg.tables", "file": "Tables.lua", "kind": "factory",
+             "deps": ["cfg.player"]}]}
+        (cfg / "Manifest.json").write_text(json.dumps(data), encoding="utf-8")
+        # 配置目录在正式脚本树外；生产 Lua 的小写路径约定不适用于导表文件。
+        with tempfile.TemporaryDirectory(prefix="hunter-data-modules-") as folder:
+            outside = Path(folder)
+            for source in cfg.iterdir():
+                (outside / source.name).write_bytes(source.read_bytes())
+            for source in cfg.iterdir():
+                source.unlink()
+            cfg.rmdir()
+            source, mapping = assemble.assemble(path, outside)
+            self.assertIn('modules["cfg.player"] = factory\n', source)
+            self.assertNotIn('modules["cfg.player"] = factory(deps)', source)
+            self.assertIn("cfg/Player.lua", [item["file"] for item in mapping["sources"]])
+            data["modules"][0]["deps"] = ["cfg.tables"]
+            (outside / "Manifest.json").write_text(json.dumps(data), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "data module cannot"):
+                assemble.assemble(path, outside)
+
+    # 配置表不能伪造玩法名字或使用目录逃逸绕过显式清单。
+    def test_data_module_namespace_and_path(self):
+        with tempfile.TemporaryDirectory(prefix="hunter-data-path-") as folder:
+            cfg = Path(folder)
+            (cfg / "Player.lua").write_text("return {}\n", encoding="utf-8")
+            for name, filename in (("main", "Player.lua"), ("cfg.player", "../Player.lua")):
+                doc = {"version": 1, "entry": name, "modules": [
+                    {"name": name, "file": filename, "kind": "data", "deps": []}]}
+                path = cfg / "Manifest.json"
+                path.write_text(json.dumps(doc), encoding="utf-8")
+                with self.subTest(name=name, filename=filename), self.assertRaises(ValueError):
+                    assemble.load_manifest(path, data=True)
+
     # 重名和缺失依赖必须在输出前被拒绝。
     def test_duplicate_and_missing(self):
         for modules in (

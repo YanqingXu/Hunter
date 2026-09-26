@@ -12,16 +12,12 @@ namespace hunter
 
 class World;
 
-// 保存固定工具槽的配置、次数和实例身份，耗尽消费品会释放该槽。
+// 保存固定工具槽的配置身份、次数与实例身份，业务属性只由 Lua 解析。
 struct ToolSlot
 {
     u32 cfg_id = 0;
     i32 count = 0;
-    i32 maximum = 0;
     u64 instance = 0;
-    bool unlimited = false;
-    bool consumable = false;
-    bool projectile = false;
 };
 
 class Player : public Unit
@@ -216,17 +212,17 @@ public:
     // 读取工具实例身份，替换槽位时旧实例失效。
     Str get_tool_instance(i64 slot) const;
 
-    // 完整验证配置后原子修改槽位，同一工具数量变化保留实例身份。
+    // 检查通用范围后修改槽位，同一配置的数量变化保留实例身份。
     void change_tool(i64 slot, const Str& tool_cfg_id, i64 count);
 
     // 绑定工具实例并为投掷物预留容量，失败不启动使用。
-    bool start_use(i64 slot, i64 ticks);
+    bool start_use(i64 slot, i64 ticks, bool projectile);
 
     // 取消使用并释放未消费的投掷物预留。
     void cancel_use();
 
-    // 使用完成时原子扣次数，拒绝已经替换的槽位实例。
-    bool finish_use();
+    // 按 Lua 指定的最终次数与清槽意图原子完成，拒绝已经替换的实例。
+    bool finish_use(i64 count, bool clear);
 
     // 返回正在使用的实例身份。
     Str get_use_instance() const;

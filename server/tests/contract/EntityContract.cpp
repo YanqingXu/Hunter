@@ -47,10 +47,9 @@ int main(int argc, char** argv)
         std::ifstream stream(argv[2]);
         const auto content = nlohmann::json::parse(stream);
         hunter::Script script;
-        take(script.open(cfg, nlohmann::json{{"v", 6}, {"snapshot_every", 3},
-            {"content", content}}.dump()));
-        take(script.event(2, R"({"v":6,"req_id":"login","player_id":"1"})"));
-        take(script.event(3, R"({"v":6,"req_id":"start","after_match_id":"0",)"
+        take(script.open(cfg, nlohmann::json{{"v", 7}, {"snapshot_every", 3}}.dump()));
+        take(script.event(2, R"({"v":7,"req_id":"login","player_id":"1"})"));
+        take(script.event(3, R"({"v":7,"req_id":"start","after_match_id":"0",)"
             R"("match_id":"1","world_id":"1"})"));
         take(script.event(5, "{}"));
 

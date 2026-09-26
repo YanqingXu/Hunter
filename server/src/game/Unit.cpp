@@ -4,6 +4,16 @@
 
 namespace hunter
 {
+void Unit::set_body(i64 new_width, i64 new_height)
+{
+    access->write();
+    range(new_width, 2, 10000);
+    range(new_height, 2, 10000);
+    require(new_width % 2 == 0 && new_height % 2 == 0, "invalid_body");
+    width = static_cast<i32>(new_width);
+    height = static_cast<i32>(new_height);
+}
+
 std::tuple<i64, i64, i64, i64, bool, i64, bool, bool> Unit::read_motion() const
 {
     return {x, y, vx, vy, grounded, facing, alive, pending_remove};

@@ -8,6 +8,11 @@ verification: ["hunter_object_contract", "hunter_game_contract", "hunter_entity_
 
 # 原生对象与脚本行为
 
+
+当前边界由 [SRV-013](cfg.intent.md) 增补：C++ 不保存完整配置文档，Lua 计算初始化参数、
+物品和配装规则；原生保留权威状态、有限结构投影及原子提交。Host 和内部状态为 v7，
+具体接口与新增 body／撤离展示字段以 `lua/contract.json` 为准。
+
 ## 目标与非目标
 
 Entity、Unit、Player、Monster、Item、Weapon、World 各有同名 C++ 文件及小写 Lua 模块。

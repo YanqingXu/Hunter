@@ -12,6 +12,12 @@ namespace hunter
 class Unit : public Entity
 {
 public:
+    i32 width = 0;
+    i32 height = 0;
+
+    // 写入 Lua 决定的有效体型，只执行整数与结构边界校验。
+    void set_body(i64 new_width, i64 new_height);
+
     i32 vx = 0;
     i32 vy = 0;
     bool grounded = false;

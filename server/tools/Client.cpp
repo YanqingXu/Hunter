@@ -1,7 +1,7 @@
 // 接收 Ready 和有界 JSON 命令，以正式 Protobuf 连接本机服务并持续输出完整协议结果。
 #include "common/Types.h"
 #include "net/Protocol.h"
-#include "ContentSpec.h"
+#include "ContentId.h"
 
 #include <asio.hpp>
 #include <nlohmann/json.hpp>

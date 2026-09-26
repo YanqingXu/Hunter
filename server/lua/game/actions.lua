@@ -5,6 +5,7 @@ return function(deps)
     local combat = deps["game.combat"]
     local projectile = deps["game.projectile"]
     local state = deps["framework.state"]
+    local inventory = deps["game.inventory"]
     local api = {}
 
     -- 切换持有物清空旧射击和装填意图，不把被取消的动作带到新槽位。
@@ -45,7 +46,7 @@ return function(deps)
         local changes = {}
         local present = {}
         local free = 0
-        for slot = 1, 8 do
+        for slot = 1, 4 + content.rules.consumable_slots do
             local cfg_id = Player.get_tool_cfg(input, slot)
             if cfg_id ~= "0" then
                 present[cfg_id] = true
@@ -79,10 +80,12 @@ return function(deps)
             changes[#changes + 1] = {slot = free, cfg_id = cfg_id, count = 1}
         end
         for _, change in ipairs(changes) do
-            Player.change_tool(input, change.slot, change.cfg_id, change.count)
+            change.expected_instance = Player.get_tool_instance(input, change.slot)
         end
-        World.set_scene_used(world, index, true)
-        return nil
+        local error = World.commit(world, json.encode({owner = World.get_player_id(world),
+            items = json.array({}), tools = json.array(changes),
+            scene = {index = index, expected_used = false, used = true}}))
+        return error ~= "" and error or nil
     end
 
     -- 从梯外进入时取消使用并清除所有非移动动作，离梯仅由端点移动触发。
@@ -95,6 +98,7 @@ return function(deps)
         Player.cancel_use(input)
         Player.set_weapon_reload_ticks(input, Player.get_active_weapon(input), 0)
         Player.set_prone(input, false)
+        Unit.set_body(player.motion, cfg.width, cfg.height)
         Player.set_want_prone(input, false)
         Player.set_ladder_id(input, integer.create(tonumber(scene.id)))
         Unit.write_motion(player.motion, next_x, next_y, 0, 0, false,
@@ -169,7 +173,7 @@ return function(deps)
                 or Player.get_aim_x(input) * Entity.get_facing(player.pose) < 0) then
             return "invalid_aim"
         end
-        if not Player.start_use(input, slot, cfg.use_ticks) then
+        if not Player.start_use(input, slot, cfg.use_ticks, cfg.kind == "bomb") then
             return "projectile_capacity"
         end
         Player.set_selected_slot(input, slot)
@@ -181,6 +185,9 @@ return function(deps)
 
     -- 仅完成合法动作，失败返回业务错误而不将玩家输入提升为脚本异常。
     function api.apply(world, content, req)
+        if req.kind == "bag" then
+            return nil
+        end
         if World.get_phase(world) ~= "Playing" or World.get_paused(world) then
             return "invalid_state"
         end
@@ -189,8 +196,13 @@ return function(deps)
             return "invalid_state"
         end
         local input = player.controls
-        if Player.get_ladder_id(input) ~= 0 then
+        if req.kind == "abandon" then
+            World.finish(world, "Abandoned")
+            return nil
+        elseif Player.get_ladder_id(input) ~= 0 then
             return "action_locked"
+        elseif req.kind == "pickup" then
+            return inventory.pickup(world, content, player, req.target_id)
         elseif req.kind == "interact" then
             return interact(world, content, player, req.target_id)
         elseif req.kind == "switch_weapon" then
@@ -256,7 +268,9 @@ return function(deps)
             end
             projectile.launch(world, content, player, cfg_id)
         end
-        assert(Player.finish_use(input), "use instance changed during completion")
+        local remaining = Player.get_tool_count(input, slot) - (cfg.kind == "knife" and 0 or 1)
+        local clear = remaining == 0 and (cfg.kind == "needle" or cfg.kind == "bomb")
+        assert(Player.finish_use(input, remaining, clear), "use instance changed during completion")
         if cfg.heal > 0 then
             local missing = Unit.get_max_hp(player.health) - Unit.get_hp(player.health)
             local amount = math.min(cfg.heal, missing)

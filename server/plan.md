@@ -1,5 +1,10 @@
 # Hunter Server 首版规划
 
+2026-09-26 后续增量：按 [SRV-013](intents/modules/cfg.intent.md) 迁移 Lua 配置与玩法规则，
+进度见 [Lua 配置任务表](V1_LUA_CFG_TASKS.md)。生产表导出独立 Lua 文件，解析与玩法由 Lua
+负责，C++ 保留权威状态及通用边界；Host／内部状态升级 v7。本轮 Windows 实现与验证已完成，
+开发 32/32、Bundle 31/31，实际记录见 [VERIFICATION.md](VERIFICATION.md)。Unity／Android 独立验收。
+
 2026-09-26 增量：按 [SRV-012](intents/usecases/gameplay.intent.md) 实施验证 DEMO 玩法，
 任务状态见 [玩法任务表](V1_GAMEPLAY_TASKS.md)。根源表显式选入内容，增加免费配装、姿态恢复、
 三枪三弹、四工具与场景交互；协议v5／内容v4／Host及内部状态v6，SQLite继续V1。

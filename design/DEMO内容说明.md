@@ -1,8 +1,11 @@
 # 当前 DEMO 生产内容
 
 `demo_sources.json` 逐项指定根工作簿、工作表和主键。`export/gameplay.py` 读取这些记录，
-校验完整依赖后生成唯一的内容 v4 JSON 和摘要。未选草稿不参与运行数据或内容身份，
-生成物不得手工修改。正式地图来源只有 `地图表.xlsx`；`关卡表.xlsx` 是历史阅读副本。
+按表生成保留原英文字段和数字主键的 Lua 文件。`game.cfg` 在 Lua 中转换字段、解析关联并
+校验玩法语义；固定 Luax 验证成功后发布配置、派生的客户端内容 v4 JSON 和摘要。
+服务端由 Lua 加载这些表并执行玩法，C++ 保留权威状态和通用边界，不读取完整 JSON 配置。
+未选草稿不参与运行数据或内容身份，生成物不得手工修改。正式地图来源只有 `地图表.xlsx`；
+`关卡表.xlsx` 是历史阅读副本。
 
 ## 本版选择与身份
 
@@ -47,13 +50,23 @@ Attack 单独维护攻击距离、伤害、冷却和前后摇。Skill、PlayerSk
 
 ```powershell
 python export/gameplay.py --source design/demo_sources.json --check
+python export/gameplay.py --source design/demo_sources.json `
+    --output server/build/generated/content.json --header server/build/generated/ContentId.h `
+    --cfg server/build/generated/cfg
 python server/tests/scripts/test_gameplay_content.py -v
 python server/tests/scripts/test_demo.py -v
 ```
 
-`--check` 不写任何输出；正式生成另传 `--output` 和 `--header`。JSON 中所有配置 ID
-为规范十进制字符串，坐标为整数毫米，速度为毫米/Tick，60 Tick 为一秒。内容键为
+先按 [构建说明](../server/README.md) 构建固定 Luax 工具；也可通过 `--luax` 指定该构建的
+`luax.exe`。`--check` 不写正式输出；正式生成使用 `--output`、`--header` 和 `--cfg`。
+每表输出独立文件，例如 `Player.lua`、`Weapon.lua`，另有显式模块清单和聚合入口。源码模式
+将表与玩法一起组装，发布模式编入同一签名 Bundle。策划双击入口见 [导表说明](../export/README.md)，
+草稿输出单独位于 `server/build/draft-cfg`。
+
+派生 JSON 中所有配置 ID 为规范十进制字符串，坐标为整数毫米，速度为毫米/Tick，60 Tick 为一秒。
+`ContentId.h` 只保存客户端需要的内容身份，不包含完整配置。内容键为
 `gameplay-v4:` 加规范 JSON 字节的 SHA-256。未选源表或记录改变不影响生产内容。
 
 `design/demo/首版.xlsx` 保持冻结，仅供旧回归；`design/combat_demo.json` 的显式测试升级
-使用 `--fixture`，保留旧地图、生命、伤害和弹量并补齐 v4 字段。生产读取不支持旧格式回退。
+使用 `--fixture` 生成隔离的 Lua 配置夹具，由 Lua 保留旧地图、生命、伤害和弹量并补齐 v4 字段。
+生产读取不支持旧格式回退。

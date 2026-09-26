@@ -59,7 +59,11 @@ public:
     World& operator=(const World&) = delete;
 
     Access access;
-    nlohmann::json content;
+    bool configured = false;
+    i32 map_width = 0;
+    i32 map_height = 0;
+    i32 bag_slots = 0;
+    Vec<u32> scene_ids;
     Str content_key;
     u64 tick_id = 0;
     u64 seq = 0;
@@ -87,9 +91,6 @@ public:
     std::array<std::optional<Actor>, 64> actors;
     Vec<u32> order;
     std::array<std::optional<ItemSlot>, 64> items;
-
-    // 在分配局号之前验证完整配装；空配装展开为正式默认配置。
-    wire::Loadout check_loadout(const wire::Loadout& input) const;
 
     // 保存已经验证的候选配装，由下一次开局消费。
     void prepare_loadout(const wire::Loadout& input);
@@ -136,8 +137,8 @@ public:
     // 仅在旧 VM 已关闭后重建空会话，仍拒绝其他线程调用。
     void reset();
 
-    // 从只读上下文配置会话，不生成网络输出。
-    void configure(const nlohmann::json& cfg);
+    // 仅一次登记 Lua 提供的有限结构边界和摘要，不保存完整配置。
+    void configure(const nlohmann::json& bounds, const Str& key);
 
     // 为实体或物品分配永不回绕的本会话句柄代次。
     u32 next_generation();
@@ -172,11 +173,20 @@ public:
     // 使用世界拥有的随机状态生成闭区间一至上限的均匀整数。
     i64 roll(i64 maximum);
 
-    // 校验总容量后按堆叠上限生成地面物品，坐标以毫米表示。
-    void drop(const Str& cfg_id, i64 count, i64 x, i64 y);
+    // 完整校验 Lua 拆分的各堆及总容量后原子生成地面物品。
+    void drop(const Str& cfg_id, const Str& stacks, i64 x, i64 y);
 
-    // 原子转移整份地面物品到操作者背包；失败返回错误码且不改变物品。
-    Str pickup(const Str& owner, const Str& item_id);
+    // 读取低频物品视图，供 Lua 计算拾取和叠堆候选。
+    Str inventory() const;
+
+    // 核对实例、旧值和容量后原子提交物品、工具及场景候选。
+    Str commit(const Str& batch);
+
+    // 返回当前冻结配装的冷路径 JSON。
+    Str loadout() const;
+
+    // 从 Lua 接受规范配装，验证结构后保存为下一局候选。
+    void accept_loadout(const Str& text);
 
     // 记录玩家受到正伤害的 Tick，用于撤离取消裁定。
     void hurt(const Str& actor);
@@ -190,11 +200,14 @@ public:
     // 写入服务端裁定的撤离点、进度及原因。
     void set_extract(i64 id, i64 ticks, Str reason);
 
+    // 写入 Lua 计算的撤离展示数据，不执行解锁规则。
+    void set_extract_view(bool unlocked, i64 remaining);
+
     // 冻结局内动作并进入待保存阶段，成功持久化由 Runtime 确认。
     void finish(Str outcome);
 
-    // 创建合法实体；预期拒绝返回带冒号前缀的错误码且不消费身份。
-    Str spawn(const Str& kind, const Str& spawn_id);
+    // 按 Lua 提供的初值创建实体，结构或容量拒绝不消费身份。
+    Str spawn(const Str& kind, const Str& spec);
 
     // 标记怪物移除，使其立即停止参与玩法。
     bool remove(const Str& id);
@@ -224,13 +237,13 @@ public:
     // 销毁物品并使其旧句柄立即失效。
     bool remove_item(const Str& id);
 
-    // 导出原生状态；导出前完整校验状态关系。
+    // 导出原生状态；导出前校验原生结构关系。
     Str save() const;
 
     // 在独立候选完整校验后替换局内数据，旧对象句柄失效。
     void load(const Str& text);
 
-    // 检查当前原生世界，不修复状态或发送消息。
+    // 检查当前原生结构，不执行配置语义、不修复状态或发送消息。
     bool valid() const;
 
     // 构造冷路径序列化数据，不产生第二份可修改的世界。

@@ -8,15 +8,28 @@ Windows 示例使用 `py -3`；CMake 使用其找到的 Python 解释器。源�
 ```powershell
 py -3 server/tools/assemble.py `
     --manifest server/lua/modules.json `
+    --cfg server/build/win-dev/generated/cfg `
     --output server/build/win-dev/generated/game.lua `
     --map server/build/win-dev/generated/game.map.json
 ```
 
-清单使用 `version:1`、入口模块名 `entry` 和 `modules` 数组。每项包含 `name/file/deps`；
-文件返回 `function(deps)` 工厂，依赖用 `deps["framework.state"]` 访问。
+清单使用 `version:1`、入口模块名 `entry` 和 `modules` 数组。正式清单每项显式包含
+`name/file/kind/deps`，`kind:factory` 文件返回 `function(deps)`，依赖用
+`deps["framework.state"]` 访问。`--cfg` 读取导表输出的 `Manifest.json`；`kind:data` 文件
+直接返回只读配置表，不调用工厂，也不执行 `require` 或 `dofile`。配置只能声明 `cfg.*`
+名字空间，不能覆盖玩法模块；数据模块不能声明依赖。生成的 `cfg.tables` 工厂聚合本次
+显式选中的表，`game.cfg` 执行字段转换、单位与引用校验、默认配装和玩法语义校验。
 入口必须传递依赖全部模块。清单顺序不会改变生成源码；相同就绪节点按模块名排序。
 清单不允许重名、依赖环、缺失依赖、目录穿越或链接逃逸。模块名和玩法 Lua 路径必须小写；
-校验包含未列入清单的脚本，并拒绝实际路径或源码依赖引用的大小写不一致。独立导表不受影响。
+校验包含未列入清单的脚本，并拒绝实际路径或源码依赖引用的大小写不一致。导表文件保留
+源表英文名大小写，例如 `Player.lua`，但仍执行真实路径、文件名大小写及目录边界检查。
+
+构建前由 `export/gameplay.py --source design/demo_sources.json --cfg <目录> --luax <工具>`
+导出并用固定 `luax.exe --profile strict` 执行相同的 `game.cfg` 依赖闭包。只有校验成功才
+发布 Lua 数据、客户端派生的 `content.json` 和仅含摘要的 `ContentId.h`。服务端启动不读取
+共享 JSON、不内嵌配置头；源码模式与签名 Bundle 均加载组装进脚本的同一批 Lua 表。
+显式 `--fixture` 导出隔离配置目录，旧灰盒升级和当前夹具校验都在 Lua 中完成；测试配置
+不会通过运行时上下文或隐藏 Host 接口注入。
 
 `game.map.json` 记录每段源码的原文件、生成起止行和摘要。原始行号为
 `生成报错行 - generated_start + source_start`；包装层报错不伪造原文件位置。
@@ -30,7 +43,8 @@ py -3 server/tools/assemble.py `
 
 ## 离线生产制品
 
-先构建开发 preset 的 `hunter_tools`；`luaxc.exe` 和 `luax-bundle.exe` 实际位置可从构建输出确认。
+先构建开发 preset 的 `hunter_tools`；`luax.exe`、`luaxc.exe` 和 `luax-bundle.exe` 实际位置
+可从构建输出确认。`luax_cli` 只用于离线配置验证，发布服务端仍不链接编译器。
 示例变量指向所用构建树内的工具、已验证干净的固定 Luax checkout 以及外部签名材料。
 工具要求公钥和 Ed25519 seed 均为 **32 字节原始二进制文件**，不是十六进制文本。
 签名密钥由发行流程提供；Hunter 工具不默认生成或分发生产密钥。
@@ -65,7 +79,7 @@ Hunter 契约；Runtime 身份包含预算成本模型、标准库和 VM 实现�
 生产程序以 `--bundle <game.luxb> --policy <policy.json>` 启动；不提供 policy、签名不符、
 身份不符或 Bundle 损坏都必须失败。测试公钥只用于测试，不能复制成发行公钥。
 宿主还将 policy 的 Host、capability、state、effect 摘要与编译时契约核对，旧 Bundle 和旧
-policy 即使彼此匹配，也不能与当前 v6 Host 混用。网络为 v5，内容为 v4。
+policy 即使彼此匹配，也不能与当前 v7 Host 混用。内部状态为 v7，网络为 v5，内容为 v4。
 
 ## 发布失败与恢复边界
 

@@ -13,6 +13,12 @@ Entity/Unit/Player/Monster/Item/Weapon/World 各有 C++ 类及同名小写 Lua �
 旧首版 Excel 和灰盒 JSON 仅用于回归。
 设计见 [规划](plan.md)，契约见 [intents](intents/README.md)，实际结果见 [验证记录](VERIFICATION.md)。
 
+当前增量 [SRV-013](intents/modules/cfg.intent.md) 已完成 Windows 实现与验证：源表导出独立 Lua，
+由 Lua 加载配置、解析关联并决定配装、拾取、消耗、掉落和状态语义。C++ 保留权威状态、
+网络、存储及有界原子修改接口，不再持有完整配置文档。本轮任务与实际进度见
+[Lua 配置迁移记录](V1_LUA_CFG_TASKS.md)。开发完整回归 32/32、Bundle 31/31，两种联调包
+解压运行通过；此前验收记录继续保留。
+
 ## 构建与测试
 
 需要 CMake 3.28+、支持 C++23 `std::expected/std::jthread` 的 x64 MSVC、Windows SDK、
@@ -37,10 +43,11 @@ Windows 与未来 Android 构建编译同一源码，不依赖系统 SQLite。
 可用 `FETCHCONTENT_SOURCE_DIR_<大写依赖名>` 指向干净的同版本源码。
 依赖缓存位于构建目录，首次构建需要准备依赖；服务运行不访问远程地址。
 
-生成产物为 `build/win-dev/generated/game.lua`、源映射、C++ Protobuf 与
+生成产物为 `build/win-dev/generated/cfg/` 原字段 Lua 表及清单、聚合的 `generated/game.lua`、
+源映射、客户端共享 `generated/content.json`、仅含身份的 `generated/ContentId.h`、C++ Protobuf 与
 `generated/csharp/Hunter.cs`。`generated/SchemaSpec.h` 从 `lua/contract.json` 生成字段及边界，
 Luax 输出提交与 Protobuf 转换共用同一校验器。C# 产物尚未进入 Unity 联调。`hunter_tools` 可单独构建
-本机 `protoc`、`luaxc`、`luax-bundle`。头文件与实现按模块并置，公共包含根为 `src`。
+本机 `protoc`、配置校验用 `luax`、`luaxc`、`luax-bundle`。头文件与实现按模块并置，公共包含根为 `src`。
 
 ## 桌面控制与协议
 
@@ -71,7 +78,7 @@ Ready 之前必须完成存档打开和玩家加载；省略 `--save` 使用 `%L
 客户端连接 `127.0.0.1:<port>`；每帧为四字节大端正文长度加 Protobuf `hunter.wire.Envelope`。
 第一次消息必须为 Hello，逐项回传 Ready 的版本、实例和令牌，5 秒内完成握手。
 正式定义位于根目录 `protobuf/hunter.proto`，不能另建私有协议来源。
-网络协议为 v5，Host 契约、上下文和内部状态为 v6，内容为 v4，SQLite 仍为 V1。
+网络协议为 v5，Host 契约、上下文和内部状态为 v7，内容为 v4，SQLite 仍为 V1。
 旧协议客户端和旧内部状态拒绝接入／导入，不提供状态迁移；客户端仍按 `kind/cfg_id` 选择配置。
 
 Hello 后发送 LoginReq，再发送 StartReq。首个 StartReq 的 after_match_id 为 0，后续使用
@@ -100,11 +107,26 @@ InputAck 仅确认操作已处理；命中、伤害和死亡以事件与快照�
 ## Excel 配置与协议客户端
 
 正式共享源由 `../design/demo_sources.json` 选择根目录工作簿、工作表和记录；
-清单不保存数值覆盖。构建自动运行 `../export/gameplay.py --source`，生成
-`generated/content.json` 与 `ContentSpec.h`。内容摘要进入 Ready／Hello，客户端应使用同一导出数据。
+清单不保存数值覆盖。构建自动运行 `../export/gameplay.py --source`，每张表生成独立 Lua，
+保留原英文字段和数字主键。`generated/cfg/Manifest.json` 显式声明数据模块；组装器区分
+`data` 与 `factory`，通过依赖注入将数据交给 `game.cfg`，运行时不调用 `require/dofile`。
+Python 只做工作簿读取、字段类型、记录选择和序列化，字段映射、单位、引用、默认配装及
+玩法语义在 Lua 中处理。正式发布前使用固定 Luax strict 执行同一个配置入口；全部通过才
+发布数据表、清单和客户端派生制品，失败保留上一份有效输出。
+
+共享 `generated/content.json` 和 `ContentId.h` 从 Lua 的规范内容派生；后者仅含身份，
+不内嵌数值。服务端由脚本加载配置并注册内容身份及必要原生结构边界，启动不读取共享 JSON。
+内容摘要进入 Ready／Hello，客户端应使用同一派生数据；数值和语义不变时摘要保持一致。
+修改允许的源表数值后重新导出、组装脚本或签名 Bundle 即可改变玩法，不必重编服务端核心；
+协议客户端自身绑定内容身份，交付时应同步生成和构建客户端。
 唯一生产地图来源为地图表；旧怪物和 Boss 使用独立记录及 Attack 招式表，不读取天赋 Skill。
 所选记录缺值、单位或引用非法会阻止构建；未选草稿不进入内容摘要，禁止回退旧工作簿。
 具体导出和单位约定见 [导表说明](../export/README.md)。
+
+配装先由只读 Lua 入口规范化并完整校验，再申请 SQLite 局号。拾取、叠堆、工具扣次与清槽、
+补给和掉落拆分由 Lua 决定，C++ 核对实例、容量及数据范围后原子修改。状态导入先由 Lua
+验证配置语义，再由 C++ 检查独立候选；失败不替换活动世界或改变句柄代际。测试配置通过
+隔离 Lua 夹具组装，不经运行时上下文注入；上下文只含版本和快照频率。
 
 开发构建同时生成 `hunter_client.exe`。分别运行桌面服务和客户端，向客户端第一行输入服务端
 Ready 的完整 JSON；握手成功后逐行发送以下命令。客户端持续输出快照和事件，EOF 关闭连接。
@@ -143,8 +165,9 @@ Boss 前摇、恢复和冷却由 Attack 表驱动，快照提供 ai/attack_ticks
 进入梯子使用 interact；梯上只处理纵向移动，拾取及其他玩法动作均拒绝。
 向梯顶或梯底移动到端点且站立空间足够时自动离梯，空间不足则保持梯上；旧动作不会补执行。
 快照还提供有效体型、体力、血段、独立枪弹、工具次数、使用剩余 Tick、场景和飞行物。
-本轮完整规则及验收条件见 [SRV-012](intents/usecases/gameplay.intent.md)，实施进度见
-[增量记录](V1_GAMEPLAY_TASKS.md)。
+既有完整玩法规则及历史验收见 [SRV-012](intents/usecases/gameplay.intent.md) 和
+[玩法记录](V1_GAMEPLAY_TASKS.md)；当前配置及规则迁移进度见
+[SRV-013 任务表](V1_LUA_CFG_TASKS.md)。
 
 对局阶段 Preparing → Playing → Settling → Finished；玩家状态独立为 Alive/Dead/Extracted/
 Abandoned。撤离只冻结背包奖励，死亡／放弃冻结空奖励；只有数据库 Committed 才到账。
@@ -160,13 +183,15 @@ stale_match、invalid_state、already_picked、out_of_range、bag_full、result_
 ## 生产 Bundle 模式
 
 开发 CTest 的 `hunter_bundle_contract` 会生成公开测试向量签名的测试制品；只用于验证。
-其中 `game.luxb` 是正式游戏模块，`entities.luxb` 包装实体测试入口；后者不用于游戏运行或发行。
+其中 `game.luxb` 是正式游戏模块，`entities.luxb` 包装实体测试入口，`fixture.luxb` 使用独立旧内容
+夹具；后两者不用于游戏运行或发行。
 使用它们验证生产 Runtime：
 
 ```powershell
 $devBuild = (Resolve-Path build/win-dev).Path
 cmake --preset win-bundle -G "Visual Studio 18 2026" -A x64 `
     "-DHUNTER_HOST_PROTOC=$devBuild/_deps/protobuf-build/Release/protoc.exe" `
+    "-DHUNTER_HOST_LUAX=$devBuild/_deps/luax-build/Release/luax.exe" `
     "-DHUNTER_TEST_BUNDLE=$devBuild/bundle-test/game.luxb" `
     "-DHUNTER_TEST_ENTITY_BUNDLE=$devBuild/bundle-test/entities.luxb" `
     "-DHUNTER_TEST_POLICY=$devBuild/bundle-test/policy.json"
@@ -177,7 +202,8 @@ ctest --preset win-bundle
 ```
 
 生产模式编译链接 `Luax::Runtime`，拒绝源码加载；不能用运行参数切换到开发 Runtime。
-未显式指定实体测试 Bundle 时，默认从游戏测试 Bundle 同目录读取 `entities.luxb`。
+未显式指定测试 Bundle 时，默认从游戏测试 Bundle 同目录读取 `entities.luxb` 和 `fixture.luxb`。
+自定义测试目录时同时保留 `host-v3.luxb`／`host-v3.json`，用于验证旧 Host 契约拒绝。
 CTest 检查真实链接参数不含 Compiler、AST、DevelopmentRuntime，并验证错误公钥、身份和篡改拒绝。
 生产运行时仅接受可信交付的公钥 policy 和签名 Bundle。正式离线签名步骤见
 [工具说明](tools/README.md)；私钥不进入可执行文件、运行资源或仓库。
@@ -194,8 +220,14 @@ python tools/package_demo.py --build build/win-bundle `
     --test-signature --output build/delivery/hunter-v1-bundle.zip
 ```
 
-包内 START.txt 给出启动命令；内容、协议、C# 和客户端一起交付。
-测试签名包只用于联调；当前进度见 [V1_GAMEPLAY_TASKS.md](V1_GAMEPLAY_TASKS.md)，
+包内 START.txt 给出启动命令；内容、身份元数据、协议、C# 和客户端一起交付。
+源包附 `cfg/Manifest.json`、19 张原字段 Lua 表和聚合文件，供联调核对；运行仍加载聚合的
+`game.lua`。Bundle 包的配置与玩法共同位于签名制品内，不包含散配置、编译器或私钥。
+打包前反向核对规范内容与身份头、实际 Lua 加载结果、生成源码与映射；Bundle 另验签并
+核对确切源码摘要和当前 Host 契约，任何错配都不替换已有包。可用 `--luax` 和
+`--bundle-tool` 显式指定固定离线工具，它们仅供构建校验，不进入联调包。
+测试签名包只用于联调；当前进度见 [V1_LUA_CFG_TASKS.md](V1_LUA_CFG_TASKS.md)，
+[V1_GAMEPLAY_TASKS.md](V1_GAMEPLAY_TASKS.md) 和
 [V1_TASKS.md](V1_TASKS.md) 保留此前版本的实际完成记录。
 
 ## 独立持久化模块（SRV-007）

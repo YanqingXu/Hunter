@@ -1,5 +1,6 @@
 // 把真实 Luax 的线程、预算、签名授权与输出事务收敛到同步脚本会话。
 #include "common/Types.h"
+#include "common/Digest.h"
 #include "script/Script.h"
 #include "script/Schema.h"
 #include "script/Objects.h"
@@ -180,6 +181,7 @@ struct Script::Impl
     bool busy = false;
     bool alive = false;
     bool allow_output = false;
+    bool installing = false;
 
     // 只读线程标识先于任何 VM 或可变会话字段访问。
     std::expected<void, Str> enter() const
@@ -348,6 +350,26 @@ struct Script::Impl
             {
                 return ctx_json;
             })));
+        cfg_space.add(luax::HostNamespaceEntry::function("install", luax::bind::function(
+            [this](const Str& content_json, const Str& bounds_json) -> luax::Result<bool>
+            {
+                try
+                {
+                    require(installing && world.content_key.empty(), "configuration_locked");
+                    require(json_object(content_json, cfg.max_json_bytes)
+                        && json_object(bounds_json, cfg.max_json_bytes), "invalid_configuration");
+                    const auto content = nlohmann::json::parse(content_json);
+                    require(content.at("v") == 4, "invalid_content_version");
+                    const Str key = "gameplay-v4:" + digest(content.dump());
+                    world.configure(nlohmann::json::parse(bounds_json), key);
+                    return true;
+                }
+                catch (const std::exception& error)
+                {
+                    host_fault = error.what();
+                    return std::unexpected(host_error(host_fault));
+                }
+            })));
         result = isolate.registerHostNamespace(module, std::move(cfg_space));
 
         if (!result)
@@ -478,13 +500,14 @@ std::expected<Vec<ScriptOut>, Str> Script::open(const Cfg& cfg, const Str& ctx_j
     {
         self.world.reset();
         const auto ctx = nlohmann::json::parse(ctx_json);
-        if (ctx.contains("content"))
+        require(!ctx.contains("content"), "legacy_content_context");
+
+        if (ctx.contains("v"))
         {
-            require(ctx.at("v") == 6 && ctx.size() == 3, "invalid_context_version");
+            require(ctx.at("v") == 7 && ctx.size() == 2, "invalid_context_version");
             self.snapshot_every = ctx.at("snapshot_every").get<u64>();
             require(self.snapshot_every >= 1 && self.snapshot_every <= 3600,
                 "invalid_snapshot_frequency");
-            self.world.configure(ctx.at("content"));
         }
     }
     catch (const std::exception& error)
@@ -596,7 +619,24 @@ std::expected<Vec<ScriptOut>, Str> Script::open(const Cfg& cfg, const Str& ctx_j
     }
 
     self.alive = true;
-    return self.commit(self.invoke<bool>("init", true, ctx_json));
+    const auto query = self.isolate.findFunction(self.module, "check_loadout");
+
+    if (query)
+    {
+        self.funcs.emplace("check_loadout", *query);
+    }
+
+    self.installing = nlohmann::json::parse(ctx_json).contains("v");
+    auto opened = self.commit(self.invoke<bool>("init", true, ctx_json));
+    self.installing = false;
+
+    if (opened && nlohmann::json::parse(ctx_json).contains("v")
+        && (self.world.content_key.empty() || !query))
+    {
+        return std::unexpected(self.fail("configuration_missing"));
+    }
+
+    return opened;
 }
 
 std::expected<Vec<ScriptOut>, Str> Script::event(i64 event_id, const Str& payload_json)
@@ -613,6 +653,106 @@ std::expected<Vec<ScriptOut>, Str> Script::event(i64 event_id, const Str& payloa
     }
 
     return impl_->commit(impl_->invoke<bool>("on_event", true, event_id, payload_json));
+}
+
+std::expected<wire::Loadout, Str> Script::check_loadout(const wire::Loadout& input)
+{
+    using Json = nlohmann::json;
+    Json request = {{"player_cfg_id", std::to_string(input.player_cfg_id())},
+        {"health_segments", Json::array()}, {"weapons", Json::array()},
+        {"tools", Json::array()}, {"consumables", Json::array()}};
+
+    for (const auto value : input.health_segments())
+    {
+        request["health_segments"].push_back(value);
+    }
+
+    for (const auto& weapon : input.weapons())
+    {
+        request["weapons"].push_back({{"cfg_id", std::to_string(weapon.cfg_id())},
+            {"ammo_cfg_id", std::to_string(weapon.ammo_cfg_id())}});
+    }
+
+    for (const auto id : input.tools())
+    {
+        request["tools"].push_back(std::to_string(id));
+    }
+
+    for (const auto id : input.consumables())
+    {
+        request["consumables"].push_back(std::to_string(id));
+    }
+
+    auto& self = *impl_;
+    const auto result = self.invoke<Str>("check_loadout", false, request.dump());
+    if (!result)
+    {
+        return std::unexpected(result.error());
+    }
+
+    try
+    {
+        require(json_object(*result, self.cfg.max_json_bytes), "invalid_loadout_result");
+        const auto response = Json::parse(*result);
+        require(response.at("ok").is_boolean(), "invalid_loadout_result");
+
+        if (!response.at("ok").get<bool>())
+        {
+            read_fields(response, {"ok", "error"});
+            const Str error = response.at("error").get<Str>();
+            require(!error.empty() && error.size() <= 128, "invalid_loadout_error");
+            return std::unexpected(error);
+        }
+
+        read_fields(response, {"ok", "loadout"});
+        const auto& accepted = response.at("loadout");
+        read_fields(accepted, {"player_cfg_id", "health_segments", "weapons",
+            "tools", "consumables"});
+        wire::Loadout output;
+        const auto cfg_id = [](const Json& value) -> u32
+        {
+            const auto id = read_id(value.get<Str>());
+            require(id > 0 && id <= 2147483647, "invalid_cfg_id");
+            return static_cast<u32>(id);
+        };
+        output.set_player_cfg_id(cfg_id(accepted.at("player_cfg_id")));
+
+        for (const auto& [key, maximum] : std::array<std::pair<const char*, usize>, 4>{
+            {{"health_segments", 6}, {"weapons", 2}, {"tools", 4}, {"consumables", 4}}})
+        {
+            require(accepted.at(key).is_array() && accepted.at(key).size() <= maximum,
+                "invalid_loadout_capacity");
+        }
+
+        for (const auto& value : accepted.at("health_segments"))
+        {
+            output.add_health_segments(static_cast<u32>(read_integer(value, 1, 2147483647)));
+        }
+
+        for (const auto& value : accepted.at("weapons"))
+        {
+            read_fields(value, {"cfg_id", "ammo_cfg_id"});
+            auto* weapon = output.add_weapons();
+            weapon->set_cfg_id(cfg_id(value.at("cfg_id")));
+            weapon->set_ammo_cfg_id(cfg_id(value.at("ammo_cfg_id")));
+        }
+
+        for (const auto& value : accepted.at("tools"))
+        {
+            output.add_tools(cfg_id(value));
+        }
+
+        for (const auto& value : accepted.at("consumables"))
+        {
+            output.add_consumables(cfg_id(value));
+        }
+
+        return output;
+    }
+    catch (const std::exception& error)
+    {
+        return std::unexpected(self.fail(error.what()));
+    }
 }
 
 std::expected<Vec<ScriptOut>, Str> Script::input(const wire::FrameInput& input, u64 applied_tick)
@@ -661,7 +801,7 @@ std::expected<Vec<ScriptOut>, Str> Script::tick(u64 tick_id, f64 dt_seconds)
     }
 
     auto& self = *impl_;
-    const bool game = !self.world.content.is_null();
+    const bool game = !self.world.content_key.empty();
     const auto previous_phase = self.world.phase;
 
     if (game)

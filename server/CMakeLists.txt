@@ -32,7 +32,7 @@ if(CMAKE_CROSSCOMPILING AND HUNTER_BUILD_TOOLS)
 endif()
 include(cmake/Deps.cmake)
 if(HUNTER_BUILD_TOOLS)
-    add_custom_target(hunter_tools DEPENDS protoc luax_compiler_tool luax_bundle_tool)
+    add_custom_target(hunter_tools DEPENDS protoc luax_cli luax_compiler_tool luax_bundle_tool)
 endif()
 if(HUNTER_TOOLS_ONLY)
     return()
@@ -58,16 +58,30 @@ target_compile_definitions(hunter_storage PRIVATE HUNTER_STORAGE_TESTING=0)
 
 set(HUNTER_GEN "${CMAKE_CURRENT_BINARY_DIR}/generated")
 file(MAKE_DIRECTORY "${HUNTER_GEN}" "${HUNTER_GEN}/csharp")
-add_custom_command(OUTPUT "${HUNTER_GEN}/content.json" "${HUNTER_GEN}/ContentSpec.h"
+if(HUNTER_BUILD_TOOLS)
+    set(HUNTER_LUAX "$<TARGET_FILE:luax_cli>")
+    set(HUNTER_LUAX_DEP luax_cli)
+else()
+    set(HUNTER_HOST_LUAX "" CACHE FILEPATH "固定候选的本机 Luax 配置校验工具")
+    if(NOT EXISTS "${HUNTER_HOST_LUAX}")
+        message(FATAL_ERROR "Set HUNTER_HOST_LUAX to the pinned native Luax CLI")
+    endif()
+    set(HUNTER_LUAX "${HUNTER_HOST_LUAX}")
+    set(HUNTER_LUAX_DEP "${HUNTER_HOST_LUAX}")
+endif()
+file(GLOB HUNTER_CFG_LUA CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/lua/game/cfg*.lua")
+add_custom_command(OUTPUT "${HUNTER_GEN}/content.json" "${HUNTER_GEN}/ContentId.h"
+    "${HUNTER_GEN}/cfg/Manifest.json"
     COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/../export/gameplay.py"
         --source "${CMAKE_CURRENT_SOURCE_DIR}/../design/demo_sources.json"
-        --output "${HUNTER_GEN}/content.json" --header "${HUNTER_GEN}/ContentSpec.h"
+        --output "${HUNTER_GEN}/content.json" --header "${HUNTER_GEN}/ContentId.h"
+        --cfg "${HUNTER_GEN}/cfg" --luax "${HUNTER_LUAX}"
     DEPENDS ../design/demo_sources.json ../design/角色表.xlsx ../design/武器表.xlsx
         ../design/道具表.xlsx ../design/怪物表.xlsx ../design/掉落表.xlsx ../design/地图表.xlsx
-        ../export/gameplay.py ../export/demo.py ../export/export.py
-        ../export/combat.py tools/publish.py VERBATIM)
+        ../export/gameplay.py ../export/export.py tools/publish.py tools/assemble.py
+        ${HUNTER_CFG_LUA} ${HUNTER_LUAX_DEP} VERBATIM)
 add_custom_target(hunter_content ALL DEPENDS
-    "${HUNTER_GEN}/content.json" "${HUNTER_GEN}/ContentSpec.h")
+    "${HUNTER_GEN}/content.json" "${HUNTER_GEN}/ContentId.h" "${HUNTER_GEN}/cfg/Manifest.json")
 set(HUNTER_PROTO "${CMAKE_CURRENT_SOURCE_DIR}/../protobuf/hunter.proto")
 if(HUNTER_BUILD_TOOLS)
     set(HUNTER_PROTOC "$<TARGET_FILE:protoc>")
@@ -100,15 +114,18 @@ file(GLOB_RECURSE HUNTER_LUA CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/lua/
 add_custom_command(OUTPUT "${HUNTER_GEN}/game.lua" "${HUNTER_GEN}/game.map.json"
     COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tools/assemble.py"
         --manifest "${CMAKE_CURRENT_SOURCE_DIR}/lua/modules.json"
+        --cfg "${HUNTER_GEN}/cfg"
         --output "${HUNTER_GEN}/game.lua" --map "${HUNTER_GEN}/game.map.json"
-    DEPENDS ${HUNTER_LUA} lua/modules.json tools/assemble.py tools/publish.py VERBATIM)
+    DEPENDS ${HUNTER_LUA} lua/modules.json tools/assemble.py tools/publish.py
+        "${HUNTER_GEN}/cfg/Manifest.json" VERBATIM)
 add_custom_target(hunter_scripts ALL DEPENDS "${HUNTER_GEN}/game.lua")
+add_dependencies(hunter_scripts hunter_content)
 add_custom_command(OUTPUT "${HUNTER_GEN}/SchemaSpec.h"
     COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tools/gen_schema.py"
         --contract "${CMAKE_CURRENT_SOURCE_DIR}/lua/contract.json"
         --output "${HUNTER_GEN}/SchemaSpec.h"
     DEPENDS lua/contract.json tools/gen_schema.py VERBATIM)
-add_library(hunter_script STATIC src/script/Script.cpp src/script/Async.cpp
+add_library(hunter_script STATIC src/common/Digest.cpp src/script/Script.cpp src/script/Async.cpp
     src/script/Objects.cpp src/game/Value.cpp src/game/Entity.cpp src/game/Unit.cpp
     src/game/Player.cpp src/game/Monster.cpp src/game/Weapon.cpp src/game/Item.cpp
     src/game/World.cpp src/game/Raid.cpp src/game/State.cpp src/game/Snapshot.cpp

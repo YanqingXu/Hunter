@@ -1,9 +1,11 @@
 // 验证真实脚本桥接、输出事务和线程边界。
 #include "common/Types.h"
+#include "common/Digest.h"
+#include "game/World.h"
+#include "ContentId.h"
 #include "core/Cfg.h"
 #include "script/Script.h"
 #include "script/Schema.h"
-#include "ContentSpec.h"
 
 #include <filesystem>
 #include <chrono>
@@ -71,7 +73,7 @@ void failures(hunter::Cfg cfg)
     cfg.source_path = fixture("return true", "net.emit('ack', "
         "'{\"v\":4,\"seq\":\"1\",\"match_id\":\"1\",\"applied_tick\":\"1\"}'); error('failed')");
     hunter::Script txn;
-    take(txn.open(cfg, "{\"v\":1}"));
+    take(txn.open(cfg, "{\"probe\":1}"));
     check(!txn.event(1, "{}"), "failed call must discard earlier net.emit");
     check(!txn.tick(1, 0.01), "failed session must stop");
     check(txn.shutdown("test").has_value(), "failed entry still permits native cleanup");
@@ -108,7 +110,7 @@ void failures(hunter::Cfg cfg)
     cfg.max_outputs = 256;
     cfg.source_path = fixture("assert(cfg.get() == ctx); return true", "return true");
     hunter::Script ctx_probe;
-    take(ctx_probe.open(cfg, "{\"v\":1}"));
+    take(ctx_probe.open(cfg, "{\"probe\":1}"));
     check(!ctx_probe.event(1, Str(cfg.max_json_bytes + 1, 'x')), "JSON boundary size limit");
 
     cfg.source_path = fixture("return true", "net.emit('ack', "
@@ -259,7 +261,7 @@ void bundle_failures(hunter::Cfg cfg)
     }
 
     hunter::Script wrong_key;
-    check(!wrong_key.open(cfg, "{\"v\":1,\"snapshot_every\":3}"),
+    check(!wrong_key.open(cfg, "{\"v\":7,\"snapshot_every\":3}"),
         "production loader rejects wrong public key");
 
     auto identity = trusted;
@@ -270,7 +272,7 @@ void bundle_failures(hunter::Cfg cfg)
     }
 
     hunter::Script wrong_identity;
-    check(!wrong_identity.open(cfg, "{\"v\":1,\"snapshot_every\":3}"),
+    check(!wrong_identity.open(cfg, "{\"v\":7,\"snapshot_every\":3}"),
         "production loader rejects incompatible runtime identity");
 
     auto malformed = trusted;
@@ -281,7 +283,7 @@ void bundle_failures(hunter::Cfg cfg)
     }
 
     hunter::Script invalid_policy;
-    check(!invalid_policy.open(cfg, "{\"v\":1,\"snapshot_every\":3}"),
+    check(!invalid_policy.open(cfg, "{\"v\":7,\"snapshot_every\":3}"),
         "malformed policy must return an error");
     {
         std::ofstream out(changed_policy.path);
@@ -301,7 +303,7 @@ void bundle_failures(hunter::Cfg cfg)
 
     cfg.bundle_path = changed_bundle.path.string();
     hunter::Script tampered;
-    check(!tampered.open(cfg, "{\"v\":1,\"snapshot_every\":3}"),
+    check(!tampered.open(cfg, "{\"v\":7,\"snapshot_every\":3}"),
         "production loader rejects modified signed bytecode");
 }
 #endif
@@ -323,15 +325,28 @@ int main(int argc, char** argv)
         cfg.source_path = argv[1];
 #endif
         hunter::Script script;
-        const nlohmann::json ctx = {{"v", 6}, {"snapshot_every", 3},
-            {"content", nlohmann::json::parse(hunter::content::json_text)}};
+        const nlohmann::json ctx = {{"v", 7}, {"snapshot_every", 3}};
+        check(hunter::digest("")
+            == "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "empty SHA-256 vector");
+        check(hunter::digest("abc")
+            == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+            "short SHA-256 vector");
+        hunter::Script legacy_context;
+        check(!legacy_context.open(cfg, R"({"v":6,"snapshot_every":3})"),
+            "old Host context cannot open a session");
+        hunter::Script injected_context;
+        check(!injected_context.open(cfg, R"({"v":7,"snapshot_every":3,"content":{}})"),
+            "native context cannot inject production content");
         take(script.open(cfg, ctx.dump()));
+        check(script.world().content_key == hunter::content::version,
+            "Lua content identity equals the derived client metadata");
         const auto logs = script.take_logs();
         check(!logs.empty(), "script diagnostics are observable after the entry returns");
         check(script.take_logs().empty(), "diagnostic extraction drains the bounded buffer");
-        auto out = take(script.event(2, R"({"v":6,"req_id":"login","player_id":"1"})"));
+        auto out = take(script.event(2, R"({"v":7,"req_id":"login","player_id":"1"})"));
         check(out.size() == 1 && out[0].kind == "login", "local session login");
-        out = take(script.event(3, R"({"v":6,"req_id":"start","after_match_id":"0",)"
+        out = take(script.event(3, R"({"v":7,"req_id":"start","after_match_id":"0",)"
             R"("match_id":"1","world_id":"1"})"));
         check(out.size() == 2 && out[0].kind == "start" && out[1].kind == "snapshot",
             "start produces response and initial snapshot");
@@ -368,8 +383,8 @@ int main(int argc, char** argv)
         check(reopened["phase"] == "Unauthenticated" && reopened["tick_id"] == "0"
             && reopened["entities"].empty() && reopened["items"].empty(),
             "reopened session owns a fresh native world");
-        take(script.event(2, R"({"v":6,"req_id":"reopen","player_id":"1"})"));
-        take(script.event(3, R"({"v":6,"req_id":"start","after_match_id":"0",)"
+        take(script.event(2, R"({"v":7,"req_id":"reopen","player_id":"1"})"));
+        take(script.event(3, R"({"v":7,"req_id":"start","after_match_id":"0",)"
             R"("match_id":"1","world_id":"1"})"));
         check(script.shutdown("reopened").has_value(), "reopened native world closes");
 #if !HUNTER_PRODUCTION

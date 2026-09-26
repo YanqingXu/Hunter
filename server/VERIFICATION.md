@@ -1,5 +1,63 @@
 # 服务端验证记录
 
+## Lua 配置与玩法规则迁移（2026-09-26）
+
+基线提交 `332c1b4`，本轮实现 [SRV-013](intents/modules/cfg.intent.md)。Windows x64 Release、
+VS 2026 / CMake 4.3.1，使用仓库固定 Luax。任务范围见 [Lua 配置任务表](V1_LUA_CFG_TASKS.md)。
+本节记录本轮最终构建与完整回归；以下历史记录不作为本轮验收依据。
+
+| 验证 | 实际结果与证据 |
+| --- | --- |
+| 最终开发／Bundle 构建 | 均成功，无 C++ 编译警告；`build/lua-cfg-win-dev-verified-build.log`、`lua-cfg-win-bundle-verified-build.log` |
+| 开发完整 CTest | **32/32，315.77 秒**；`build/lua-cfg-win-dev-verified-tests.log` |
+| Bundle 完整 CTest | **31/31，304.84 秒**；`build/lua-cfg-win-bundle-verified-tests.log` |
+| 生产链接检查 | 完整 Bundle CTest 中通过，实际链接不含 Compiler、AST、DevelopmentRuntime |
+| 修改源表，仅重新导出／组装 | 两模式均通过，同一服务端文件 SHA-256 保持不变，实际移动从 100 改为 37 mm/Tick |
+| 损坏 Lua 配置启动拒绝 | 两模式均通过，错误配置在 Ready 和存档创建前拒绝；`build/lua-cfg-win-dev-startup-tests.log`、`lua-cfg-win-bundle-startup-tests.log` |
+| 策划导出入口及草稿隔离 | Python 导表／启动器 28/28；重打包 EXE 在独立工作目录和仅 System32 的 PATH 下正式检查通过 |
+| 联调包解压运行 | 两模式各完成真实战斗、拾取、撤离、Committed 和重启查询；`build/lua-cfg-unpacked-source.log`、`lua-cfg-unpacked-bundle.log` |
+
+生产入口保留 `design/demo_sources.json`，19 张选中表分别导出数字主键、原英文字段的 Lua 文件。
+Python 只读取工作簿、校验类型和选择记录；Lua `game.cfg` 执行字段转换、单位、引用、默认配装和
+玩法语义检查。构建与运行时使用同一配置模块，旧内容通过独立 Lua 夹具加载。共享 JSON 及身份头
+均从 Lua 输出派生，服务端启动不读取 JSON，C++ 不再内嵌完整配置头。
+
+导表契约覆盖稳定输出、中文／转义、缺值、错误引用与单位、未选草稿隔离、失败保留原制品；
+发布器继续使用完整预校验、暂存、合作锁和异常回滚，不宣称跨文件崩溃原子替换。
+草稿入口已隔离到 `server/build/draft-cfg`，不覆盖正式 `generated/cfg`。
+
+源表生效集成测试复制工作簿到临时目录，将角色 1 的 Speed 从 100 改为 37，仅重新导出并组装
+源码或离线签名 Bundle；通过真实 TCP 测量位移，前后服务端可执行文件字节不变。
+另绕过导表校验，将独立 Lua 表中的 Speed 改为 0，验证真实 Runtime 返回配置错误、无 Ready、
+非零退出且没有生成任何存档文件。空源表数值和缺失 Lua 文件均不能覆盖已有有效制品。
+
+玩法回归覆盖只读配装校验先于持久局号分配、拾取叠堆、消耗品槽满原子拒绝、工具扣次及清槽、
+补给重复请求、掉落拆分和免费物资不入库。配置语义由 Lua 校验，C++ 仅在独立候选通过结构、
+整数和容量校验后替换世界；失败保持世界、serial、revision、对象地址及句柄代次。
+补齐了快照 match_id/player_id 的 INT64_MAX 上限，与正常创建及存储范围一致。
+既有动作去重、暂停冻结、Tick 顺序、死亡／放弃空奖励、写失败、提交边界强杀及旧 SQLite V1
+结果解释继续验证。同一 Runtime 连续十局撤离和随后十次启停均已实际执行。
+
+测试夹具也随边界迁移：64 实体压测由 32 个合法出生记录加动态实例组成，未放宽生产配置上限；
+进程故障探针保留真实 v7 配置初始化；慢读测试使用 64 KiB 发送预算，避免单 Tick 正常输出突发
+触发原 1 KiB 阈值，仍验证小接收窗、正常读包、停止读包后的有界背压与连接关闭。
+
+版本：网络 **v5**、内容 **v4**、Host／上下文／内部状态 **v7**、SQLite **V1**。
+旧上下文、内部快照及旧签名 Host 身份明确拒绝。两模式的共享内容与组装 Lua 逐字节相同，
+内容摘要保持 `gameplay-v4:65104619225ac997076578c36c5d4cca91ebf28af6fe7d66df19f13d1b056908`。
+
+联调包在 `build/delivery/`，ZIP CRC、manifest 每个文件的长度和 SHA-256 均通过核对，
+解压后的可执行文件与本轮测试构建逐字节相同。源包含 30 个清单文件，Bundle 包含 9 个，
+另各有 manifest；Bundle 包没有散配置、编译器或私钥。
+
+- `hunter-lua-cfg-source.zip`：`bb7453b36d81c0206737c5145a3d69f12ae1bf8c18e2b02a2194accf93002b45`
+- `hunter-lua-cfg-bundle.zip`：`97c1e6ecdb5904f7c5da026116805960354d4d7e30bb2ccb1222da2ba9724fef`
+
+Bundle 使用公开测试向量签名，仅供联调。Android 探针已同步 v7 上下文，但本轮没有 NDK／真机
+执行证据；Unity、Android 和正式发行签名继续独立验收。本次没有增加热更新。
+
+---
+
 ## 验证 DEMO 玩法增量（2026-09-26）
 
 基线提交 `724e33c`，本轮实现 SRV-012 / G01—G06。Windows x64 Release、VS 2026，

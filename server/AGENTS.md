@@ -6,15 +6,21 @@
 构建与运行见 [README.md](README.md)，验证范围见 [VERIFICATION.md](VERIFICATION.md)。
 SRV-007 提供 SQLite 底座；SRV-011 接通 Runtime 读档、持久局号、掉落背包、撤离与结算。
 首版任务和实际验证见 [V1_TASKS.md](V1_TASKS.md)，Unity 与 Android 仍为独立门槛。
-SRV-012 增加免费配装、姿态恢复、三枪四工具和场景交互；当前增量状态见
+SRV-012 增加免费配装、姿态恢复、三枪四工具和场景交互；历史增量状态见
 [V1_GAMEPLAY_TASKS.md](V1_GAMEPLAY_TASKS.md)。生产内容从根工作簿与 `design/demo_sources.json`
-生成，旧首版工作簿仅作回归夹具。当前协议v5、内容v4、Host／状态v6，SQLite仍为V1。
+生成，旧首版工作簿仅作回归夹具。SRV-013 的 Windows 双 Runtime 实现与验证已完成，见
+[Lua 配置任务表](V1_LUA_CFG_TASKS.md)；协议 v5、内容 v4、Host／状态 v7，SQLite 仍为 V1。
 
 - `.gitkeep` 仅用于保留空目录。
 - `src/game/` 持有唯一权威状态，`lua/main.lua` 组装玩法规则；高频输入和网络投影由 C++ 实现。
   Entity、Unit、Player、Monster、Item、Weapon、World 与同名小写 Lua 文件配对。
   掉落与撤离模块已列入正式清单；`tests/fixtures` 的实体夹具不属于生产模块清单。
 - `lua/modules.json` 定义正式构建清单，桥接与状态 schema 见 `lua/contract.json`。
+- 生产源表按 `design/demo_sources.json` 导出独立 Lua 数据模块，`game.cfg` 加载、解析关联
+  并校验玩法语义；Python 不维护第二套玩法配置模型。只读配置允许在 Lua 缓存，C++ 不持有
+  完整配置文档。共享 JSON 为客户端派生产物，`ContentId.h` 仅保存身份元数据。
+- 配装、拾取、工具消费、补给、掉落及依赖配置的状态校验由 Lua 决定；C++ 负责权威状态、
+  句柄、容量、整数范围及有界批量原子提交。旧上下文和旧内部状态明确拒绝。
 - 不因目录和文件已经存在，就将相应阶段、模块或测试标记为完成。
 
 ## 后续开发流程

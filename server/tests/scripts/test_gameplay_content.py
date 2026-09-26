@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "export"))
@@ -69,6 +70,8 @@ class GameplayContentTest(unittest.TestCase):
             ("Player", 1, "HPSetting", "50|25"),
             ("Player", 1, "ProneWidth", 999),
             ("Player", 1, "RunCost", 1),
+            ("Player", 1, "Run", 1001),
+            ("Player", 1, "ProneSpeed", 1001),
             ("Player", 1, "EquipmentLimit", 2),
             ("Tool", 30002, "SlowPercent", 31),
             ("Tool", 30006, "Speed", 0),
@@ -117,6 +120,67 @@ class GameplayContentTest(unittest.TestCase):
                 cwd=folder, capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(list(Path(folder).iterdir()), [])
+
+    # 真实导出保留原英文字段和数值主键，服务端身份头不能隐藏第二份配置模型。
+    def test_lua_artifacts_and_shared_identity(self):
+        with tempfile.TemporaryDirectory(prefix="hunter-lua-content-") as folder:
+            root = Path(folder)
+            gameplay.export_content(source=ROOT / "design/demo_sources.json",
+                output=root / "content.json", header=root / "ContentId.h", cfg=root / "cfg")
+            raw = (root / "cfg/Player.lua").read_text(encoding="utf-8")
+            self.assertIn('[1] = {', raw)
+            self.assertIn('["HPSetting"] = "50|50|25|25"', raw)
+            self.assertNotIn('hp_segments', raw)
+            header = (root / "ContentId.h").read_text(encoding="utf-8")
+            self.assertNotIn('json_text', header)
+            self.assertIn('65104619225ac997076578c36c5d4cca91ebf28af6fe7d66df19f13d1b056908',
+                          header)
+            manifest = json.loads((root / "cfg/Manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(sum(m["kind"] == "data" for m in manifest["modules"]), 19)
+            self.assertEqual(gameplay.content_bytes(gameplay.evaluate({
+                p.name: p.read_bytes() for p in (root / "cfg").iterdir()}))[0],
+                (root / "content.json").read_bytes())
+
+    # Lua 语义失败或多个文件发布途中失败均保留完整上一份有效配置。
+    def test_validation_and_publication_failure_preserve_artifacts(self):
+        with tempfile.TemporaryDirectory(prefix="hunter-lua-rollback-") as folder:
+            root = Path(folder)
+            args = {"source": ROOT / "design/demo_sources.json", "output": root / "content.json",
+                    "header": root / "ContentId.h", "cfg": root / "cfg"}
+            gameplay.export_content(**args)
+            before = {p.relative_to(root): p.read_bytes() for p in root.rglob("*") if p.is_file()}
+            invalid = copy.deepcopy(self.tables)
+            invalid["Weapon"].rows[1]["DefaultBullet"] = 99
+            with mock.patch.object(gameplay, "read_tables", return_value=invalid):
+                with self.assertRaisesRegex(ValueError, "Lua configuration validation failed"):
+                    gameplay.export_content(**args)
+            self.assertEqual(before,
+                {p.relative_to(root): p.read_bytes() for p in root.rglob("*") if p.is_file()})
+            replace = gameplay.sheets.PUBLISH.os.replace
+            writes = 0
+
+            # 第二个制品发布失败，恢复流程继续使用真实替换操作。
+            def fail_second(source, target):
+                nonlocal writes
+                writes += 1
+                if writes == 2:
+                    raise OSError("injected configuration publication failure")
+                return replace(source, target)
+
+            with mock.patch.object(gameplay.sheets.PUBLISH.os, "replace", side_effect=fail_second):
+                with self.assertRaisesRegex(OSError, "injected"):
+                    gameplay.export_content(**args)
+            self.assertEqual(before,
+                {p.relative_to(root): p.read_bytes() for p in root.rglob("*") if p.is_file()})
+
+    # 运行时相同代码检查规范夹具，不能通过改为测试来源绕过非法字段或版本。
+    def test_fixture_semantics_cannot_bypass_validation(self):
+        doc = json.loads(gameplay.artifacts(self.tables)[0])
+        for field, value in (("v", 3), ("tick_hz", 30), ("unsupported", 1)):
+            changed = copy.deepcopy(doc)
+            changed[field] = value
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                gameplay.content_artifacts(changed)
 
 
 if __name__ == "__main__":

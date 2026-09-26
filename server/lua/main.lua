@@ -1,4 +1,4 @@
--- 组装本机会话与基础战斗切片，唯一活动世界由七个同步入口访问。
+-- 组装本机会话与基础战斗切片，唯一活动世界由显式同步入口访问。
 return function(deps)
     local state = deps["framework.state"]
     local world_api = deps["game.world"]
@@ -11,6 +11,9 @@ return function(deps)
     local actions = deps["game.actions"]
     local projectile = deps["game.projectile"]
     local vitals = deps["game.vitals"]
+    local cfg_api = deps["game.cfg"]
+    local loadout_api = deps["game.loadout"]
+    local statecheck = deps["game.statecheck"]
     local api = {}
     local world = nil
     local content = nil
@@ -23,12 +26,13 @@ return function(deps)
 
     -- 返回当前局的完整权威快照。
     local function snapshot()
+        settlement.update_view(world, content)
         snapshot_api.emit()
     end
 
     -- 本机令牌握手后显式建立玩家，重复登录保持同一身份和当前局。
     local function login(payload)
-        assert(state.fields(payload, {"v", "req_id", "player_id"}) and payload.v == 6
+        assert(state.fields(payload, {"v", "req_id", "player_id"}) and payload.v == 7
             and state.req(payload.req_id), "invalid login contract")
         if World.get_phase(world) == "Unauthenticated" then
             World.login(world, payload.player_id)
@@ -41,7 +45,7 @@ return function(deps)
     -- 只从大厅或终态开局，重复成功请求返回原局而不重置实体。
     local function start(payload)
         assert(state.fields(payload, {"v", "req_id", "after_match_id", "match_id", "world_id"})
-            and payload.v == 6
+            and payload.v == 7
             and state.req(payload.req_id) and state.is_id(payload.after_match_id),
             "invalid start contract")
         if World.get_phase(world) == "Unauthenticated" then
@@ -75,17 +79,31 @@ return function(deps)
     function api.init(ctx_json)
         assert(world == nil, "session already initialized")
         local ctx = json.decode(ctx_json)
-        assert(state.fields(ctx, {"v", "snapshot_every", "content"}) and ctx.v == 6
+        assert(state.fields(ctx, {"v", "snapshot_every"}) and ctx.v == 7
             and state.integer(ctx.snapshot_every, 1, 3600), "invalid context")
         assert(json.encode(ctx) == json.encode(json.decode(cfg.get())), "context mismatch")
-        content = ctx.content
-        assert(type(content) == "table" and content.v == 4
-            and content.tick_hz == 60,
-            "invalid content")
+        content = cfg_api.load()
+        local scene_ids = json.array({})
+        for _, scene in ipairs(content.scenes) do
+            scene_ids[#scene_ids + 1] = scene.id
+        end
+        cfg.install(json.encode(content), json.encode({map_width = content.map.width,
+            map_height = content.map.height, bag_slots = content.bag.slots,
+            scene_ids = scene_ids}))
         world = world_api.new(content)
         assert(world_api.valid(world, content), "invalid initial state")
         diagnostics.log("combat session initialized")
         return true
+    end
+
+    -- 校验请求配装仅计算候选，失败不申请对局身份或改变世界状态。
+    function api.check_loadout(request_json)
+        assert(world ~= nil, "session not initialized")
+        local accepted, reason = loadout_api.check(content, json.decode(request_json))
+        if accepted == nil then
+            return json.encode({ok = false, error = reason})
+        end
+        return json.encode({ok = true, loadout = accepted})
     end
 
     -- 分发已鉴权宿主送达的登录、开局与暂停事件。
@@ -97,14 +115,14 @@ return function(deps)
         elseif event_id == 3 then
             start(payload)
         elseif event_id == 4 then
-            assert(state.fields(payload, {"v", "paused"}) and payload.v == 6
+            assert(state.fields(payload, {"v", "paused"}) and payload.v == 7
                 and type(payload.paused) == "boolean", "invalid pause contract")
             World.set_paused(world, payload.paused)
             world_api.clear_input(world)
         elseif event_id == 5 then
             assert(state.fields(payload,
                 {"v", "req_id", "kind", "slot", "target_id", "action_seq"})
-                and payload.v == 6 and state.req(payload.req_id)
+                and payload.v == 7 and state.req(payload.req_id)
                 and state.integer(payload.slot, 0, 8) and state.is_id(payload.target_id)
                 and state.is_id(payload.action_seq), "invalid action contract")
             local error = actions.apply(world, content, payload)
@@ -144,6 +162,7 @@ return function(deps)
             loot.step(world, content)
             world_api.flush(world)
             settlement.step(world, content)
+            settlement.update_view(world, content)
             Player.set_jump(player.controls, false)
             Player.set_fire_once(player.controls, false)
             Player.set_reload(player.controls, false)
@@ -156,11 +175,14 @@ return function(deps)
     -- 导出全部权威状态，包含输入边沿、冷却和最近开局幂等记录。
     function api.export_state()
         assert(world_api.valid(world, content), "invalid session state")
-        return World.save(world)
+        local text = World.save(world)
+        statecheck.validate(json.decode(text), content)
+        return text
     end
 
     -- 完整验证独立候选之后才替换活动世界。
     function api.import_state(snapshot_json)
+        statecheck.validate(json.decode(snapshot_json), content)
         World.load(world, snapshot_json)
         return true
     end
@@ -168,6 +190,7 @@ return function(deps)
     -- 检查当前原生状态，不发送网络输出。
     function api.validate_state()
         assert(world_api.valid(world, content), "invalid session state")
+        statecheck.validate(json.decode(World.save(world)), content)
         return true
     end
 

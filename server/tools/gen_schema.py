@@ -84,18 +84,18 @@ def validate_node(node, depth=0):
 
 # 校验冻结消息形状并生成唯一原生描述，合法边界改动会直接反映到产物。
 def generate(doc):
-    if not isinstance(doc, dict) or type(doc.get("version")) is not int or doc["version"] != 6:
+    if not isinstance(doc, dict) or type(doc.get("version")) is not int or doc["version"] != 7:
         raise ValueError("unsupported contract version")
     state = doc.get("state")
-    if not isinstance(state, dict) or type(state.get("v")) is not int or state["v"] != 6:
-        raise ValueError("state schema must declare version 6")
+    if not isinstance(state, dict) or type(state.get("v")) is not int or state["v"] != 7:
+        raise ValueError("state schema must declare version 7")
     effect = doc.get("effect")
     if not isinstance(effect, dict) or type(effect.get("v")) is not int or effect["v"] != 5:
         raise ValueError("effect schema must declare version 5")
     host = doc.get("host_api")
     ctx = host.get("ctx") if isinstance(host, dict) else None
-    if not isinstance(ctx, dict) or type(ctx.get("v")) is not int or ctx["v"] != 6:
-        raise ValueError("context schema must declare version 6")
+    if not isinstance(ctx, dict) or type(ctx.get("v")) is not int or ctx["v"] != 7:
+        raise ValueError("context schema must declare version 7")
     input_spec = effect.get("input", {})
     if not isinstance(input_spec, dict) or type(input_spec.get("v")) is not int \
             or input_spec["v"] != 5:

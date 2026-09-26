@@ -171,6 +171,7 @@ return function(deps)
             local width = desired and cfg.prone_width or cfg.width
             local height = desired and cfg.prone_height or cfg.height
             if api.fits(x, y, width, height, content) then
+                Unit.set_body(player.motion, width, height)
                 Player.set_prone(input, desired)
                 prone = desired
             else

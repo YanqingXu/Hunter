@@ -5,50 +5,58 @@
     {
       "name": "framework.state",
       "file": "framework/state.lua",
-      "deps": []
+      "deps": [],
+      "kind": "factory"
     },
     {
       "name": "game.movement",
       "file": "game/movement.lua",
-      "deps": []
+      "deps": [],
+      "kind": "factory"
     },
     {
       "name": "game.combat",
       "file": "game/combat.lua",
       "deps": [
         "game.movement"
-      ]
+      ],
+      "kind": "factory"
     },
     {
       "name": "game.snapshot",
       "file": "game/snapshot.lua",
-      "deps": []
+      "deps": [],
+      "kind": "factory"
     },
     {
       "name": "game.entity",
       "file": "game/entity.lua",
-      "deps": []
+      "deps": [],
+      "kind": "factory"
     },
     {
       "name": "game.unit",
       "file": "game/unit.lua",
       "deps": [
         "game.entity"
-      ]
+      ],
+      "kind": "factory"
     },
     {
       "name": "game.player",
       "file": "game/player.lua",
       "deps": [
         "game.unit"
-      ]
+      ],
+      "kind": "factory"
     },
     {
       "name": "game.monster",
       "file": "game/monster.lua",
       "deps": [
         "game.unit"
-      ]
+      ],
+      "kind": "factory"
     },
     {
       "name": "game.world",
@@ -56,8 +64,11 @@
       "deps": [
         "framework.state",
         "game.player",
-        "game.monster"
-      ]
+        "game.monster",
+        "game.loadout",
+        "game.movement"
+      ],
+      "kind": "factory"
     },
     {
       "name": "game.damage",
@@ -65,7 +76,8 @@
       "deps": [
         "game.world",
         "game.player"
-      ]
+      ],
+      "kind": "factory"
     },
     {
       "name": "game.weapon",
@@ -76,7 +88,8 @@
         "game.combat",
         "game.damage",
         "game.movement"
-      ]
+      ],
+      "kind": "factory"
     },
     {
       "name": "game.ai",
@@ -87,7 +100,8 @@
         "game.world",
         "game.monster",
         "game.damage"
-      ]
+      ],
+      "kind": "factory"
     },
     {
       "name": "main",
@@ -104,27 +118,34 @@
         "game.settlement",
         "game.actions",
         "game.projectile",
-        "game.vitals"
-      ]
+        "game.vitals",
+        "game.cfg",
+        "game.loadout",
+        "game.statecheck"
+      ],
+      "kind": "factory"
     },
     {
       "name": "game.item",
       "file": "game/item.lua",
-      "deps": []
+      "deps": [],
+      "kind": "factory"
     },
     {
       "name": "game.loot",
       "file": "game/loot.lua",
       "deps": [
         "game.world"
-      ]
+      ],
+      "kind": "factory"
     },
     {
       "name": "game.settlement",
       "file": "game/settlement.lua",
       "deps": [
         "game.world"
-      ]
+      ],
+      "kind": "factory"
     },
     {
       "name": "game.projectile",
@@ -134,7 +155,8 @@
         "game.movement",
         "game.combat",
         "game.damage"
-      ]
+      ],
+      "kind": "factory"
     },
     {
       "name": "game.actions",
@@ -144,13 +166,83 @@
         "game.movement",
         "game.combat",
         "game.projectile",
-        "framework.state"
-      ]
+        "framework.state",
+        "game.inventory"
+      ],
+      "kind": "factory"
     },
     {
       "name": "game.vitals",
       "file": "game/vitals.lua",
+      "deps": [],
+      "kind": "factory"
+    },
+    {
+      "name": "game.cfg",
+      "file": "game/cfg.lua",
+      "kind": "factory",
+      "deps": [
+        "cfg.tables",
+        "game.cfg_build",
+        "game.cfg_check",
+        "game.cfg_fixture"
+      ]
+    },
+    {
+      "name": "game.cfg_build",
+      "file": "game/cfg_build.lua",
+      "kind": "factory",
       "deps": []
+    },
+    {
+      "name": "game.cfg_check",
+      "file": "game/cfg_check.lua",
+      "kind": "factory",
+      "deps": [
+        "framework.state",
+        "game.cfg_geometry"
+      ]
+    },
+    {
+      "name": "game.cfg_geometry",
+      "file": "game/cfg_geometry.lua",
+      "kind": "factory",
+      "deps": []
+    },
+    {
+      "name": "game.cfg_fixture",
+      "file": "game/cfg_fixture.lua",
+      "kind": "factory",
+      "deps": [
+        "framework.state"
+      ]
+    },
+    {
+      "name": "game.loadout",
+      "file": "game/loadout.lua",
+      "kind": "factory",
+      "deps": [
+        "framework.state"
+      ]
+    },
+    {
+      "name": "game.statecheck",
+      "file": "game/statecheck.lua",
+      "kind": "factory",
+      "deps": [
+        "framework.state",
+        "game.loadout",
+        "game.movement",
+        "game.monster"
+      ]
+    },
+    {
+      "name": "game.inventory",
+      "file": "game/inventory.lua",
+      "kind": "factory",
+      "deps": [
+        "game.world"
+      ]
     }
   ]
 }

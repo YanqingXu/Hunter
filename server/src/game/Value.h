@@ -2,6 +2,7 @@
 #pragma once
 #include "common/Types.h"
 #include <thread>
+#include <nlohmann/json.hpp>
 
 namespace hunter
 {
@@ -23,6 +24,12 @@ void require(bool valid, const Str& error);
 
 // 验证有符号整数的闭区间。
 void range(i64 value, i64 low, i64 high);
+
+// 读取精确有界整数，拒绝布尔、浮点和无符号溢出。
+i32 read_integer(const nlohmann::json& value, i64 low, i64 high);
+
+// 检查有限对象的完整字段集合，拒绝遗漏和未知字段。
+void read_fields(const nlohmann::json& value, std::initializer_list<const char*> names);
 
 // 读取完整规范十进制身份，拒绝符号、前导零和溢出。
 u64 read_id(const Str& text);

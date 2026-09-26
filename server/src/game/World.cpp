@@ -28,15 +28,32 @@ void World::reset()
     *this = World{};
 }
 
-void World::configure(const nlohmann::json& cfg)
+void World::configure(const nlohmann::json& bounds, const Str& key)
 {
     access.read();
-    require(content.is_null(), "already_configured");
-    require(cfg.is_object() && cfg.at("v") == 4 && cfg.at("tick_hz") == 60, "invalid_content");
-    require(cfg.at("scenes").is_array() && cfg.at("scenes").size() <= 32,
-        "scene_capacity");
-    content = cfg;
-    content_key = cfg.dump();
+    require(!configured && !key.empty() && key.size() <= 128, "already_configured");
+    read_fields(bounds, {"map_width", "map_height", "bag_slots", "scene_ids"});
+    const auto width = read_integer(bounds.at("map_width"), 1000, 100000);
+    const auto height = read_integer(bounds.at("map_height"), 1000, 100000);
+    const auto capacity = read_integer(bounds.at("bag_slots"), 0, 64);
+    const auto& scenes = bounds.at("scene_ids");
+    require(scenes.is_array() && scenes.size() <= 32, "scene_capacity");
+    Vec<u32> ids;
+    Set<u64> seen;
+
+    for (const auto& value : scenes)
+    {
+        const auto id = read_id(value.get<Str>());
+        require(id > 0 && id <= 2147483647 && seen.insert(id).second, "invalid_scene_id");
+        ids.push_back(static_cast<u32>(id));
+    }
+
+    content_key = key;
+    scene_ids = std::move(ids);
+    map_width = width;
+    map_height = height;
+    bag_slots = capacity;
+    configured = true;
 }
 
 u32 World::next_generation()
@@ -109,7 +126,8 @@ void World::begin(const Str& req, const Str& after, const Str& match, const Str&
     require(assigned > match_id && assigned <= static_cast<u64>(std::numeric_limits<i64>::max())
         && next_world > world_id && revision < std::numeric_limits<u32>::max(),
         "identity_exhausted");
-    active_loadout = check_loadout(pending_loadout);
+    require(configured && pending_loadout.player_cfg_id() > 0, "missing_loadout");
+    active_loadout = pending_loadout;
     pending_loadout.Clear();
     used_scenes = {};
     projectiles = {};
@@ -132,7 +150,7 @@ void World::begin(const Str& req, const Str& after, const Str& match, const Str&
     phase = "Playing";
 }
 
-Str World::spawn(const Str& kind, const Str& spawn_id)
+Str World::spawn(const Str& kind, const Str& text)
 {
     access.write();
 
@@ -151,109 +169,121 @@ Str World::spawn(const Str& kind, const Str& spawn_id)
         return ":entity_id_exhausted";
     }
 
-    const nlohmann::json* spawn = nullptr;
+    require(text.size() <= 16384, "spawn_too_large");
+    const auto spec = nlohmann::json::parse(text);
+    Actor actor;
 
     if (kind == "player")
     {
-        if (player_entity_id != 0 || !spawn_id.empty())
+        if (player_entity_id != 0)
         {
             return ":invalid_player";
         }
 
-        spawn = &content.at("map").at("spawn");
+        read_fields(spec, {"cfg_id", "x", "y", "hp", "width", "height", "grounded",
+            "stamina", "weapons", "health_segments", "tools"});
+        auto& player = std::get<Player>(actor.value);
+        player.access = &access;
+        player.world = this;
+        player.player_id = player_id;
+        player.stamina = read_integer(spec.at("stamina"), 0, 1000000);
+        const auto& weapons = spec.at("weapons");
+        const auto& segments = spec.at("health_segments");
+        const auto& tools = spec.at("tools");
+        require(weapons.is_array() && !weapons.empty() && weapons.size() <= 2
+            && segments.is_array() && !segments.empty() && segments.size() <= 6
+            && tools.is_array() && tools.size() <= 8, "invalid_spawn_slots");
+        player.weapon_count = static_cast<i32>(weapons.size());
+        player.active_weapon = 1;
+
+        for (usize index = 0; index < weapons.size(); ++index)
+        {
+            const auto& entry = weapons[index];
+            read_fields(entry, {"cfg_id", "ammo_cfg_id", "ammo", "reserve"});
+            auto& weapon = index == 0 ? player.weapon : player.other_weapon;
+            const auto cfg = read_id(entry.at("cfg_id").get<Str>());
+            const auto ammo = read_id(entry.at("ammo_cfg_id").get<Str>());
+            require(cfg > 0 && cfg <= 2147483647 && ammo > 0 && ammo <= 2147483647,
+                "invalid_weapon_cfg");
+            weapon.access = &access;
+            weapon.cfg_id = static_cast<u32>(cfg);
+            weapon.ammo = read_integer(entry.at("ammo"), 0, 1000);
+            player.ammo_cfg_ids[index] = static_cast<u32>(ammo);
+            (index == 0 ? player.reserve : player.other_reserve)
+                = read_integer(entry.at("reserve"), 0, 100000);
+        }
+
+        for (const auto& amount : segments)
+        {
+            player.health_segments.push_back(read_integer(amount, 1, 1000000));
+        }
+
+        Set<i32> used;
+
+        for (const auto& entry : tools)
+        {
+            read_fields(entry, {"slot", "cfg_id", "count"});
+            const auto slot = read_integer(entry.at("slot"), 1, 8);
+            require(used.insert(slot).second, "duplicate_tool_slot");
+            player.change_tool(slot, entry.at("cfg_id").get<Str>(),
+                read_integer(entry.at("count"), 0, 100000));
+        }
     }
     else if (kind == "monster")
     {
-        spawn = Monster::spawn_cfg(content, spawn_id);
-
-        if (!spawn)
-        {
-            return ":invalid_spawn";
-        }
+        read_fields(spec, {"cfg_id", "x", "y", "hp", "width", "height", "grounded",
+            "spawn_id"});
+        const auto spawn = read_id(spec.at("spawn_id").get<Str>());
+        require(spawn > 0 && spawn <= 2147483647, "invalid_spawn_id");
+        actor.value = Monster{};
+        std::get<Monster>(actor.value).spawn_id = static_cast<u32>(spawn);
     }
     else
     {
         return ":invalid_kind";
     }
 
-    const auto cfg_id = kind == "player" ? std::to_string(active_loadout.player_cfg_id())
-        : spawn->at("cfg_id").get<Str>();
-    const auto& cfgs = content.at(kind == "player" ? "players" : "monsters");
-
-    if (!cfgs.contains(cfg_id))
-    {
-        return ":invalid_cfg";
-    }
-
-    Actor actor;
-
-    if (kind == "monster")
-    {
-        actor.value = Monster{};
-        auto& monster = std::get<Monster>(actor.value);
-        monster.spawn_id = static_cast<u32>(read_id(spawn_id));
-        monster.max_attack_ticks = cfgs.at(cfg_id).at("attack_ticks");
-    }
-    else
-    {
-        auto& player = std::get<Player>(actor.value);
-        player.access = &access;
-        player.world = this;
-        player.player_id = player_id;
-        player.weapon_count = active_loadout.weapons_size();
-        player.active_weapon = 1;
-        player.stamina = cfgs.at(cfg_id).at("stamina");
-
-        for (i32 index = 0; index < player.weapon_count; ++index)
-        {
-            const auto& choice = active_loadout.weapons(index);
-            auto& weapon = index == 0 ? player.weapon : player.other_weapon;
-            weapon.access = &access;
-            weapon.cfg_id = choice.cfg_id();
-            const auto& gun = content.at("weapons").at(weapon.get_cfg_id());
-            weapon.ammo = gun.at("magazine");
-            (index == 0 ? player.reserve : player.other_reserve) = gun.at("reserve");
-            player.ammo_cfg_ids[static_cast<usize>(index)] = choice.ammo_cfg_id();
-        }
-
-        for (const auto amount : active_loadout.health_segments())
-        {
-            player.health_segments.push_back(static_cast<i32>(amount));
-        }
-
-        for (i32 index = 0; index < active_loadout.tools_size(); ++index)
-        {
-            const auto id = std::to_string(active_loadout.tools(index));
-            player.change_tool(index + 1, id, content.at("tools").at(id).at("uses"));
-        }
-
-        for (i32 index = 0; index < active_loadout.consumables_size(); ++index)
-        {
-            const auto id = std::to_string(active_loadout.consumables(index));
-            player.change_tool(index + 5, id, content.at("tools").at(id).at("uses"));
-        }
-    }
-
     auto& unit = actor.unit();
     unit.access = &access;
-    unit.hp = cfgs.at(cfg_id).at("hp");
-    unit.max_hp = unit.hp;
-    unit.id = last_entity_id + 1;
+    const auto cfg = read_id(spec.at("cfg_id").get<Str>());
+    require(cfg > 0 && cfg <= 2147483647, "invalid_spawn_cfg");
+    unit.cfg_id = static_cast<u32>(cfg);
     unit.kind = kind;
-    unit.cfg_id = static_cast<u32>(read_id(cfg_id));
-    unit.x = spawn->at("x");
-    unit.y = spawn->at("y");
-    unit.grounded = unit.y == 0;
-    const i32 half = cfgs.at(cfg_id).at("width").get<i32>() / 2;
-
-    for (const auto& solid : content.at("map").at("solids"))
+    unit.id = last_entity_id + 1;
+    unit.hp = read_integer(spec.at("hp"), 1, 1000000);
+    unit.max_hp = unit.hp;
+    unit.width = read_integer(spec.at("width"), 2, 10000);
+    unit.height = read_integer(spec.at("height"), 2, 10000);
+    require(unit.width % 2 == 0 && unit.height % 2 == 0, "invalid_body");
+    unit.x = read_integer(spec.at("x"), unit.width / 2, map_width - unit.width / 2);
+    unit.y = read_integer(spec.at("y"), 0, map_height - unit.height);
+    require(spec.at("grounded").is_boolean(), "invalid_grounded");
+    unit.grounded = spec.at("grounded").get<bool>();
+    if (const auto* player = std::get_if<Player>(&actor.value))
     {
-        const i32 x = solid.at("x");
-        const i32 y = solid.at("y");
-        const i32 w = solid.at("w");
-        const i32 h = solid.at("h");
-        unit.grounded = unit.grounded || (unit.y == y + h
-            && unit.x - half < x + w && unit.x + half > x);
+        require(player->cfg_id == active_loadout.player_cfg_id()
+            && player->weapon_count == active_loadout.weapons_size()
+            && player->health_segments.size()
+                == static_cast<usize>(active_loadout.health_segments_size()), "loadout_mismatch");
+        i64 total = 0;
+
+        for (usize index = 0; index < player->health_segments.size(); ++index)
+        {
+            const auto amount = player->health_segments[index];
+            require(amount == static_cast<i32>(
+                active_loadout.health_segments(static_cast<i32>(index))),
+                "loadout_mismatch");
+            total += amount;
+        }
+
+        require(total == unit.max_hp, "invalid_health_segments");
+
+        for (i32 index = 0; index < player->weapon_count; ++index)
+        {
+            require(player->weapon_at(index + 1).cfg_id == active_loadout.weapons(index).cfg_id()
+                && player->ammo_cfg_ids[static_cast<usize>(index)]
+                    == active_loadout.weapons(index).ammo_cfg_id(), "loadout_mismatch");
+        }
     }
 
     u32 index = 0;
@@ -526,100 +556,36 @@ void World::set_paused(bool value)
     clear_input();
 }
 
-wire::Loadout World::check_loadout(const wire::Loadout& input) const
-{
-    access.read();
-    wire::Loadout result = input;
-
-    if (result.ByteSizeLong() == 0)
-    {
-        const auto& defaults = content.at("default_loadout");
-        result.set_player_cfg_id(static_cast<u32>(read_id(defaults.at("player_cfg_id"))));
-
-        for (const auto& value : defaults.at("hp_segments"))
-        {
-            result.add_health_segments(value.get<u32>());
-        }
-
-        for (usize index = 0; index < defaults.at("weapons").size(); ++index)
-        {
-            auto* weapon = result.add_weapons();
-            weapon->set_cfg_id(static_cast<u32>(read_id(defaults.at("weapons")[index])));
-            weapon->set_ammo_cfg_id(static_cast<u32>(read_id(defaults.at("ammo")[index])));
-        }
-
-        for (const auto& value : defaults.at("tools"))
-        {
-            result.add_tools(static_cast<u32>(read_id(value)));
-        }
-
-        for (const auto& value : defaults.at("consumables"))
-        {
-            result.add_consumables(static_cast<u32>(read_id(value)));
-        }
-    }
-
-    const auto player_key = std::to_string(result.player_cfg_id());
-    require(content.at("players").contains(player_key), "invalid_player_cfg");
-    const auto& player = content.at("players").at(player_key);
-    require(result.health_segments_size() > 0 && result.health_segments_size() <= 6,
-        "invalid_health_segments");
-    u32 total = 0;
-
-    for (const auto value : result.health_segments())
-    {
-        require(value == 25 || value == 50, "invalid_health_segments");
-        total += value;
-    }
-
-    require(total == player.at("hp").get<u32>(), "invalid_health_segments");
-    require(result.weapons_size() > 0 && result.weapons_size() <= 2,
-        "invalid_weapon_slots");
-    i64 weight = 0;
-
-    for (const auto& choice : result.weapons())
-    {
-        const auto key = std::to_string(choice.cfg_id());
-        require(content.at("weapons").contains(key), "invalid_weapon_cfg");
-        const auto& gun = content.at("weapons").at(key);
-        require(gun.at("ammo_cfg_id") == std::to_string(choice.ammo_cfg_id())
-            && content.at("ammo").contains(std::to_string(choice.ammo_cfg_id())),
-            "invalid_ammo_cfg");
-        weight += gun.at("weight").get<i32>();
-    }
-
-    require(weight <= player.at("weight").get<i32>(), "loadout_overweight");
-    require(result.tools_size() <= 4 && result.consumables_size() <= 4,
-        "invalid_tool_slots");
-    Set<u32> selected;
-    const auto validate_tool = [&](u32 id, bool consumable)
-    {
-        const auto key = std::to_string(id);
-        require(content.at("tools").contains(key) && selected.insert(id).second,
-            "invalid_tool_cfg");
-        const Str kind = content.at("tools").at(key).at("kind");
-        require(kind == "knife" || kind == "medkit" || kind == "needle" || kind == "bomb",
-            "invalid_tool_kind");
-        require((kind == "needle" || kind == "bomb") == consumable, "invalid_tool_slot");
-    };
-
-    for (const auto id : result.tools())
-    {
-        validate_tool(id, false);
-    }
-
-    for (const auto id : result.consumables())
-    {
-        validate_tool(id, true);
-    }
-
-    return result;
-}
-
 void World::prepare_loadout(const wire::Loadout& input)
 {
     access.write();
-    pending_loadout = check_loadout(input);
+    require(input.player_cfg_id() > 0 && input.player_cfg_id() <= 2147483647
+        && input.weapons_size() > 0 && input.weapons_size() <= 2
+        && input.health_segments_size() > 0 && input.health_segments_size() <= 6
+        && input.tools_size() <= 4 && input.consumables_size() <= 4, "invalid_loadout");
+
+    for (const auto& gun : input.weapons())
+    {
+        require(gun.cfg_id() > 0 && gun.cfg_id() <= 2147483647
+            && gun.ammo_cfg_id() > 0 && gun.ammo_cfg_id() <= 2147483647, "invalid_loadout");
+    }
+
+    for (const auto amount : input.health_segments())
+    {
+        range(amount, 1, 1000000);
+    }
+
+    for (const auto id : input.tools())
+    {
+        range(id, 1, 2147483647);
+    }
+
+    for (const auto id : input.consumables())
+    {
+        range(id, 1, 2147483647);
+    }
+
+    pending_loadout = input;
 }
 
 wire::Loadout World::get_loadout() const
@@ -635,7 +601,7 @@ Str World::get_world_id() const
 
 i64 World::scene_count() const
 {
-    return static_cast<i64>(content.at("scenes").size());
+    return static_cast<i64>(scene_ids.size());
 }
 
 bool World::scene_used(i64 index) const
@@ -648,8 +614,6 @@ void World::set_scene_used(i64 index, bool used)
 {
     access.write();
     range(index, 1, scene_count());
-    require(!used || content.at("scenes")[static_cast<usize>(index - 1)].at("kind") == "supply",
-        "invalid_scene_usage");
     used_scenes[static_cast<usize>(index - 1)] = used;
 }
 
@@ -679,13 +643,13 @@ i64 World::spawn_projectile(const Str& cfg_id, i64 x, i64 y, i64 vx, i64 vy, i64
 {
     access.write();
     require(phase == "Playing" && !paused && raid.player_state == "Alive", "invalid_state");
-    require(content.at("tools").contains(cfg_id)
-        && content.at("tools").at(cfg_id).at("kind") == "bomb", "invalid_projectile_cfg");
-    range(x, 0, content.at("map").at("width"));
-    range(y, 0, content.at("map").at("height"));
+    const auto cfg = read_id(cfg_id);
+    require(cfg > 0 && cfg <= 2147483647, "invalid_projectile_cfg");
+    range(x, 0, map_width);
+    range(y, 0, map_height);
     range(vx, -1000, 1000);
     range(vy, -1000, 1000);
-    range(remaining, 1, content.at("tools").at(cfg_id).at("throw_range"));
+    range(remaining, 1, 100000);
     require(vx != 0 || vy != 0, "invalid_projectile_velocity");
     require(last_projectile_id < std::numeric_limits<u64>::max(), "projectile_id_exhausted");
     Player* player = nullptr;
@@ -735,8 +699,8 @@ void World::write_projectile(i64 index, i64 x, i64 y, i64 remaining)
 {
     access.write();
     require(projectile_alive(index), "missing_projectile");
-    range(x, 0, content.at("map").at("width"));
-    range(y, 0, content.at("map").at("height"));
+    range(x, 0, map_width);
+    range(y, 0, map_height);
     auto& value = projectiles[static_cast<usize>(index - 1)];
     range(remaining, 0, value.remaining);
     value.x = static_cast<i32>(x);

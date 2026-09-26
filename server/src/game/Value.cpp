@@ -3,6 +3,7 @@
 #include "common/Types.h"
 #include <charconv>
 #include <stdexcept>
+#include <limits>
 
 namespace hunter
 {
@@ -29,6 +30,26 @@ void Access::write() const
 void range(i64 value, i64 low, i64 high)
 {
     require(value >= low && value <= high, "value_out_of_range");
+}
+
+i32 read_integer(const nlohmann::json& value, i64 low, i64 high)
+{
+    require(value.is_number_integer() && (!value.is_number_unsigned()
+        || value.get<u64>() <= static_cast<u64>(std::numeric_limits<i64>::max())),
+        "invalid_integer");
+    const auto number = value.get<i64>();
+    range(number, low, high);
+    return static_cast<i32>(number);
+}
+
+void read_fields(const nlohmann::json& value, std::initializer_list<const char*> names)
+{
+    require(value.is_object() && value.size() == names.size(), "invalid_fields");
+
+    for (const auto name : names)
+    {
+        require(value.contains(name), "missing_field");
+    }
 }
 
 u64 read_id(const Str& text)

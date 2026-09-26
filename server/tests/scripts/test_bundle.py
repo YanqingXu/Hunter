@@ -36,6 +36,7 @@ class BundleContract(unittest.TestCase):
         cls.policy = cls.root / "policy.json"
         cls.artifact = cls.root / "game.luxb"
         cls.entities = cls.root / "entities.luxb"
+        cls.fixture = cls.root / "fixture.luxb"
         cls.old_policy = cls.root / "host-v3.json"
         cls.old_artifact = cls.root / "host-v3.luxb"
         cls.seed.write_bytes(SEED)
@@ -45,6 +46,8 @@ class BundleContract(unittest.TestCase):
                      cls.policy, cls.seed, cls.artifact)
         bundle.build(OPTIONS.luaxc, OPTIONS.bundle_tool, OPTIONS.entity_source,
                      cls.policy, cls.seed, cls.entities)
+        bundle.build(OPTIONS.luaxc, OPTIONS.bundle_tool, OPTIONS.fixture_source,
+                     cls.policy, cls.seed, cls.fixture)
         evidence = json.loads(cls.policy.with_suffix(".provenance.json").read_text("utf-8"))
         old = json.loads(cls.policy.read_text("utf-8"))
         for name in bundle.KEYS[5:]:
@@ -57,7 +60,7 @@ class BundleContract(unittest.TestCase):
     # 保留可供后续 Runtime 测试消费的已签名样本，删除临时中间目录。
     @classmethod
     def tearDownClass(cls):
-        paths = (cls.artifact, cls.entities, cls.policy, cls.pub, cls.old_policy, cls.old_artifact,
+        paths = (cls.artifact, cls.entities, cls.fixture, cls.policy, cls.pub, cls.old_policy, cls.old_artifact,
                  cls.policy.with_suffix(".provenance.json"))
         files = [(OPTIONS.output_dir / path.name, path.read_bytes()) for path in paths]
         publish.publish_files(files)
@@ -285,6 +288,7 @@ def main():
     parser.add_argument("--bundle-tool", type=Path, required=True)
     parser.add_argument("--source", type=Path, required=True)
     parser.add_argument("--entity-source", type=Path, required=True)
+    parser.add_argument("--fixture-source", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     OPTIONS = parser.parse_args()
     unittest.main(argv=[__file__], verbosity=2)

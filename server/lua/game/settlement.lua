@@ -20,6 +20,16 @@ return function(deps)
         return false
     end
 
+    -- 将配置驱动的撤离展示值写入原生标量，网络快照只投影已有状态。
+    function api.update_view(world, content)
+        local open, remaining = false, 0
+        for _, point in ipairs(content.extracts or {}) do
+            open = open or unlocked(world, point)
+            remaining = math.max(0, point.hold_ticks - World.get_extract_ticks(world))
+        end
+        World.set_extract_view(world, open, remaining)
+    end
+
     -- 死亡优先于撤离完成，正伤害与离区均取消，暂停由调用入口冻结。
     function api.step(world, content)
         if content.extracts == nil then

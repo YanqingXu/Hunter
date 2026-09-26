@@ -24,6 +24,7 @@ CTest 名称；无前缀项在两种模式都必须存在。检查器从 CMake �
 | SRV-010 | [原生对象](modules/objects.intent.md) | C++ 权威状态、七类句柄绑定、原生高频网络与基础 Item |
 | SRV-011 | [单人撤离](usecases/demo.intent.md) | Windows 撤离、背包与真实存档闭环，进度见 V1_TASKS |
 | SRV-012 | [验证玩法](usecases/gameplay.intent.md) | active；免费配装、姿态恢复、枪弹工具与场景交互，两种 Windows Runtime 已验证 |
+| SRV-013 | [Lua 配置](modules/cfg.intent.md) | Lua 表加载、配置解析与玩法规则迁移；Windows 双 Runtime 已验证 |
 
 `tools/verify_intents.py` 对照构建生成的目标清单与 CTest 注册信息检查 active 契约，
 并检查索引、唯一 ID、引用及依赖环。它核对注册名称，不检查测试源码内容或证明行为覆盖；

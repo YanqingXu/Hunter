@@ -10,6 +10,7 @@ import tkinter as tk
 from tkinter import messagebox, scrolledtext, ttk
 
 import export as cfg
+import gameplay
 
 
 TARGET_NAME = "导出目标.txt"
@@ -22,6 +23,7 @@ class Report:
     title: str
     detail: str
     root: Path
+    draft: bool = False
 
 
 # 支持记事本常见的 UTF-8、带 BOM 的 UTF-16 以及旧版中文 Windows 的 GB18030。
@@ -82,28 +84,37 @@ def select_workbooks(source, target_file):
 
 
 # 导出与窗口分离，便于无交互验收打包后的程序；目标错误发生在发布之前。
-def run_export(root, *, check=False):
+def run_export(root, *, check=False, draft=False):
     root = Path(root)
     source = root / "design"
-    output = root / "server/build/generated/cfg"
+    output = root / ("server/build/draft-cfg" if draft else "server/build/generated/cfg")
     target_file = root / "export" / TARGET_NAME
     try:
-        workbooks = select_workbooks(source, target_file)
-        tables = cfg.export_config(source, output, check=check, workbooks=workbooks)
+        if draft:
+            workbooks = select_workbooks(source, target_file)
+            tables = cfg.export_config(source, output, check=check, workbooks=workbooks)
+        else:
+            manifest = source / "demo_sources.json"
+            tables, _ = gameplay.export_content(source=manifest, output=output.parent / "content.json",
+                header=output.parent / "ContentId.h", cfg=output, check=check)
+            tables = list(tables.values())
+            workbooks = sorted({table.sheet.path for table in tables})
         action = "检查通过" if check else "导出完成"
         records = sum(len(table.rows) for table in tables)
         lines = [f"本次选择 {len(workbooks)} 个 Excel 文件，生成 {len(tables)} 张表，共 {records} 条记录。",
                  "", "本次目标：", *[f"  {p.relative_to(source)}" for p in workbooks], "",
                  "配置文件：", *[f"  {t.name}.lua（{len(t.rows)} 条）" for t in tables], "",
-                 "输出目录：", str(output), "", "配置尚未接入游戏，当前游戏数值不会因此改变。"]
+                 "输出目录：", str(output), "",
+                 "草稿导出不会进入游戏；正式导出请使用默认入口。" if draft else
+                 "已通过 Luax 玩法校验。服务端构建将加载相同源表生成的 Lua 配置。"]
         if check:
             lines[0] = lines[0].replace("生成", "可生成")
             lines.append("本次只检查，没有写入 Lua 文件。")
-        report = Report(True, action, "\n".join(lines), root)
+        report = Report(True, action, "\n".join(lines), root, draft)
     except (cfg.ConfigError, OSError, ValueError) as error:
-        report = Report(False, "导出失败", f"{error}\n\n请按提示修改后再次双击“导出配置.exe”。", root)
+        report = Report(False, "导出失败", f"{error}\n\n请按提示修改后再次双击“导出配置.exe”。", root, draft)
     except Exception:
-        report = Report(False, "导出失败", "发生意外错误，请将下列信息交给开发人员：\n\n" + traceback.format_exc(), root)
+        report = Report(False, "导出失败", "发生意外错误，请将下列信息交给开发人员：\n\n" + traceback.format_exc(), root, draft)
     log = root / "export" / LOG_NAME
     try:
         log.write_text(f"{datetime.now():%Y-%m-%d %H:%M:%S}  {report.title}\n\n{report.detail}\n", encoding="utf-8")
@@ -124,7 +135,9 @@ def show_report(report):
     title = tk.Label(container, text=report.title, anchor="w", font=("Microsoft YaHei UI", 18, "bold"),
                      foreground="#176739" if report.ok else "#B3261E")
     title.pack(fill="x", pady=(0, 8))
-    ttk.Label(container, text="修改“导出目标.txt”中的文件名后，双击 EXE 即可再次导出。").pack(anchor="w", pady=(0, 12))
+    description = ("草稿由导出目标.txt 选择，输出到独立 draft-cfg 目录。" if report.draft else
+                   "正式内容由 design/demo_sources.json 选择，修改源表后重新导出。")
+    ttk.Label(container, text=description).pack(anchor="w", pady=(0, 12))
     detail = scrolledtext.ScrolledText(container, wrap="word", height=18, font=("Microsoft YaHei UI", 10))
     detail.insert("1.0", report.detail)
     detail.configure(state="disabled")
@@ -138,8 +151,10 @@ def show_report(report):
         except OSError as error:
             messagebox.showerror("无法打开", str(error), parent=window)
 
-    ttk.Button(buttons, text="修改目标清单", command=lambda: open_path(report.root / "export" / TARGET_NAME)).pack(side="left")
-    output = report.root / "server/build/generated/cfg"
+    target = report.root / ("export/" + TARGET_NAME if report.draft else "design/demo_sources.json")
+    ttk.Button(buttons, text="打开草稿清单" if report.draft else "打开生产清单",
+               command=lambda: open_path(target)).pack(side="left")
+    output = report.root / ("server/build/draft-cfg" if report.draft else "server/build/generated/cfg")
     if output.is_dir():
         ttk.Button(buttons, text="打开输出目录", command=lambda: open_path(output)).pack(side="left", padx=10)
     ttk.Button(buttons, text="关闭", command=window.destroy).pack(side="right")
@@ -150,8 +165,9 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="Hunter 策划配置导出工具")
     parser.add_argument("--no-ui", action="store_true", help="开发验收：仅写结果日志，不打开窗口")
     parser.add_argument("--check", action="store_true", help="开发验收：只检查，不写 Lua 文件（仍写结果日志）")
+    parser.add_argument("--draft", action="store_true", help="仅导出旧目标清单草稿，不作为生产内容")
     args = parser.parse_args(argv)
-    report = run_export(cfg.ROOT, check=args.check)
+    report = run_export(cfg.ROOT, check=args.check, draft=args.draft)
     if not args.no_ui:
         show_report(report)
     elif sys.stdout is not None:

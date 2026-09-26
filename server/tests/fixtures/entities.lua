@@ -6,6 +6,7 @@ return function(deps)
     local ai = deps["game.ai"]
     local damage = deps["game.damage"]
     local movement = deps["game.movement"]
+    local cfg_api = deps["game.cfg"]
     local api = {}
     local content = nil
 
@@ -140,7 +141,7 @@ return function(deps)
 
     -- 复用正式初始化并保存只读配置。
     function api.init(ctx_json)
-        content = json.decode(ctx_json).content
+        content = cfg_api.load()
         return game.init(ctx_json)
     end
 
@@ -170,6 +171,7 @@ return function(deps)
     end
 
     api.tick = game.tick
+    api.check_loadout = game.check_loadout
     api.export_state = game.export_state
     api.import_state = game.import_state
     api.validate_state = game.validate_state

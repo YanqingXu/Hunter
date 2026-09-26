@@ -1,5 +1,5 @@
 {
-  "version": 6,
+  "version": 7,
   "host_api": {
     "net.emit": {
       "args": [
@@ -38,13 +38,15 @@
       "validate_state": [],
       "shutdown": [
         "string reason"
+      ],
+      "check_loadout": [
+        "string request_json"
       ]
     },
-    "entry_returns": "boolean true except export_state returns string",
+    "entry_returns": "boolean true；export_state 和 check_loadout 返回 string JSON",
     "ctx": {
-      "v": 6,
-      "snapshot_every": "integer [1,3600]",
-      "content": "validated exported content object"
+      "v": 7,
+      "snapshot_every": "integer [1,3600]"
     },
     "net.event": {
       "args": [
@@ -98,7 +100,8 @@
           "set_hp": "void set_hp(i64 value)",
           "get_max_hp": "i64 get_max_hp() const",
           "get_alive": "bool get_alive() const",
-          "set_alive": "void set_alive(bool value)"
+          "set_alive": "void set_alive(bool value)",
+          "set_body": "void set_body(i64 new_width, i64 new_height)"
         },
         "ownership": "World",
         "handle": "type + slot + generation + owner + module epoch + capability",
@@ -171,9 +174,9 @@
           "get_tool_count": "i64 get_tool_count(i64 slot) const",
           "get_tool_instance": "Str get_tool_instance(i64 slot) const",
           "change_tool": "void change_tool(i64 slot, const Str& tool_cfg_id, i64 count)",
-          "start_use": "bool start_use(i64 slot, i64 ticks)",
+          "start_use": "bool start_use(i64 slot, i64 ticks, bool projectile)",
           "cancel_use": "void cancel_use()",
-          "finish_use": "bool finish_use()",
+          "finish_use": "bool finish_use(i64 count, bool clear)",
           "get_use_instance": "Str get_use_instance() const",
           "get_weapon_ammo": "i64 get_weapon_ammo(i64 slot) const",
           "set_weapon_ammo": "void set_weapon_ammo(i64 slot, i64 value)",
@@ -260,7 +263,7 @@
           "entity_id": "Str entity_id(i64 index) const",
           "login": "void login(const Str& owner)",
           "begin": "void begin(const Str& req, const Str& after, const Str& match, const Str& world)",
-          "spawn": "Str spawn(const Str& kind, const Str& spawn_id)",
+          "spawn": "Str spawn(const Str& kind, const Str& spec)",
           "remove": "bool remove(const Str& id)",
           "flush": "void flush()",
           "clear_input": "void clear_input()",
@@ -273,8 +276,7 @@
           "find_player": "Str find_player(const Str& owner) const",
           "drop_once": "bool drop_once(const Str& actor)",
           "roll": "i64 roll(i64 maximum)",
-          "drop": "void drop(const Str& cfg_id, i64 count, i64 x, i64 y)",
-          "pickup": "Str pickup(const Str& owner, const Str& item_id)",
+          "drop": "void drop(const Str& cfg_id, const Str& stacks, i64 x, i64 y)",
           "hurt": "void hurt(const Str& actor)",
           "hurt_now": "bool hurt_now() const",
           "get_extract_ticks": "i64 get_extract_ticks() const",
@@ -290,7 +292,12 @@
           "read_projectile": "std::tuple<Str, i64, i64, i64, i64, i64> read_projectile(i64 index) const",
           "write_projectile": "void write_projectile(i64 index, i64 x, i64 y, i64 remaining)",
           "remove_projectile": "void remove_projectile(i64 index)",
-          "clear_actions": "void clear_actions()"
+          "clear_actions": "void clear_actions()",
+          "inventory": "Str inventory() const",
+          "commit": "Str commit(const Str& batch)",
+          "loadout": "Str loadout() const",
+          "accept_loadout": "void accept_loadout(const Str& text)",
+          "set_extract_view": "void set_extract_view(bool unlocked, i64 remaining)"
         },
         "ownership": "World",
         "handle": "type + slot + generation + owner + module epoch + capability",
@@ -300,7 +307,100 @@
         }
       }
     },
-    "gc_checkpoint": "bounded 128 temporary table writes per tick; fixed runtime automatic GC safepoints"
+    "gc_checkpoint": "bounded 128 temporary table writes per tick; fixed runtime automatic GC safepoints",
+    "cfg.install": {
+      "args": [
+        "string content_json",
+        "string bounds_json"
+      ],
+      "returns": "boolean",
+      "usage": "仅 init 一次注册：宿主计算规范内容 SHA-256，保存内容身份与有限原生结构；不保存完整 content_json"
+    },
+    "entry_readonly": [
+      "check_loadout",
+      "export_state",
+      "validate_state"
+    ],
+    "payloads": {
+      "bounds": {
+        "fields": {
+          "map_width": "integer [1000,100000]",
+          "map_height": "integer [1000,100000]",
+          "bag_slots": "integer [0,64]",
+          "scene_ids": "array <=32；唯一规范十进制字符串 [1,2147483647]"
+        },
+        "extra_fields": false
+      },
+      "loadout": {
+        "max_bytes": 8192,
+        "fields": {
+          "player_cfg_id": "规范十进制字符串 [1,2147483647]；仅完整空配装可为0",
+          "health_segments": "array [1,6] of 25|50，总和等于角色配置hp",
+          "weapons": "array [1,2] of {cfg_id,ammo_cfg_id}；均为配置身份字符串",
+          "tools": "array <=4 of 配置身份字符串",
+          "consumables": "array <=4 of 配置身份字符串"
+        },
+        "extra_fields": false,
+        "validation": "Lua 校验关联、种类、负重和默认值；原生仅校验整数与固定槽位边界"
+      },
+      "check_loadout": {
+        "request": "完整 loadout 对象或 {}；只读执行，不分配局号",
+        "success": "{ok:true,loadout:完整规范配装}",
+        "failure": "{ok:false,error:业务错误码}"
+      },
+      "spawn": {
+        "max_bytes": 16384,
+        "common": {
+          "cfg_id": "规范十进制字符串 [1,2147483647]",
+          "x": "integer [width/2,map_width-width/2]",
+          "y": "integer [0,map_height-height]",
+          "hp": "integer [1,1000000]",
+          "width": "偶数 integer [2,10000]",
+          "height": "偶数 integer [2,10000]",
+          "grounded": "boolean"
+        },
+        "player": {
+          "stamina": "integer [0,1000000]",
+          "health_segments": "array [1,6] of integer [1,1000000]",
+          "weapons": "array [1,2] of {cfg_id:string,ammo_cfg_id:string,ammo:integer[0,1000],reserve:integer[0,100000]}",
+          "tools": "array <=8 of {slot:integer[1,8],cfg_id:string,count:integer[0,100000]}；slot不重复"
+        },
+        "monster": {
+          "spawn_id": "规范十进制字符串 [1,2147483647]"
+        },
+        "extra_fields": false,
+        "atomic": "解析、范围和容量全部通过后分配实体身份与代次"
+      },
+      "inventory": {
+        "returns": "array <=64；每项与 state.items.fields 相同；只读低频临时投影"
+      },
+      "drop": {
+        "max_bytes": 4096,
+        "stacks": "非空 array <=64 of integer [1,2147483647]；由 Lua 按配置拆堆",
+        "atomic": "全部次数、槽位、身份及代次容量通过后一次发布；失败保留原状态"
+      },
+      "commit": {
+        "max_bytes": 32768,
+        "fields": {
+          "owner": "当前玩家规范十进制 uint64 字符串",
+          "items": "array <=64 of {id:string,expected_count:integer[1,2147483647],count:integer[0,2147483647],place:Ground|Bag}；id不重复，count=0删除",
+          "tools": "array <=8 of {slot:integer[1,8],expected_instance:string,cfg_id:string,count:integer[0,100000]}；slot不重复，cfg_id=0要求count=0",
+          "scene": "可选 {index:integer[1,32],expected_used:boolean,used:boolean}"
+        },
+        "extra_fields": false,
+        "ownership": "items必须为Ground或本玩家Bag；Bag目标自动写当前owner并将x/y归零；不改变cfg_id",
+        "atomic": "核对所有旧count、工具实例、场景水位和背包容量后一次提交；失败返回错误字符串且无修改",
+        "returns": "空字符串为成功；invalid_state|invalid_player|stale_item|invalid_item_owner|stale_tool|stale_scene|bag_full；非法结构抛错"
+      },
+      "tool_use": {
+        "start_use": "Lua 决定前摇和是否需要投掷物预留，原生绑定非空槽实例并原子预留容量",
+        "finish_use": "Lua 传最终count及是否clear；原生要求使用已到0 Tick且实例未变，count不增加，clear要求count=0；成功释放前摇和未消费预留"
+      },
+      "state_import": {
+        "max_bytes": 1048576,
+        "ordering": "Lua 先验证配置语义；World.load 在独立候选验证结构，通过后替换；失败不得推进revision或generation"
+      }
+    }
   },
   "capability": {
     "namespaces": [
@@ -323,17 +423,27 @@
     ]
   },
   "state": {
-    "v": 6,
+    "v": 7,
     "tick_id": "canonical decimal string [0,9223372036854775807]",
     "seq": "canonical decimal string [0,18446744073709551615]",
     "match_id": "canonical decimal string [0,18446744073709551615]",
     "world_id": "server assigned runtime identity, nonzero for an active match",
-    "raid": "native player_state/random/dropped/extract_id/extract_ticks/extract_reason/damage_tick",
+    "raid": {
+      "player_state": "Alive|Dead|Extracted|Abandoned",
+      "random": "非零 uint32 规范十进制字符串",
+      "dropped": "唯一 uint64 字符串数组，最多64",
+      "extract_id": "integer [0,2147483647]",
+      "extract_ticks": "integer [0,36000]",
+      "extract_reason": "locked|outside|hurt|dead|counting|complete",
+      "damage_tick": "规范十进制 uint64 字符串 <=tick_id",
+      "extract_unlocked": "boolean；Lua 计算，原生仅投影",
+      "extract_remaining": "integer [0,36000]；Lua 计算，原生仅投影"
+    },
     "player_id": "canonical decimal string [0,18446744073709551615]",
     "event_id": "canonical decimal string [0,18446744073709551615]",
     "phase": "Unauthenticated|Lobby|Preparing|Playing|Settling|Finished|Aborted; Dead/Cleared only in combat regression fixture",
     "paused": "boolean",
-    "content_key": "canonical JSON encoding of complete immutable content; exact import match",
+    "content_key": "gameplay-v4: 加规范内容 SHA-256 十六进制摘要；导入必须完全相同",
     "entities": {
       "max": 64,
       "key": "positive canonical uint64 string, exactly matches instance id",
@@ -356,6 +466,10 @@
           "hp": "integer [0,max_hp]",
           "max_hp": "integer equal to referenced hp",
           "alive": "boolean, equals hp > 0"
+        },
+        "body": {
+          "width": "偶数 integer [2,10000]；Lua 验证当前姿态配置",
+          "height": "偶数 integer [2,10000]；Lua 验证当前姿态配置"
         }
       },
       "player": {
@@ -431,7 +545,8 @@
     "scene_used": "boolean array matching selected scene order; maximum 32; only supply may become used",
     "projectiles": "fixed 16 slots with unique id/cfg_id/x/y/vx/vy/remaining/active/reserved; reservations belong to an active bomb use",
     "last_projectile_id": "canonical uint64 high-water, never reused within a match",
-    "action_seq": "canonical uint64 accepted action high-water; responses retained in Runtime bounded cache"
+    "action_seq": "canonical uint64 accepted action high-water; responses retained in Runtime bounded cache",
+    "validation": "原生执行类型、范围、容量、所有权、实例及状态结构校验；Lua 执行所有配置关联、体型碰撞、枪械工具、叠堆与场景语义校验"
   },
   "effect": {
     "v": 5,

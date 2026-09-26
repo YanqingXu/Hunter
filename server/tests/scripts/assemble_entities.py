@@ -11,7 +11,7 @@ from publish import publish_files
 
 
 # 复用正式路径校验与组装器，只在临时目录增加测试入口。
-def build(manifest, fixture, output, mapping):
+def build(manifest, fixture, output, mapping, cfg):
     entry, modules = assemble.load_manifest(manifest)
     with tempfile.TemporaryDirectory(prefix="hunter-entities-") as temp:
         root = Path(temp)
@@ -20,15 +20,16 @@ def build(manifest, fixture, output, mapping):
             target = root / module["file"]
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(module["path"].read_bytes())
-            items.append({"name": name, "file": module["file"], "deps": module["deps"]})
+            items.append({"name": name, "file": module["file"], "deps": module["deps"],
+                          "kind": module["kind"]})
         (root / "entities.lua").write_bytes(fixture.read_bytes())
         items.append({"name": "tests.entities", "file": "entities.lua", "deps": [
             entry, "game.world", "game.weapon", "game.ai", "game.damage", "game.snapshot",
-            "game.movement"]})
+            "game.movement", "game.cfg"], "kind": "factory"})
         path = root / "modules.json"
         path.write_text(json.dumps({"version": 1, "entry": "tests.entities", "modules": items}),
                         encoding="utf-8")
-        source, evidence = assemble.assemble(path)
+        source, evidence = assemble.assemble(path, cfg)
     publish_files([(output, source.encode("utf-8")),
                    (mapping, (json.dumps(evidence, indent=2) + "\n").encode("utf-8"))])
 
@@ -36,10 +37,10 @@ def build(manifest, fixture, output, mapping):
 # 接收构建系统提供的正式清单和测试夹具位置。
 def main():
     parser = argparse.ArgumentParser()
-    for name in ("manifest", "fixture", "output", "map"):
+    for name in ("manifest", "fixture", "output", "map", "cfg"):
         parser.add_argument("--" + name, type=Path, required=True)
     args = parser.parse_args()
-    build(args.manifest, args.fixture, args.output, args.map)
+    build(args.manifest, args.fixture, args.output, args.map, args.cfg)
 
 
 if __name__ == "__main__":

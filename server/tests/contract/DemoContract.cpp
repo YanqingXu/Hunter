@@ -2,7 +2,7 @@
 #include "common/Types.h"
 #include "game/World.h"
 #include "script/Schema.h"
-#include "ContentSpec.h"
+#include "../fixtures/NativeWorld.h"
 #include <iostream>
 #include <stdexcept>
 
@@ -50,7 +50,8 @@ i32 tool_slot(const hunter::World& world, const Str& kind)
     {
         const auto id = value.get_tool_cfg(index);
 
-        if (id != "0" && world.content.at("tools").at(id).at("kind") == kind)
+        if ((id == "30001" && kind == "knife") || (id == "30002" && kind == "medkit")
+            || (id == "30004" && kind == "needle") || (id == "30006" && kind == "bomb"))
         {
             return index;
         }
@@ -58,72 +59,114 @@ i32 tool_slot(const hunter::World& world, const Str& kind)
 
     throw std::runtime_error("missing default tool");
 }
-// 梯上拾取不得绕过动作门禁，拒绝必须同时保留地面物品与装备资源。
-void check_ladder_pickup()
+// 初始化拒绝不能留下半份结构；出生参数必须绑定已接受的完整配装。
+void check_initialization()
 {
     hunter::World world;
-    world.configure(nlohmann::json::parse(hunter::content::json_text));
+    rejects([&]
+    {
+        world.configure({{"map_width", 24000}, {"map_height", 10000},
+            {"bag_slots", 8}, {"scene_ids", {"1", "1"}}}, "rejected");
+    }, "duplicate scene identity rejected");
+    check(!world.configured && world.content_key.empty() && world.map_width == 0
+        && world.scene_ids.empty(), "rejected initialization publishes no structure");
+    hunter::test::configure(world);
+    rejects([&] { hunter::test::configure(world); }, "configuration installs exactly once");
+    rejects([&] { world.prepare_loadout(hunter::test::loadout()); }, "loadout write gate");
     world.access.writable = true;
     world.login("73");
-    world.begin("ladder_pickup", "0", "1", "1");
-    check(world.spawn("player", "") == "1", "spawn ladder pickup player");
+    world.prepare_loadout(hunter::test::loadout());
+    world.begin("init", "0", "1", "1");
+    const auto before = world.document();
+    const auto revision = world.revision;
+    const auto serial = world.serial;
+    auto spec = hunter::test::player_spec();
+    spec["weapons"][0]["ammo_cfg_id"] = "2";
+    rejects([&] { world.spawn("player", spec.dump()); }, "spawn binds accepted ammunition");
+    check(world.document() == before && world.revision == revision && world.serial == serial,
+        "failed player initialization preserves world and allocators");
+    hunter::test::spawn(world, "player");
+    const auto saved = world.save();
+    auto invalid = world.document();
+    invalid["entities"]["1"]["body"]["width"] = 599;
+    const auto active_serial = world.serial;
+    const auto active_revision = world.revision;
+    rejects([&] { world.load(invalid.dump()); }, "malformed body rejected");
+    check(world.save() == saved && world.serial == active_serial
+        && world.revision == active_revision, "failed body import preserves handles");
+}
+
+// 混合提交必须核对旧实例和场景水位，任一失败不能部分补给或消费物品。
+void check_batch()
+{
+    hunter::World world;
+    hunter::test::configure(world);
+    world.access.writable = true;
+    world.login("73");
+    world.prepare_loadout(hunter::test::loadout());
+    world.begin("batch", "0", "1", "1");
+    hunter::test::spawn(world, "player");
     auto& value = player(world);
-    const auto needle = tool_slot(world, "needle");
-    const auto needle_id = value.get_tool_cfg(needle);
-    value.change_tool(needle, "0", 0);
-    value.x = 6400;
-    value.y = 500;
-    value.vx = 0;
-    value.vy = 0;
-    value.grounded = false;
-    value.ladder_id = 1;
-    world.drop("2800001", 1, value.x, value.y);
-    world.drop(needle_id, 1, value.x, value.y);
+    value.change_tool(2, "30002", 0);
+    world.drop("2800001", "[1]", value.x, value.y);
+    using Json = nlohmann::json;
+    Json batch = {{"owner", "73"}, {"items", {{{"id", "1"}, {"expected_count", 1},
+        {"count", 0}, {"place", "Ground"}}}}, {"tools", {{{"slot", 2},
+        {"expected_instance", "999"}, {"cfg_id", "30002"}, {"count", 1}}}},
+        {"scene", {{"index", 2}, {"expected_used", false}, {"used", true}}}};
     const auto before = world.save();
-    check(world.pickup("73", "1") == "action_locked" && world.save() == before,
-        "ladder rejects nearby reward pickup without changing resources");
-    check(world.pickup("73", "2") == "action_locked" && world.save() == before,
-        "ladder rejects nearby consumable pickup without changing resources");
-    value.ladder_id = 0;
-    value.y = 1500;
-    value.grounded = true;
-    check(world.pickup("73", "1").empty(), "reward pickup resumes after leaving ladder");
-    check(world.pickup("73", "2").empty() && value.get_tool_cfg(needle) == needle_id,
-        "consumable pickup resumes after leaving ladder");
-    check(world.valid(), "ladder pickup boundaries preserve valid native state");
+    check(world.commit(batch.dump()) == "stale_tool" && world.save() == before,
+        "stale tool rejects entire mixed batch");
+    batch["tools"][0]["expected_instance"] = value.get_tool_instance(2);
+    batch["tools"][0]["count"] = false;
+    rejects([&] { world.commit(batch.dump()); }, "malformed later batch value rejected");
+    check(world.save() == before, "malformed batch does not consume earlier item change");
+    batch["tools"][0]["count"] = 1;
+    check(world.commit(batch.dump()).empty() && !world.has_item("1")
+        && world.scene_used(2) && value.get_tool_count(2) == 1,
+        "valid mixed batch commits all resources");
+    batch["items"] = Json::array();
+    batch["tools"][0]["count"] = 2;
+    const auto committed = world.save();
+    check(world.commit(batch.dump()) == "stale_scene" && world.save() == committed,
+        "scene watermark prevents duplicate supply");
+    const auto serial = world.serial;
+    rejects([&] { world.drop("1", "[1,false]", value.x, value.y); },
+        "malformed later drop stack rejected");
+    check(world.save() == committed && world.serial == serial,
+        "drop validation has no partial publication");
 }
 
 }
 
-// 在正式内容上验证拒绝不消费资源、快照投影与状态往返。
+// 在隔离原生夹具上验证拒绝不消费资源、快照投影与状态往返。
 int main()
 {
     try
     {
-        check_ladder_pickup();
+        check_initialization();
+        check_batch();
         hunter::World world;
-        world.configure(nlohmann::json::parse(hunter::content::json_text));
-        auto accepted = world.check_loadout({});
+        hunter::test::configure(world);
+        world.access.writable = true;
+        auto accepted = hunter::test::loadout();
         check(accepted.weapons_size() == 2 && accepted.tools_size() == 2
             && accepted.consumables_size() == 2, "complete default loadout");
         auto invalid = accepted;
-        invalid.mutable_weapons(0)->set_ammo_cfg_id(2147483647);
-        rejects([&] { world.check_loadout(invalid); }, "mismatched ammo rejected");
+        invalid.set_player_cfg_id(0);
+        rejects([&] { world.prepare_loadout(invalid); }, "zero player id rejected");
         invalid = accepted;
-        invalid.set_health_segments(0, 49);
-        rejects([&] { world.check_loadout(invalid); }, "invalid segment rejected");
-        invalid = accepted;
-        invalid.add_tools(accepted.tools(0));
-        rejects([&] { world.check_loadout(invalid); }, "duplicate tool rejected");
+        invalid.add_weapons()->CopyFrom(accepted.weapons(0));
+        rejects([&] { world.prepare_loadout(invalid); }, "weapon capacity rejected");
         world.access.writable = true;
         world.login("73");
         world.prepare_loadout(accepted);
         world.begin("demo", "0", "1", "1");
-        check(world.spawn("player", "") == "1", "spawn accepted loadout");
+        check(hunter::test::spawn(world, "player") == "1", "spawn accepted loadout");
 
-        for (const auto& spawn : world.content.at("map").at("enemies"))
+        for (const auto spawn : {"2", "3"})
         {
-            world.spawn("monster", spawn.at("spawn_id"));
+            hunter::test::spawn(world, "monster", spawn);
         }
 
         check(world.valid(), "new demo world valid");
@@ -164,32 +207,21 @@ int main()
         const auto medkit = tool_slot(world, "medkit");
         const auto medkit_id = value.get_tool_cfg(medkit);
         value.change_tool(medkit, medkit_id, 1);
-        check(value.start_use(medkit, 1), "begin medical use");
+        check(value.start_use(medkit, 1, false), "begin medical use");
         value.set_use_ticks(0);
-        check(value.finish_use() && value.get_tool_count(medkit) == 0
+        check(value.finish_use(0, false) && value.get_tool_count(medkit) == 0
             && value.get_tool_cfg(medkit) == medkit_id, "empty regular tool keeps slot");
-        check(!value.start_use(medkit, 1), "empty tool cannot start");
+        check(!value.start_use(medkit, 1, false), "empty tool cannot start");
         const auto needle = tool_slot(world, "needle");
         value.change_tool(needle, value.get_tool_cfg(needle), 1);
-        check(value.start_use(needle, 1), "begin consumable use");
+        check(value.start_use(needle, 1, false), "begin consumable use");
         value.set_use_ticks(0);
-        check(value.finish_use() && value.get_tool_cfg(needle) == "0",
+        check(value.finish_use(0, true) && value.get_tool_cfg(needle) == "0",
             "empty consumable clears slot");
-        world.drop(medkit_id, 1, value.x, value.y);
-        check(world.pickup("73", "1") == "unsupported_pickup" && world.has_item("1"),
-            "regular equipment never enters reward bag");
-        const auto needle_id = std::to_string(accepted.consumables(0));
-        world.drop(needle_id, 1, value.x, value.y);
-        check(world.pickup("73", "2").empty() && !world.has_item("2")
-            && value.get_tool_cfg(needle) == needle_id, "consumable pickup uses equipment slot");
-        world.drop(needle_id, 1, value.x, value.y);
-        const auto before_pickup = world.document();
-        check(world.pickup("73", "3") == "consumable_full"
-            && world.document() == before_pickup, "consumable capacity rejection is atomic");
         const auto bomb = tool_slot(world, "bomb");
         const auto bomb_id = value.get_tool_cfg(bomb);
         const auto bomb_count = value.get_tool_count(bomb);
-        check(value.start_use(bomb, 1) && world.projectile_free() == 15,
+        check(value.start_use(bomb, 1, true) && world.projectile_free() == 15,
             "bomb reserves flight capacity before use");
         const auto reserved_state = world.save();
         world.load(reserved_state);
@@ -198,10 +230,10 @@ int main()
         check(world.projectile_free() == 16 && player(world).get_tool_count(bomb) == bomb_count,
             "cancel returns reservation without consumption");
         auto& active = player(world);
-        check(active.start_use(bomb, 1), "restart bomb");
+        check(active.start_use(bomb, 1, true), "restart bomb");
         active.set_use_ticks(0);
         const auto projectile = world.spawn_projectile(bomb_id, active.x, active.y, 100, 0, 1600);
-        check(active.finish_use() && world.projectile_alive(projectile)
+        check(active.finish_use(0, true) && world.projectile_alive(projectile)
             && world.projectile_free() == 15, "completion consumes reservation once");
 
         for (i32 index = 1; index < 16; ++index)
@@ -211,10 +243,10 @@ int main()
 
         check(world.projectile_free() == 0, "projectile capacity bounded");
         active.change_tool(bomb, bomb_id, 1);
-        check(!active.start_use(bomb, 1) && active.get_tool_count(bomb) == 1,
+        check(!active.start_use(bomb, 1, true) && active.get_tool_count(bomb) == 1,
             "full projectile capacity rejects without consumption");
         world.remove_projectile(projectile);
-        check(active.start_use(bomb, 1), "released capacity reusable");
+        check(active.start_use(bomb, 1, true), "released capacity reusable");
         active.cancel_use();
         check(world.get_loadout().SerializeAsString() == accepted.SerializeAsString(),
             "accepted loadout stays frozen after consumption");
@@ -229,12 +261,6 @@ int main()
         check(!hunter::validate_output(hunter::ScriptOut(snapshot), 65536),
             "duplicate projectile rejected by output boundary");
         auto damaged = world.document();
-        damaged["items"]["1"]["place"] = "Bag";
-        damaged["items"]["1"]["owner_player_id"] = "73";
-        damaged["items"]["1"]["x"] = 0;
-        damaged["items"]["1"]["y"] = 0;
-        rejects([&] { world.load(damaged.dump()); }, "equipment reward bag import rejected");
-        damaged = world.document();
         damaged["entities"]["1"]["demo"]["health_segments"][0] = 49;
         const auto before = world.save();
         rejects([&] { world.load(damaged.dump()); }, "bad state segments rejected");

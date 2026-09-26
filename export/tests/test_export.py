@@ -295,6 +295,17 @@ class ExportTest(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("导表失败", errors.getvalue())
 
+    # 通用命令默认仅写草稿目录，不覆盖正式导表的同名文件。
+    def test_default_cli_output_is_separate_draft_directory(self):
+        write_book(self.book)
+        production = self.base / "server/build/generated/cfg/Test.lua"
+        production.parent.mkdir(parents=True)
+        production.write_bytes(b"production config")
+        with mock.patch.object(EXPORT, "ROOT", self.base), contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(EXPORT.main(["--source", str(self.source)]), 0)
+        self.assertTrue((self.base / "server/build/draft-cfg/Test.lua").is_file())
+        self.assertEqual(production.read_bytes(), b"production config")
+
 
 # 真实配置回归用例与引擎检查分开，使未安装 Lua 的机器也能运行通用测试。
 class RepositoryTest(unittest.TestCase):

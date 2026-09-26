@@ -361,8 +361,8 @@ def repo_path(value):
 def main(argv=None):
     parser = argparse.ArgumentParser(description="将 design Excel 配置导出为服务端 Lua（不接入运行时）")
     parser.add_argument("--source", type=repo_path, default=ROOT / "design", help="Excel 目录，默认 design")
-    parser.add_argument("--output", type=repo_path, default=ROOT / "server/build/generated/cfg",
-                        help="Lua 输出目录，默认 server/build/generated/cfg")
+    parser.add_argument("--output", type=repo_path, default=ROOT / "server/build/draft-cfg",
+                        help="草稿 Lua 输出目录，默认 server/build/draft-cfg")
     parser.add_argument("--check", action="store_true", help="仅校验，不创建输出文件或目录")
     args = parser.parse_args(argv)
     try:

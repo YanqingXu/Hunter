@@ -18,16 +18,16 @@ wire::Envelope World::snapshot(u64 observer) const
     msg.set_world_id(world_id);
     msg.set_player_entity_id(read_id(find_player(get_player_id())));
     msg.set_player_state(raid.player_state);
-    msg.set_bag_slots(content.contains("bag") ? content.at("bag").at("slots").get<u32>() : 0);
+    msg.set_bag_slots(static_cast<u32>(bag_slots));
     msg.set_extract_id(raid.extract_id);
     msg.set_extract_ticks(static_cast<u32>(raid.extract_ticks));
     msg.set_extract_reason(raid.extract_reason);
     msg.set_action_seq(action_seq);
 
-    for (usize index = 0; index < content.at("scenes").size(); ++index)
+    for (usize index = 0; index < scene_ids.size(); ++index)
     {
         auto& value = *msg.add_scenes();
-        value.set_id(static_cast<u32>(read_id(content.at("scenes")[index].at("id"))));
+        value.set_id(scene_ids[index]);
         value.set_used(used_scenes[index]);
     }
 
@@ -46,25 +46,8 @@ wire::Envelope World::snapshot(u64 observer) const
         }
     }
 
-    if (content.contains("extracts"))
-    {
-        for (const auto& point : content.at("extracts"))
-        {
-            const auto spawn = read_id(point.at("boss_spawn_id").get<Str>());
-
-            for (const auto index : order)
-            {
-                const auto* monster = std::get_if<Monster>(&actors[index]->value);
-                if (monster && monster->spawn_id == spawn && !monster->alive)
-                {
-                    msg.set_extract_unlocked(true);
-                }
-            }
-
-            const i32 duration = point.at("hold_ticks");
-            msg.set_extract_remaining_ticks(static_cast<u32>(duration - raid.extract_ticks));
-        }
-    }
+    msg.set_extract_unlocked(raid.extract_unlocked);
+    msg.set_extract_remaining_ticks(static_cast<u32>(raid.extract_remaining));
 
     for (const auto& entry : items)
     {
@@ -113,12 +96,11 @@ wire::Envelope World::snapshot(u64 observer) const
             value.set_reserve(player->reserve);
             value.set_reload_ticks(player->weapon.reload_ticks);
             value.set_ai(unit.alive ? "idle" : "dead");
-            const auto& cfg = content.at("players").at(player->get_cfg_id());
             value.set_prone(player->prone);
             value.set_running(player->running);
             value.set_stamina(static_cast<u32>(player->stamina));
-            value.set_width(cfg.at(player->prone ? "prone_width" : "width").get<u32>());
-            value.set_height(cfg.at(player->prone ? "prone_height" : "height").get<u32>());
+            value.set_width(static_cast<u32>(unit.width));
+            value.set_height(static_cast<u32>(unit.height));
             value.set_active_weapon(static_cast<u32>(player->active_weapon));
             value.set_selected_slot(static_cast<u32>(player->selected_slot));
             value.set_use_slot(static_cast<u32>(player->use_slot));
@@ -159,9 +141,8 @@ wire::Envelope World::snapshot(u64 observer) const
         }
         else
         {
-            const auto& cfg = content.at("monsters").at(unit.get_cfg_id());
-            value.set_width(cfg.at("width").get<u32>());
-            value.set_height(cfg.at("height").get<u32>());
+            value.set_width(static_cast<u32>(unit.width));
+            value.set_height(static_cast<u32>(unit.height));
             value.set_ai(std::get<Monster>(actor.value).state);
             value.set_attack_ticks(static_cast<u32>(std::get<Monster>(actor.value).attack_ticks));
         }

@@ -3,7 +3,7 @@
 #include "core/Cfg.h"
 #include "game/World.h"
 #include "script/Script.h"
-#include "ContentSpec.h"
+#include "../fixtures/ScriptCfg.h"
 #include <iostream>
 #include <stdexcept>
 
@@ -38,7 +38,7 @@ T take(std::expected<T, Str> result)
 // 使用合法的最小感知和移动参数，隔离需要精确计时的远处怪物。
 Json content()
 {
-    auto value = Json::parse(hunter::content::json_text);
+    auto value = hunter::test_content();
 
     for (auto& monster : value["monsters"])
     {
@@ -61,11 +61,12 @@ struct Game
     Game(const hunter::Cfg& cfg, Json data = content(),
         const hunter::wire::Loadout& loadout = {})
     {
-        take(script.open(cfg, Json{{"v", 6}, {"snapshot_every", 3},
-            {"content", std::move(data)}}.dump()));
-        take(script.event(2, R"({"v":6,"req_id":"login","player_id":"1"})"));
-        take(script.change([&](hunter::World& world) { world.prepare_loadout(loadout); }));
-        take(script.event(3, R"({"v":6,"req_id":"start","after_match_id":"0",
+        take(script.open(hunter::test_cfg(cfg, data),
+            Json{{"v", 7}, {"snapshot_every", 3}}.dump()));
+        take(script.event(2, R"({"v":7,"req_id":"login","player_id":"1"})"));
+        const auto accepted = take(script.check_loadout(loadout));
+        take(script.change([&](hunter::World& world) { world.prepare_loadout(accepted); }));
+        take(script.event(3, R"({"v":7,"req_id":"start","after_match_id":"0",
             "match_id":"1","world_id":"1"})"));
     }
 
@@ -120,7 +121,7 @@ struct Game
     // 调用与 Runtime 相同的动作桥接并返回明确业务拒绝。
     Str action(const Str& kind, i32 slot = 0, u32 target = 0)
     {
-        const auto result = take(script.event(5, Json{{"v", 6}, {"req_id", "action"},
+        const auto result = take(script.event(5, Json{{"v", 7}, {"req_id", "action"},
             {"kind", kind}, {"slot", slot}, {"target_id", std::to_string(target)},
             {"action_seq", std::to_string(++action_seq)}}.dump()));
 
@@ -145,7 +146,7 @@ struct Game
     {
         const auto saved = take(script.export_state());
         take(script.import_state(saved));
-        check(take(script.export_state()) == saved, "v6 state roundtrip");
+        check(take(script.export_state()) == saved, "v7 state roundtrip");
     }
 };
 
@@ -159,18 +160,18 @@ void loadouts(const hunter::Cfg& cfg)
     auto heavy = accepted;
     heavy.mutable_weapons(1)->set_cfg_id(2);
     heavy.mutable_weapons(1)->set_ammo_cfg_id(2);
-    bool rejected = false;
-
-    try
-    {
-        static_cast<void>(game.script.world().check_loadout(heavy));
-    }
-    catch (const std::exception&)
-    {
-        rejected = true;
-    }
-
-    check(rejected, "overweight rejected before starting");
+    const auto rejected = game.script.check_loadout(heavy);
+    check(!rejected && rejected.error() == "loadout_overweight",
+        "overweight rejected before starting");
+    auto invalid = accepted;
+    invalid.mutable_weapons(0)->set_ammo_cfg_id(2);
+    check(!game.script.check_loadout(invalid), "mismatched ammunition rejected in Lua");
+    invalid = accepted;
+    invalid.set_health_segments(0, 49);
+    check(!game.script.check_loadout(invalid), "nonsegment health rejected in Lua");
+    invalid = accepted;
+    invalid.set_tools(1, invalid.tools(0));
+    check(!game.script.check_loadout(invalid), "duplicate tools rejected in Lua");
     auto second = accepted;
     second.set_player_cfg_id(2);
     Game other(cfg, content(), second);
@@ -216,11 +217,11 @@ void vitals(const hunter::Cfg& cfg)
     check(game.player().hp == 100, "mixed segment recovery stops at 100");
     game.steps(120);
     check(game.player().hp == 100, "exact boundary cannot enter next segment");
-    take(game.script.event(4, R"({"v":6,"paused":true})"));
+    take(game.script.event(4, R"({"v":7,"paused":true})"));
     const auto before = game.player().stamina;
     game.steps(120);
     check(game.player().stamina == before, "pause freezes recovery");
-    take(game.script.event(4, R"({"v":6,"paused":false})"));
+    take(game.script.event(4, R"({"v":7,"paused":false})"));
     game.roundtrip();
 
     auto tunnel = content();
@@ -329,7 +330,7 @@ void tools(const hunter::Cfg& cfg)
     });
     u32 supply = 0;
 
-    for (const auto& scene : game.script.world().content.at("scenes"))
+    for (const auto& scene : content().at("scenes"))
     {
         if (scene.at("kind") == "supply")
         {
@@ -341,6 +342,111 @@ void tools(const hunter::Cfg& cfg)
     check(game.player().get_tool_count(2) == 3, "supply restores one regular charge");
     check(!game.action("interact", 0, supply).empty(), "supply used only once");
     game.roundtrip();
+}
+
+// 通过正式动作验证拾取语义与原生批量提交，拒绝操作不能改变物品或工具实例。
+void inventory(const hunter::Cfg& cfg)
+{
+    auto data = content();
+    data["bag"]["slots"] = 1;
+    data["items"]["2800001"]["max_stack"] = 5;
+    Game game(cfg, data);
+    game.setup([](hunter::Player&, hunter::World& world)
+    {
+        world.drop("2800001", "[3]", 3501, 0);
+    });
+    const auto before = take(game.script.export_state());
+    check(game.action("pickup", 0, 1) == "out_of_range", "pickup radius rejects 1501 mm");
+    check(take(game.script.export_state()) == before, "distance refusal preserves full state");
+    game.setup([](hunter::Player&, hunter::World& world)
+    {
+        world.items[world.item_slot(1)]->value.x = 3500;
+    });
+    check(game.action("pickup", 0, 1).empty(), "pickup accepts exact 1500 mm radius");
+    game.setup([](hunter::Player&, hunter::World& world)
+    {
+        world.drop("2800001", "[3]", 2000, 0);
+    });
+    const auto full = take(game.script.export_state());
+    check(game.action("pickup", 0, 2) == "bag_full", "partial stack cannot exceed one bag slot");
+    check(take(game.script.export_state()) == full, "bag refusal does not partially merge");
+    game.setup([](hunter::Player&, hunter::World& world)
+    {
+        world.items[world.item_slot(2)]->value.count = 2;
+    });
+    check(game.action("pickup", 0, 2).empty(), "remaining stack capacity accepts exact fit");
+    check(!game.script.world().has_item("2")
+        && game.script.world().items[game.script.world().item_slot(1)]->value.count == 5,
+        "stack merge consumes only ground instance");
+    game.setup([](hunter::Player&, hunter::World& world)
+    {
+        world.drop("30002", "[1]", 2000, 0);
+        world.drop("30004", "[1]", 2000, 0);
+    });
+    check(game.action("pickup", 0, 3) == "unsupported_pickup",
+        "regular tool does not enter reward inventory");
+    const auto equipment = take(game.script.export_state());
+    check(game.action("pickup", 0, 4) == "consumable_full", "full consumable rejects pickup");
+    check(take(game.script.export_state()) == equipment, "consumable refusal is atomic");
+    game.setup([](hunter::Player& player, hunter::World&)
+    {
+        player.change_tool(5, "0", 0);
+    });
+    check(game.action("pickup", 0, 4).empty(), "consumable enters dedicated empty slot");
+    check(game.player().get_tool_cfg(5) == "30004" && !game.script.world().has_item("4"),
+        "consumable transfer keeps reward bag separate");
+    game.roundtrip();
+
+    Game ladder(cfg);
+    ladder.setup([](hunter::Player& player, hunter::World&)
+    {
+        player.x = 4700;
+    });
+    check(ladder.action("interact", 0, 1).empty(), "pickup fixture enters ladder");
+    ladder.setup([](hunter::Player& player, hunter::World& world)
+    {
+        world.drop("2800001", "[1]", player.x, player.y);
+    });
+    check(ladder.action("pickup", 0, 1) == "action_locked", "ladder blocks pickup");
+    ladder.input(0, false, false, false, false, false, 1000, 0, 1);
+    ladder.steps(15);
+    check(ladder.action("pickup", 0, 1).empty(), "leaving ladder restores pickup");
+}
+
+// 非法候选先在 Lua 拒绝，既有世界内容与句柄代际都保持原样。
+void state_semantics(const hunter::Cfg& cfg)
+{
+    Game game(cfg);
+    const auto saved = take(game.script.export_state());
+    const auto& original = game.script.world();
+    const auto serial = original.serial;
+    auto invalid = Json::parse(saved);
+    invalid["entities"]["1"]["weapon"]["ammo"] = 999;
+    check(!game.script.import_state(invalid.dump()), "Lua rejects magazine overflow");
+    check(original.document().dump() == saved && original.serial == serial,
+        "invalid configuration semantics preserves world and generations");
+
+    Game shape(cfg);
+    invalid = Json::parse(take(shape.script.export_state()));
+    invalid["entities"]["1"]["body"]["height"] = 1;
+    check(!shape.script.import_state(invalid.dump()), "Lua rejects mismatched effective body");
+
+    Game legacy(cfg);
+    invalid = Json::parse(take(legacy.script.export_state()));
+    invalid["v"] = 6;
+    check(!legacy.script.import_state(invalid.dump()), "old internal state is rejected");
+
+    Game using_tool(cfg);
+    using_tool.setup([](hunter::Player& player, hunter::World&) { player.hp = 100; });
+    check(using_tool.action("use", 2).empty(), "state fixture begins valid tool use");
+    invalid = Json::parse(take(using_tool.script.export_state()));
+    invalid["entities"]["1"]["demo"]["ladder_id"] = 1;
+    check(!using_tool.script.import_state(invalid.dump()), "ladder cannot import active tool use");
+
+    Game projection(cfg);
+    invalid = Json::parse(take(projection.script.export_state()));
+    invalid["raid"]["extract_unlocked"] = true;
+    check(!projection.script.import_state(invalid.dump()), "forged extraction view is rejected");
 }
 
 // 验证梯上只处理移动、离梯不重放边沿动作以及近战体力门禁。
@@ -433,6 +539,10 @@ int main(int argc, char** argv)
         ladders(cfg);
         stage = "explosives";
         explosives(cfg);
+        stage = "inventory";
+        inventory(cfg);
+        stage = "state semantics";
+        state_semantics(cfg);
         std::cout << "gameplay contract passed\n";
         return 0;
     }

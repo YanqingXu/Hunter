@@ -171,6 +171,7 @@ luax::Status register_objects(World& world, const luax::Isolate& isolate,
 
     {
         auto type = builder<Unit>(world, "Unit");
+        type.method("set_body", &Unit::set_body);
         type.method("read_motion", &Unit::read_motion);
         type.method("write_motion", &Unit::write_motion);
         type.factory("find", [&world](Str id) { return find<Unit>(world, id); });
@@ -347,11 +348,15 @@ luax::Status register_objects(World& world, const luax::Isolate& isolate,
     type.method("drop_once", &World::drop_once);
     type.method("roll", &World::roll);
     type.method("drop", &World::drop);
-    type.method("pickup", &World::pickup);
+    type.method("inventory", &World::inventory);
+    type.method("commit", &World::commit);
+    type.method("loadout", &World::loadout);
+    type.method("accept_loadout", &World::accept_loadout);
     type.method("hurt", &World::hurt);
     type.method("hurt_now", &World::hurt_now);
     type.method("get_extract_ticks", &World::get_extract_ticks);
     type.method("set_extract", &World::set_extract);
+    type.method("set_extract_view", &World::set_extract_view);
     type.method("finish", &World::finish);
     type.method("get_last_entity_id", &World::get_last_entity_id);
     type.method("get_last_req", &World::get_last_req);

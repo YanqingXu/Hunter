@@ -1,5 +1,6 @@
 // 在真实 Luax 源码及签名运行时验证登录、运动、战斗、重开和完整状态恢复。
 #include "common/Types.h"
+#include "../fixtures/ScriptCfg.h"
 #include "core/Cfg.h"
 #include "script/Script.h"
 #include "script/Schema.h"
@@ -67,8 +68,8 @@ struct Game
     // 使用与宿主一致的配置打开真实脚本。
     Game(const hunter::Cfg& cfg, Json data) : content(std::move(data))
     {
-        const auto output = take(script.open(cfg,
-            Json{{"v", 6}, {"snapshot_every", 3}, {"content", content}}.dump()));
+        const auto output = take(script.open(hunter::test_cfg(cfg, content),
+            Json{{"v", 7}, {"snapshot_every", 3}}.dump()));
         check(output.empty(), "init must not send network output");
     }
 
@@ -101,7 +102,7 @@ struct Game
             payload["world_id"] = std::to_string(next);
         }
 
-        payload["v"] = 6;
+        payload["v"] = 7;
         return take(script.event(id, payload.dump()));
     }
 
@@ -370,10 +371,14 @@ void weapons(const hunter::Cfg& cfg, const Json& base)
     content["map"]["enemies"][0]["spawn_id"] = "3";
     auto same_place = content["map"]["enemies"][0];
     same_place["spawn_id"] = "2";
+    same_place["x"] = 8000;
+    same_place["patrol_min"] = 7500;
+    same_place["patrol_max"] = 8500;
     content["map"]["enemies"].push_back(same_place);
     Game tied(cfg, content);
     tied.start();
     auto reversed = tied.state();
+    reversed["entities"]["3"]["pose"]["x"] = 5000;
     reversed["entity_ids"] = Json::array({"3", "1", "2"});
     tied.restore(reversed);
     tied.event(1, tied.input(0, false, true));
@@ -478,10 +483,11 @@ void monster_ranges(const hunter::Cfg& cfg, const Json& base)
         && outside.state()["entities"]["2"]["pose"]["x"] == 3236,
         "one unit beyond detection continues patrol");
 
-    content["map"]["enemies"][0].update({{"x", 2136}, {"patrol_min", 1600},
-        {"patrol_max", 2600}});
     Game approach(cfg, content);
     approach.start();
+    auto approach_state = approach.state();
+    approach_state["entities"]["2"]["pose"]["x"] = 2136;
+    approach.restore(approach_state);
     approach.steps();
     check(approach.state()["entities"]["2"]["ai"]["state"] == "chase"
         && approach.state()["entities"]["2"]["pose"]["x"] == 2101
@@ -493,9 +499,11 @@ void monster_ranges(const hunter::Cfg& cfg, const Json& base)
         && approach.state()["entities"]["1"]["health"]["hp"] == 90,
         "chase reaching melee range attacks in the same tick");
 
-    content["map"]["enemies"][0]["x"] = 2100;
     Game attack(cfg, content);
     attack.start();
+    auto attack_state = attack.state();
+    attack_state["entities"]["2"]["pose"]["x"] = 2100;
+    attack.restore(attack_state);
     attack.steps();
     check(attack.state()["entities"]["2"]["ai"]["state"] == "attack"
         && attack.state()["entities"]["2"]["pose"]["x"] == 2100
@@ -518,9 +526,11 @@ void monster_ranges(const hunter::Cfg& cfg, const Json& base)
         "leaving detection returns to patrol while cooldown expires");
 
     content["monsters"]["1"]["speed"] = 1000;
-    content["map"]["enemies"][0]["x"] = 2150;
     Game fast(cfg, content);
     fast.start();
+    auto fast_state = fast.state();
+    fast_state["entities"]["2"]["pose"]["x"] = 2150;
+    fast.restore(fast_state);
     fast.steps();
     check(fast.state()["entities"]["2"]["pose"]["x"] == 2000
         && fast.state()["entities"]["2"]["ai"]["state"] == "attack"
@@ -531,6 +541,7 @@ void monster_ranges(const hunter::Cfg& cfg, const Json& base)
     Game above(cfg, content);
     above.start();
     saved = above.state();
+    saved["entities"]["2"]["pose"]["x"] = 2150;
     saved["entities"]["1"]["pose"].update({{"x", 2150}, {"y", 1500}});
     saved["entities"]["1"]["motion"]["grounded"] = false;
     above.restore(saved);
@@ -777,12 +788,12 @@ void configs(const hunter::Cfg& cfg, const Json& base)
         && bodies.state()["entities"]["3"]["health"]["hp"] == 40,
         "ray passes above short monster and hits farther tall body");
 
-    content["map"]["enemies"][0].update({{"x", 2600}, {"patrol_min", 2500},
-        {"patrol_max", 2700}});
-    content["map"]["enemies"][1].update({{"x", 2800}, {"patrol_min", 2700},
-        {"patrol_max", 2900}});
     Game melee(cfg, content);
     melee.start();
+    auto close = melee.state();
+    close["entities"]["2"]["pose"]["x"] = 2600;
+    close["entities"]["3"]["pose"]["x"] = 2800;
+    melee.restore(close);
     melee.steps();
     check(melee.state()["entities"]["1"]["health"]["hp"] == 83,
         "different melee damage applies in same tick");
@@ -805,6 +816,7 @@ void configs(const hunter::Cfg& cfg, const Json& base)
         {"ammo_cfg_id", "2"}});
     content["ammo"]["2"] = content["ammo"]["1"];
     content["ammo"]["2"]["damage"] = 35;
+    content["ammo"]["2"]["range"] = 2000;
     content["default_loadout"]["weapons"] = Json::array({"2"});
     content["default_loadout"]["ammo"] = Json::array({"2"});
     content["map"]["spawn"]["weapon_cfg_id"] = "2";
@@ -828,6 +840,7 @@ void configs(const hunter::Cfg& cfg, const Json& base)
     check(gun.state()["entities"]["1"]["weapon"]["ammo"] == 2
         && gun.state()["entities"]["1"]["reserve"] == 3, "alternate ammo transfer");
     content["weapons"]["2"]["range"] = 18000;
+    content["ammo"]["2"]["range"] = 18000;
     Game hit(cfg, content);
     hit.start();
     hit.event(1, hit.input(0, false, true));

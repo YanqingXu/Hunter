@@ -3,6 +3,8 @@ return function(deps)
     local state = deps["framework.state"]
     local player_api = deps["game.player"]
     local monster_api = deps["game.monster"]
+    local loadout_api = deps["game.loadout"]
+    local movement = deps["game.movement"]
     local api = {}
     local cache = {}
     local revision = 0
@@ -74,7 +76,28 @@ return function(deps)
 
     -- 原生分配成功后建立视图，预期拒绝返回原错误码。
     function api.spawn(world, content, kind, spawn_id)
-        local id = World.spawn(world, kind, spawn_id or "")
+        local spec
+        if kind == "player" then
+            spec = loadout_api.player(content, json.decode(World.loadout(world)))
+        elseif kind == "monster" then
+            assert(state.is_id(spawn_id, "2147483647") and spawn_id ~= "0", "invalid_spawn_id")
+            local spawn = monster_api.spawn_cfg(content, spawn_id)
+            if spawn == nil then
+                return nil, "invalid_spawn"
+            end
+            local cfg = content.monsters[spawn.cfg_id]
+            spec = {cfg_id = spawn.cfg_id, spawn_id = spawn_id, x = spawn.x, y = spawn.y,
+                hp = cfg.hp, width = cfg.width, height = cfg.height}
+        else
+            return nil, "invalid_kind"
+        end
+        spec.grounded = spec.y == 0
+        for _, solid in ipairs(movement.solids(content)) do
+            spec.grounded = spec.grounded or (spec.y == solid.y + solid.h
+                and spec.x - spec.width // 2 < solid.x + solid.w
+                and spec.x + spec.width // 2 > solid.x)
+        end
+        local id = World.spawn(world, kind, json.encode(spec))
         if string.sub(id, 1, 1) == ":" then
             return nil, string.sub(id, 2)
         end
@@ -98,6 +121,10 @@ return function(deps)
 
     -- 重建局内对象，保留连接序号和全局 Tick。
     function api.start(world, content, request)
+        local accepted, reason = loadout_api.check(content,
+            request.loadout or json.decode(World.loadout(world)))
+        assert(accepted ~= nil, reason or "invalid_loadout")
+        World.accept_loadout(world, json.encode(accepted))
         World.begin(world, request.req_id, request.after_match_id, request.match_id, request.world_id)
         assert(api.spawn(world, content, "player") ~= nil, "player spawn failed")
         for _, spawn in ipairs(content.map.enemies) do

@@ -9,7 +9,6 @@
 #include "storage/Storage.h"
 #include "net/Transport.h"
 #include "script/Script.h"
-#include "ContentSpec.h"
 
 #include <asio.hpp>
 #include <nlohmann/json.hpp>
@@ -302,7 +301,7 @@ struct Runtime::Loop
                     return;
                 }
 
-                if (!commit(script->event(4, R"({"v":6,"paused":true})")))
+                if (!commit(script->event(4, R"({"v":7,"paused":true})")))
                 {
                     return;
                 }
@@ -324,7 +323,7 @@ struct Runtime::Loop
 
                 if (was_paused)
                 {
-                    if (!commit(script->event(4, R"({"v":6,"paused":false})")))
+                    if (!commit(script->event(4, R"({"v":7,"paused":false})")))
                     {
                         return;
                     }
@@ -382,9 +381,8 @@ struct Runtime::Loop
             token = random_hex(32);
             instance_id = std::stoull(instance.substr(0, 16), nullptr, 16) | 1ULL;
             script = std::make_unique<Script>();
-            const nlohmann::json ctx = {{"v", 6},
-                {"snapshot_every", cfg.tick_hz / cfg.snapshot_hz},
-                {"content", nlohmann::json::parse(content::json_text)}};
+            const nlohmann::json ctx = {{"v", 7},
+                {"snapshot_every", cfg.tick_hz / cfg.snapshot_hz}};
             auto out = script->open(cfg, ctx.dump());
 
             if (!flush_logs())
@@ -495,7 +493,7 @@ struct Runtime::Loop
         evt["instance"] = instance;
         evt["token"] = token;
         evt["protocol_version"] = 5;
-        evt["content_version"] = content::version;
+        evt["content_version"] = script->world().content_key;
         emit(std::move(evt));
     }
 
@@ -507,7 +505,7 @@ struct Runtime::Loop
             const auto& hello = msg.hello();
 
             if (!msg.has_hello() || hello.protocol_version() != 5
-                || hello.content_version() != content::version
+                || hello.content_version() != script->world().content_key
                 || hello.instance() != instance || hello.token() != token)
             {
                 abort("handshake_rejected");
@@ -520,7 +518,7 @@ struct Runtime::Loop
             wire::Envelope reply;
             auto* ack = reply.mutable_hello_ack();
             ack->set_protocol_version(5);
-            ack->set_content_version(Str(content::version));
+            ack->set_content_version(Str(script->world().content_key));
             ack->set_instance(instance);
 
             if (!send_msg(reply))
@@ -888,7 +886,7 @@ struct Runtime::Loop
                 continue;
             }
 
-            nlohmann::json payload = {{"v", 6}};
+            nlohmann::json payload = {{"v", 7}};
             i64 event_id = 2;
             if (input->has_login_req())
             {
@@ -928,15 +926,14 @@ struct Runtime::Loop
         const auto& world = script->world();
         auto req = incoming;
 
-        try
+        const auto loadout = script->check_loadout(incoming.loadout());
+        if (!loadout)
         {
-            *req.mutable_loadout() = world.check_loadout(incoming.loadout());
-        }
-        catch (const std::exception& error)
-        {
-            reject(error.what(), req.req_id());
+            reject(loadout.error(), req.req_id());
             return;
         }
+
+        *req.mutable_loadout() = *loadout;
 
         if (world.player_id == 0)
         {
@@ -1051,7 +1048,7 @@ struct Runtime::Loop
             return;
         }
 
-        const nlohmann::json payload = {{"v", 6}, {"req_id", req.req_id()},
+        const nlohmann::json payload = {{"v", 7}, {"req_id", req.req_id()},
             {"after_match_id", std::to_string(req.after_match_id())},
             {"match_id", std::to_string(match)}, {"world_id", std::to_string(world_id)}};
 
@@ -1096,98 +1093,58 @@ struct Runtime::Loop
             return;
         }
 
-        if (req.kind() >= wire::ActionReq::SWITCH_WEAPON
-            && req.kind() <= wire::ActionReq::INTERACT)
+        const i32 kind = static_cast<i32>(req.kind());
+        if (kind < wire::ActionReq::BAG || kind > wire::ActionReq::INTERACT)
         {
-            static constexpr const char* names[] = {
-                "switch_weapon", "select_tool", "melee", "use", "interact"};
-            const nlohmann::json payload = {{"v", 6}, {"req_id", req.req_id()},
-                {"kind", names[req.kind() - wire::ActionReq::SWITCH_WEAPON]},
-                {"slot", req.slot()}, {"target_id", std::to_string(req.target_id())},
-                {"action_seq", std::to_string(req.action_seq())}};
-            auto output = script->event(5, payload.dump());
-            std::optional<wire::Envelope> response;
+            reject_action("invalid_request", req);
+            return;
+        }
 
-            if (output)
+        static constexpr const char* names[] = {"bag", "pickup", "abandon", "switch_weapon",
+            "select_tool", "melee", "use", "interact"};
+        const auto target = req.kind() == wire::ActionReq::PICKUP
+            ? req.item_id() : req.target_id();
+        const nlohmann::json payload = {{"v", 7}, {"req_id", req.req_id()},
+            {"kind", names[kind]}, {"slot", req.slot()},
+            {"target_id", std::to_string(target)},
+            {"action_seq", std::to_string(req.action_seq())}};
+        auto output = script->event(5, payload.dump());
+        std::optional<wire::Envelope> response;
+
+        if (output)
+        {
+            for (const auto& value : *output)
             {
-                for (const auto& value : *output)
+                if ((value.message.has_action_rsp()
+                        && value.message.action_rsp().req_id() == req.req_id())
+                    || (value.message.has_error()
+                        && value.message.error().req_id() == req.req_id()))
                 {
-                    if ((value.message.has_action_rsp()
-                            && value.message.action_rsp().req_id() == req.req_id())
-                        || (value.message.has_error()
-                            && value.message.error().req_id() == req.req_id()))
+                    if (response)
                     {
-                        if (response)
-                        {
-                            abort("duplicate_action_response");
-                            return;
-                        }
-
-                        response = value.message;
+                        abort("duplicate_action_response");
+                        return;
                     }
+
+                    response = value.message;
                 }
             }
+        }
 
-            if (!commit(std::move(output)))
-            {
-                return;
-            }
-
-            if (!response)
-            {
-                abort("missing_action_response");
-                return;
-            }
-
-            actions.complete(req.action_seq(), *response);
+        if (!commit(std::move(output)))
+        {
             return;
         }
 
-        Str error;
-        const auto changed = script->change([&](World& world)
+        if (!response)
         {
-            if (req.kind() == wire::ActionReq::PICKUP)
-            {
-                error = world.pickup(std::to_string(ctx->player_id), std::to_string(req.item_id()));
-            }
-            else if (req.kind() == wire::ActionReq::ABANDON)
-            {
-                if (world.phase != "Playing")
-                {
-                    error = "invalid_state";
-                    return;
-                }
-
-                world.finish("Abandoned");
-            }
-            else if (req.kind() != wire::ActionReq::BAG)
-            {
-                error = "invalid_request";
-            }
-        });
-
-        if (!changed)
-        {
-            abort("action_failed:" + changed.error());
+            abort("missing_action_response");
             return;
         }
 
-        if (!error.empty())
-        {
-            reject_action(error, req);
-            return;
-        }
+        actions.complete(req.action_seq(), *response);
 
-        wire::Envelope reply;
-        auto& ack = *reply.mutable_action_rsp();
-        ack.set_req_id(req.req_id());
-        ack.set_world_id(ctx->world_id);
-        ack.set_match_id(ctx->match_id);
-        ack.set_action_seq(req.action_seq());
-        actions.complete(req.action_seq(), reply);
-        send_to(ctx->session_id, reply);
-
-        if (script)
+        if (script && req.kind() <= wire::ActionReq::ABANDON)
         {
             send_to(ctx->session_id, script->world().snapshot(ctx->player_id));
             freeze_result();
@@ -1208,7 +1165,7 @@ struct Runtime::Loop
         req.player_id = world.player_id;
         req.expected_revision = profile.revision;
         req.outcome = world.raid.player_state;
-        req.content_key = Str(content::version);
+        req.content_key = Str(script->world().content_key);
 
         if (req.outcome == "Extracted")
         {

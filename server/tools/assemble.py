@@ -11,6 +11,7 @@ from publish import publish_files
 NAME = re.compile(r"[a-z_][a-z0-9_]*(?:\.[a-z_][a-z0-9_]*)*\Z")
 ENTRIES = {
     "init": "ctx_json",
+    "check_loadout": "request_json",
     "on_event": "event_id, payload_json",
     "tick": "tick_id, dt_seconds",
     "export_state": "",
@@ -21,10 +22,10 @@ ENTRIES = {
 
 
 # 读取严格清单，在访问源码前确认依赖图与目录边界。
-def load_manifest(path):
+def load_manifest(path, *, data=False):
     path = Path(path).resolve(strict=True)
     root = path.parent
-    for script in root.rglob("*"):
+    for script in ([] if data else root.rglob("*")):
         if script.is_file() and script.suffix.lower() == ".lua":
             relative = script.relative_to(root).as_posix()
             if relative != relative.lower():
@@ -39,11 +40,14 @@ def load_manifest(path):
         if not isinstance(item, dict):
             raise ValueError("module must be an object")
         name, filename, deps = item.get("name"), item.get("file"), item.get("deps")
+        kind = item.get("kind", "factory")
+        if kind not in ("factory", "data") or (kind == "data" and not data):
+            raise ValueError(f"unsupported module kind: {name}")
         if not isinstance(name, str) or not NAME.fullmatch(name) or name in modules:
             raise ValueError(f"invalid or duplicate module name: {name}")
         if not isinstance(filename, str) or not filename or "\\" in filename:
             raise ValueError(f"invalid module path: {filename}")
-        if filename != filename.lower():
+        if not data and filename != filename.lower():
             raise ValueError(f"Lua module path must be lowercase: {filename}")
         rel = PurePosixPath(filename)
         win = PureWindowsPath(filename)
@@ -61,12 +65,14 @@ def load_manifest(path):
             raise ValueError(f"deps must be module names: {name}")
         if len(set(deps)) != len(deps):
             raise ValueError(f"duplicate dependency: {name}")
-        modules[name] = {"file": rel.as_posix(), "path": full, "deps": sorted(deps)}
+        if kind == "data" and deps:
+            raise ValueError(f"data module cannot declare dependencies: {name}")
+        if data and not name.startswith("cfg."):
+            raise ValueError(f"configuration module must use cfg namespace: {name}")
+        modules[name] = {"file": ("cfg/" if data else "") + rel.as_posix(),
+                         "path": full, "deps": sorted(deps), "kind": kind}
     if not isinstance(doc.get("entry"), str) or doc["entry"] not in modules:
         raise ValueError("entry module is missing")
-    for name, item in modules.items():
-        if any(dep not in modules for dep in item["deps"]):
-            raise ValueError(f"missing dependency: {name}")
     return doc["entry"], modules
 
 
@@ -93,8 +99,10 @@ def ordered(modules):
 
 
 # 将工厂按拓扑顺序封装，所有跨模块引用均来自显式注入。
-def assemble(path):
-    entry, modules = load_manifest(path)
+def assemble_modules(entry, modules, *, footer=None):
+    for name, item in modules.items():
+        if any(dep not in modules for dep in item["deps"]):
+            raise ValueError(f"missing dependency: {name}")
     order = ordered(modules)
     required = set()
     pending = [entry]
@@ -117,24 +125,43 @@ def assemble(path):
         lines += ["do", "    local factory = (function()"]
         start = len(lines) + 1
         lines += ["        " + line for line in source]
-        lines += ["    end)()", "    local deps = {}"]
-        for dep in item["deps"]:
-            key = json.dumps(dep, ensure_ascii=True)
-            lines.append(f"    deps[{key}] = modules[{key}]")
-        lines += [f"    modules[{json.dumps(name)}] = factory(deps)", "end", ""]
+        lines += ["    end)()"]
+        if item.get("kind", "factory") == "data":
+            lines += ["    assert(type(factory) == \"table\", \"data module must return a table\")",
+                      f"    modules[{json.dumps(name)}] = factory", "end", ""]
+        else:
+            lines += ["    local deps = {}"]
+            for dep in item["deps"]:
+                key = json.dumps(dep, ensure_ascii=True)
+                lines.append(f"    deps[{key}] = modules[{key}]")
+            lines += [f"    modules[{json.dumps(name)}] = factory(deps)", "end", ""]
         mapping["sources"].append({
             "name": name, "file": item["file"], "generated_start": start,
             "generated_end": start + len(source) - 1, "source_start": 1,
             "sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
         })
     lines.append(f"local entry = modules[{json.dumps(entry)}]")
-    for name, args in ENTRIES.items():
-        lines += ["", f"-- 转交 {name} 生命周期入口，模块表保留在脚本内部。",
-                  f"function {name}({args})", f"    return entry.{name}({args})", "end"]
-    lines += ["", "return true"]
+    if footer is None:
+        for name, args in ENTRIES.items():
+            lines += ["", f"-- 转交 {name} 生命周期入口，模块表保留在脚本内部。",
+                      f"function {name}({args})", f"    return entry.{name}({args})", "end"]
+        lines += ["", "return true"]
+    else:
+        lines += ["", footer]
     source = "\n".join(lines) + "\n"
     mapping["source_sha256"] = hashlib.sha256(source.encode("utf-8")).hexdigest()
     return source, mapping
+
+
+# 合并独立配置清单，配置只能提供 cfg 命名空间中的显式数据与聚合模块。
+def assemble(path, cfg=None):
+    entry, modules = load_manifest(path)
+    if cfg is not None:
+        cfg_entry, configs = load_manifest(Path(cfg) / "Manifest.json", data=True)
+        if cfg_entry != "cfg.tables" or set(modules) & set(configs):
+            raise ValueError("invalid or colliding configuration entry")
+        modules.update(configs)
+    return assemble_modules(entry, modules)
 
 
 # 接收构建目录输出路径，失败时返回非零且不生成半份源码。
@@ -143,9 +170,10 @@ def main():
     parser.add_argument("--manifest", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--map", type=Path, required=True)
+    parser.add_argument("--cfg", type=Path)
     args = parser.parse_args()
     try:
-        source, mapping = assemble(args.manifest)
+        source, mapping = assemble(args.manifest, args.cfg)
         map_text = json.dumps(mapping, ensure_ascii=False, indent=2) + "\n"
         publish_files([(args.output, source.encode("utf-8")),
                        (args.map, map_text.encode("utf-8"))])
