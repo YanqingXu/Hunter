@@ -88,7 +88,7 @@ using Value = std::variant<Opened, Closed, PlayerSave, MatchId, MatchResult>;
 struct Rsp
 {
     Key key;
-    std::expected<Value, Error> result;
+    Expect<Value, Error> result;
 };
 
 struct StorageCfg

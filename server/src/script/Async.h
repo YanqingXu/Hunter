@@ -46,7 +46,7 @@ private:
 class Async
 {
 public:
-    using Done = Func<void(std::expected<luax::CallResult, Str>)>;
+    using Done = Func<void(Expect<luax::CallResult, Str>)>;
 
     // 在逻辑线程创建操作表；io 必须比适配器及其票据的关闭阶段活得更久。
     Async(asio::io_context& io, const Cfg& cfg, u64 instance, u64 generation);
@@ -61,11 +61,11 @@ public:
     Async& operator=(const Async&) = delete;
 
     // 在启动外部工作前预留完成槽；失败时取消传入 continuation。
-    std::expected<AsyncTicket, Str> reserve(luax::Isolate isolate,
+    Expect<AsyncTicket, Str> reserve(luax::Isolate isolate,
         luax::ExecutionSuspended suspended, Done done, u32 timeout_ms);
 
     // 将 TimerAwait 适配到 Asio；回调一定延后，不同步重入 VM。
-    std::expected<AsyncKey, Str> timer(luax::Isolate isolate,
+    Expect<AsyncKey, Str> timer(luax::Isolate isolate,
         luax::ExecutionSuspended suspended, Done done, u32 timeout_ms);
 
     // 仅拥有线程可取消当前实例和代次的操作；成功表示唯一终态已交付。

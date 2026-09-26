@@ -33,7 +33,7 @@ public:
     }
 
     // 移出最早值并归还其容量；空队列返回空值。
-    std::optional<T> pop()
+    Opt<T> pop()
     {
         if (items_.empty())
         {

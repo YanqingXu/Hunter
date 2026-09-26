@@ -437,12 +437,12 @@ ScriptOut::ScriptOut(Str name, const Str& payload) : kind(std::move(name))
     }
 }
 
-std::expected<void, Str> validate_output(const ScriptOut& out, usize max_bytes)
+Expect<void, Str> validate_output(const ScriptOut& out, usize max_bytes)
 {
     if (!out.error.empty() || !schema::valid_output(out.message)
         || out.message.ByteSizeLong() > max_bytes || !valid_demo_snapshot(out.message))
     {
-        return std::unexpected("output_schema");
+        return Unexpect("output_schema");
     }
 
     return {};

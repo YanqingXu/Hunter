@@ -48,16 +48,16 @@ public:
     }
 
     // 从连接和请求作用域构造上下文；玩家身份始终由绑定产生。
-    std::expected<CmdCtx, Str> resolve(u64 session_id, u64 world_id, u64 match_id) const
+    Expect<CmdCtx, Str> resolve(u64 session_id, u64 world_id, u64 match_id) const
     {
         if (session_id == 0 || session_id != ctx_.session_id)
         {
-            return std::unexpected("stale_session");
+            return Unexpect("stale_session");
         }
 
         if (world_id != ctx_.world_id || match_id != ctx_.match_id)
         {
-            return std::unexpected("stale_match");
+            return Unexpect("stale_match");
         }
 
         return ctx_;

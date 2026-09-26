@@ -11,7 +11,7 @@ namespace hunter
 {
 
 // 直接校验类型化协议输出及消息大小，不执行 JSON 转换。
-std::expected<void, Str> validate_output(const ScriptOut& out, usize max_bytes);
+Expect<void, Str> validate_output(const ScriptOut& out, usize max_bytes);
 
 // 为诊断和契约测试投影协议消息，热路径禁止使用此接口。
 nlohmann::json output_json(const ScriptOut& out);

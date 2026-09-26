@@ -137,7 +137,7 @@ auto builder(World& world, const Str& name)
             auto* target = object<T>(world, value.slot);
             if (!target || generation<T>(world, value.slot) != value.generation)
             {
-                return std::unexpected(luax::Error(luax::ErrorCode::stale_handle,
+                return Unexpect(luax::Error(luax::ErrorCode::stale_handle,
                     luax::ErrorPhase::execution, "stale object generation"));
             }
 

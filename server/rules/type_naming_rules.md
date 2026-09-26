@@ -21,6 +21,10 @@
 | `std::size_t` | `usize` |
 | `float` / `double` | `f32` / `f64` |
 | `std::string` | `Str` |
+| `std::string_view` | `StrView` |
+| `std::array<T, N>` | `Arr<T, N>` |
+| `std::optional<T>` | `Opt<T>` |
+| `std::span<T, N>` | `Span<T, N>`（省略 `N` 时为动态长度） |
 | `std::vector<T>` | `Vec<T>` |
 | `std::unordered_map<K, V>` | `HashMap<K, V>` |
 | `std::map<K, V>` | `Map<K, V>` |
@@ -30,6 +34,8 @@
 | `std::weak_ptr<T>` | `WPtr<T>` |
 | `std::unique_ptr<T>` | `UPtr<T>` |
 | `std::function<Signature>` | `Func<Signature>` |
+| `std::expected<T, E>` | `Expect<T, E>` |
+| `std::unexpected<E>` | `Unexpect<E>` |
 
 - 项目自行选择的整数类型按值域、符号和用途使用 `i8`～`i64`、`u8`～`u64` 或 `usize`，
   不继续用 `short`、`int`、`long`、`unsigned` 等平台相关拼写表达业务数值。

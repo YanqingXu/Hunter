@@ -37,9 +37,9 @@ struct Op
 };
 
 // 返回有限错误值，拒绝发生时尚未接受或执行任务。
-std::unexpected<Error> rejected(Code code, const char* message)
+Unexpect<Error> rejected(Code code, const char* message)
 {
-    return std::unexpected(Error{code, 0, false, message});
+    return Unexpect(Error{code, 0, false, message});
 }
 
 // 逐项计费并避免任意长度输入使计数加法溢出。
@@ -93,7 +93,7 @@ struct Storage::Impl : std::enable_shared_from_this<Impl>
     }
 
     // 检查逻辑线程及生命周期；工作线程从不访问这些状态字段。
-    std::expected<void, Error> allowed(Kind kind) const
+    Expect<void, Error> allowed(Kind kind) const
     {
         if (std::this_thread::get_id() != owner)
         {
@@ -119,12 +119,12 @@ struct Storage::Impl : std::enable_shared_from_this<Impl>
     }
 
     // 原子预留请求和完成预算后入队；独立停止槽不消耗普通操作额度。
-    std::expected<Accepted, Error> submit(Ptr<Op> op)
+    Expect<Accepted, Error> submit(Ptr<Op> op)
     {
         auto valid = allowed(op->kind);
         if (!valid)
         {
-            return std::unexpected(valid.error());
+            return Unexpect(valid.error());
         }
 
         const bool stop = op->kind == Kind::Stop;
@@ -172,7 +172,7 @@ struct Storage::Impl : std::enable_shared_from_this<Impl>
     }
 
     // 交付前归还预算，允许回调提交后续任务；关闭等待回调处理完毕。
-    void deliver(const Ptr<Op>& op, std::expected<Value, Error> result)
+    void deliver(const Ptr<Op>& op, Expect<Value, Error> result)
     {
         if (std::this_thread::get_id() != owner)
         {
@@ -221,7 +221,7 @@ struct Storage::Impl : std::enable_shared_from_this<Impl>
     }
 
     // 工作线程只操作拥有型数据，捕获强引用让旧完成独立于门面寿命。
-    void complete(Ptr<Op> op, std::expected<Value, Error> result)
+    void complete(Ptr<Op> op, Expect<Value, Error> result)
     {
         asio::post(io, [self = shared_from_this(), op = std::move(op),
             result = std::move(result)]() mutable
@@ -231,7 +231,7 @@ struct Storage::Impl : std::enable_shared_from_this<Impl>
     }
 
     // 在唯一存档线程执行任务，异常不会越过线程入口或伪装为保存成功。
-    std::expected<Value, Error> execute(const Op& op, UPtr<Db>& db)
+    Expect<Value, Error> execute(const Op& op, UPtr<Db>& db)
     {
         try
         {
@@ -275,7 +275,7 @@ struct Storage::Impl : std::enable_shared_from_this<Impl>
         }
         catch (const Error& error)
         {
-            return std::unexpected(error);
+            return Unexpect(error);
         }
         catch (const std::exception&)
         {
@@ -344,12 +344,12 @@ struct Storage::Impl : std::enable_shared_from_this<Impl>
     }
 
     // 准备无可变请求体的任务，完成槽按最坏结果大小预留。
-    std::expected<Accepted, Error> simple(Kind kind, u64 id, Done done)
+    Expect<Accepted, Error> simple(Kind kind, u64 id, Done done)
     {
         auto valid = allowed(kind);
         if (!valid)
         {
-            return std::unexpected(valid.error());
+            return Unexpect(valid.error());
         }
 
         if ((kind == Kind::Find || kind == Kind::Load) && !id_ok(id))
@@ -379,13 +379,13 @@ Storage::~Storage()
     impl_->shutdown();
 }
 
-std::expected<Accepted, Error> Storage::open(Str path, Done done)
+Expect<Accepted, Error> Storage::open(Str path, Done done)
 {
     auto& self = *impl_;
     auto valid = self.allowed(Kind::Open);
     if (!valid)
     {
-        return std::unexpected(valid.error());
+        return Unexpect(valid.error());
     }
 
     if (path.empty() || path.find('\0') != Str::npos)
@@ -407,27 +407,27 @@ std::expected<Accepted, Error> Storage::open(Str path, Done done)
     }
     catch (const Error& error)
     {
-        return std::unexpected(error);
+        return Unexpect(error);
     }
 }
 
-std::expected<Accepted, Error> Storage::load_player(u64 player_id, Done done)
+Expect<Accepted, Error> Storage::load_player(u64 player_id, Done done)
 {
     return impl_->simple(Kind::Load, player_id, std::move(done));
 }
 
-std::expected<Accepted, Error> Storage::alloc_match(Done done)
+Expect<Accepted, Error> Storage::alloc_match(Done done)
 {
     return impl_->simple(Kind::Alloc, 0, std::move(done));
 }
 
-std::expected<Accepted, Error> Storage::commit_match(CommitMatch req, Done done)
+Expect<Accepted, Error> Storage::commit_match(CommitMatch req, Done done)
 {
     auto& self = *impl_;
     auto valid = self.allowed(Kind::Commit);
     if (!valid)
     {
-        return std::unexpected(valid.error());
+        return Unexpect(valid.error());
     }
 
     try
@@ -455,16 +455,16 @@ std::expected<Accepted, Error> Storage::commit_match(CommitMatch req, Done done)
     }
     catch (const Error& error)
     {
-        return std::unexpected(error);
+        return Unexpect(error);
     }
 }
 
-std::expected<Accepted, Error> Storage::find_match(u64 match_id, Done done)
+Expect<Accepted, Error> Storage::find_match(u64 match_id, Done done)
 {
     return impl_->simple(Kind::Find, match_id, std::move(done));
 }
 
-std::expected<Accepted, Error> Storage::stop(Done done)
+Expect<Accepted, Error> Storage::stop(Done done)
 {
     return impl_->simple(Kind::Stop, 0, std::move(done));
 }

@@ -17,7 +17,7 @@ public:
     {
         Kind kind;
         Str error;
-        std::optional<wire::Envelope> response;
+        Opt<wire::Envelope> response;
     };
 
     // 接受新序号或返回旧请求状态；任何缓存淘汰均不降低连接处理水位。
@@ -92,7 +92,7 @@ private:
     struct Entry
     {
         wire::ActionReq req;
-        std::optional<wire::Envelope> response;
+        Opt<wire::Envelope> response;
     };
 
     // 只比较正式业务字段，未知协议字段不进入持久缓存。

@@ -18,13 +18,13 @@ struct Frame
 };
 
 // 编码为四字节大端长度头加 Protobuf；过大或空消息返回错误。
-std::expected<Frame, Str> encode_frame(const wire::Envelope& msg, usize max_bytes);
+Expect<Frame, Str> encode_frame(const wire::Envelope& msg, usize max_bytes);
 
 // 解码已经去掉长度头的完整消息；拒绝空信封和非法 Protobuf。
-std::expected<wire::Envelope, Str> decode_frame(const Str& bytes, usize max_bytes);
+Expect<wire::Envelope, Str> decode_frame(const Str& bytes, usize max_bytes);
 
 // 整批校验类型化输出并编码协议；失败不返回任何可提交输出。
-std::expected<Vec<Frame>, Str> script_frames(const Vec<ScriptOut>& out, const Cfg& cfg);
+Expect<Vec<Frame>, Str> script_frames(const Vec<ScriptOut>& out, const Cfg& cfg);
 
 class SendQueue
 {

@@ -7,5 +7,5 @@
 namespace hunter
 {
 // 对完整字节序列返回小写十六进制 SHA-256。
-Str digest(std::string_view text);
+Str digest(StrView text);
 }

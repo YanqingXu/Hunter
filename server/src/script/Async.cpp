@@ -41,7 +41,7 @@ struct AsyncSlot
     AsyncKey key;
     Ptr<AsyncInbox> inbox;
     luax::bind::AsyncCompletionLimits limits;
-    std::optional<luax::bind::AsyncCompletionPacket> packet;
+    Opt<luax::bind::AsyncCompletionPacket> packet;
     bool active = true;
     bool completed = false;
 };
@@ -78,7 +78,7 @@ struct Async::Impl : std::enable_shared_from_this<Impl>
     }
 
     // 终态先移出操作表再恢复或通知，避免回调取消已终结的操作。
-    void finish(u64 op_id, std::optional<luax::bind::AsyncCompletionPacket> packet,
+    void finish(u64 op_id, Opt<luax::bind::AsyncCompletionPacket> packet,
         const Str& reason)
     {
         auto found = ops.find(op_id);
@@ -105,21 +105,21 @@ struct Async::Impl : std::enable_shared_from_this<Impl>
         if (!packet)
         {
             static_cast<void>(op.isolate.cancel(op.continuation, terminal_error(reason)));
-            op.done(std::unexpected(reason));
+            op.done(Unexpect(reason));
             return;
         }
 
         if (const auto* failure = packet->failureIf())
         {
             static_cast<void>(op.isolate.cancel(op.continuation, failure->toError()));
-            op.done(std::unexpected(Str(failure->message())));
+            op.done(Unexpect(Str(failure->message())));
             return;
         }
 
         auto resumed = op.isolate.resume(op.continuation, packet->values());
         if (!resumed)
         {
-            op.done(std::unexpected(Str(resumed.error().message())));
+            op.done(Unexpect(Str(resumed.error().message())));
             return;
         }
 
@@ -132,7 +132,7 @@ struct Async::Impl : std::enable_shared_from_this<Impl>
         const auto& again = std::get<luax::ExecutionSuspended>(*resumed);
         static_cast<void>(op.isolate.cancel(again.continuation,
             terminal_error("repeat_suspend_unsupported")));
-        op.done(std::unexpected("repeat_suspend_unsupported"));
+        op.done(Unexpect("repeat_suspend_unsupported"));
     }
 
     // 一次唤醒提取有限槽里的全部完成包，VM 操作只发生在锁外。
@@ -240,13 +240,13 @@ Async::~Async()
     stop();
 }
 
-std::expected<AsyncTicket, Str> Async::reserve(luax::Isolate isolate,
+Expect<AsyncTicket, Str> Async::reserve(luax::Isolate isolate,
     luax::ExecutionSuspended suspended, Done done, u32 timeout_ms)
 {
     auto& self = *impl_;
     if (self.owner != std::this_thread::get_id())
     {
-        return std::unexpected("wrong_thread");
+        return Unexpect("wrong_thread");
     }
 
     if (self.stopped || self.ops.size() >= self.capacity || !done || timeout_ms == 0 ||
@@ -254,7 +254,7 @@ std::expected<AsyncTicket, Str> Async::reserve(luax::Isolate isolate,
     {
         static_cast<void>(isolate.cancel(suspended.continuation,
             terminal_error("async_capacity_or_closed")));
-        return std::unexpected("async_capacity_or_closed");
+        return Unexpect("async_capacity_or_closed");
     }
 
     auto slot = std::make_shared<AsyncSlot>();
@@ -296,12 +296,12 @@ std::expected<AsyncTicket, Str> Async::reserve(luax::Isolate isolate,
     return AsyncTicket(std::move(slot));
 }
 
-std::expected<AsyncKey, Str> Async::timer(luax::Isolate isolate,
+Expect<AsyncKey, Str> Async::timer(luax::Isolate isolate,
     luax::ExecutionSuspended suspended, Done done, u32 timeout_ms)
 {
     if (impl_->owner != std::this_thread::get_id())
     {
-        return std::unexpected("wrong_thread");
+        return Unexpect("wrong_thread");
     }
 
     const auto* req = std::get_if<luax::TimerAwait>(&suspended.request);
@@ -309,14 +309,14 @@ std::expected<AsyncKey, Str> Async::timer(luax::Isolate isolate,
     {
         static_cast<void>(isolate.cancel(suspended.continuation,
             terminal_error("unsupported_await")));
-        return std::unexpected("unsupported_await");
+        return Unexpect("unsupported_await");
     }
 
     const auto delay = std::chrono::nanoseconds(req->delayNanoseconds);
     auto ticket = reserve(isolate, std::move(suspended), std::move(done), timeout_ms);
     if (!ticket)
     {
-        return std::unexpected(ticket.error());
+        return Unexpect(ticket.error());
     }
 
     auto& op = impl_->ops.at(ticket->key().op);
