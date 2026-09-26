@@ -298,18 +298,18 @@ class ExportTest(unittest.TestCase):
 
 # 真实配置回归用例与引擎检查分开，使未安装 Lua 的机器也能运行通用测试。
 class RepositoryTest(unittest.TestCase):
-    def test_current_tables(self):
-        tables = EXPORT.collect_tables(ROOT / "design")
-        counts = {"Item": 14, "Equip": 4, "Map": 3, "MapSolid": 10, "PlayerSpawn": 3,
-                  "MonsterSpawn": 10, "ExtractPoint": 3, "Player": 3, "PlayerSkill": 3,
-                  "Monster": 7, "MonsterSkill": 9, "Weapon": 4, "Skill": 9, "Drop": 6, "DropEntry": 15}
+    # 通用导出用冻结工作簿回归；根表的显式生产选择由 gameplay 内容测试覆盖。
+    def test_frozen_demo_tables(self):
+        tables = EXPORT.collect_tables(ROOT / "design/demo")
+        counts = {"Bag": 1, "Item": 3, "Equip": 1, "Map": 1, "MapSolid": 3,
+                  "PlayerSpawn": 1, "MonsterSpawn": 3, "ExtractPoint": 1, "Player": 1,
+                  "Monster": 2, "MonsterSkill": 2, "Weapon": 1, "Skill": 3, "Drop": 2, "DropEntry": 3}
         self.assertEqual({t.name: len(t.rows) for t in tables}, counts)
-        self.assertEqual(len({t.sheet.path for t in tables}), 7)
-        self.assertEqual(sum(len(t.rows) for t in tables), 103)
+        self.assertEqual(len({t.sheet.path for t in tables}), 1)
+        self.assertEqual(sum(len(t.rows) for t in tables), 28)
         by_name = {t.name: t for t in tables}
-        for identity in range(1, 5):
-            self.assertEqual(by_name["Item"].rows[identity]["Type"], 0)
-        self.assertNotIn("IconId", by_name["Item"].rows[1])
+        self.assertEqual(by_name["Item"].rows[2800001]["Type"], 0)
+        self.assertNotIn("IconId", by_name["Item"].rows[2800001])
         self.assertNotIn("Name", by_name["Equip"].rows[100000001])
         self.assertEqual(by_name["Skill"].rows[1]["Damage"], 20)
         self.assertEqual(by_name["Weapon"].rows[1]["Magazine"], 6)
@@ -318,7 +318,7 @@ class RepositoryTest(unittest.TestCase):
     def test_lua_loads_all_records_and_escaped_strings(self):
         with tempfile.TemporaryDirectory(prefix="hunter-lua-test-") as folder:
             folder = Path(folder)
-            tables = EXPORT.export_config(ROOT / "design", folder)
+            tables = EXPORT.export_config(ROOT / "design/demo", folder)
             text = '中文😀"\\\n\r\t' + "".join(chr(i) for i in range(32)) + '\x7f9_x0041_"}; error("injected"); --'
             source = folder / "source"
             # 控制字符先按 OOXML 转义，保证测试输入是合法 XML。
@@ -355,7 +355,7 @@ class RepositoryTest(unittest.TestCase):
             self.skipTest("需要 luaxc；可通过 LUAXC 指定，未运行 strict 编译检查")
         with tempfile.TemporaryDirectory(prefix="hunter-luax-test-") as folder:
             folder = Path(folder)
-            tables = EXPORT.export_config(ROOT / "design", folder)
+            tables = EXPORT.export_config(ROOT / "design/demo", folder)
             for table in tables:
                 with self.subTest(table=table.name):
                     run = subprocess.run([compiler, "--profile", "strict", "-o", str(folder / (table.name + ".lux")),

@@ -1,5 +1,11 @@
 # Hunter Server 首版规划
 
+2026-09-26 增量：按 [SRV-012](intents/usecases/gameplay.intent.md) 实施验证 DEMO 玩法，
+任务状态见 [玩法任务表](V1_GAMEPLAY_TASKS.md)。根源表显式选入内容，增加免费配装、姿态恢复、
+三枪三弹、四工具与场景交互；协议v5／内容v4／Host及内部状态v6，SQLite继续V1。
+本轮 Windows 实现与验证已完成，实际证据见任务表和验证记录；下列历史记录保留。
+Unity与Android继续独立验收。
+
 2026-09-25 增量：本轮按 [V1 任务表](V1_TASKS.md) 与 SRV-011 实施 Windows 单人撤离
 持久化闭环。现有 Excel 地图 2 为正式配置源，固定装备出战；开发热更新后移，
 不再作为 PvE/存档前置。下文 P0—P5 保留原设计背景，当前实施顺序以 V1 任务表为准。

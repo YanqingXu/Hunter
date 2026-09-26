@@ -26,6 +26,9 @@ message FrameInput {
   bool fire = 8;
   bool reload = 9;
   uint64 world_id = 10;
+  sint32 move_y = 11;
+  bool run = 12;
+  bool prone = 13;
 }
 message InputAck {
   uint64 seq = 1;
@@ -52,6 +55,19 @@ message Entity {
   string ai = 15;
   uint32 cfg_id = 16;
   uint32 attack_ticks = 17;
+  bool prone = 18;
+  bool running = 19;
+  uint32 stamina = 20;
+  uint32 width = 21;
+  uint32 height = 22;
+  uint32 active_weapon = 23;
+  repeated WeaponState weapons = 24;
+  repeated ToolState tools = 25;
+  uint32 use_slot = 26;
+  uint32 use_ticks = 27;
+  uint32 ladder_id = 28;
+  repeated uint32 health_segments = 29;
+  uint32 selected_slot = 30;
 }
 message Snapshot {
   uint64 tick_id = 1;
@@ -71,6 +87,9 @@ message Snapshot {
   string extract_reason = 14;
   uint32 extract_remaining_ticks = 15;
   bool extract_unlocked = 16;
+  repeated SceneState scenes = 17;
+  repeated ProjectileState projectiles = 18;
+  uint64 action_seq = 19;
 }
 message LoginReq {
   string req_id = 1;
@@ -87,13 +106,55 @@ message LoginRsp {
 message StartReq {
   string req_id = 1;
   uint64 after_match_id = 2;
+  Loadout loadout = 3;
 }
 message StartRsp {
+  Loadout loadout = 6;
   string req_id = 1;
   uint64 match_id = 2;
   string phase = 3;
   uint64 world_id = 4;
   uint64 player_entity_id = 5;
+}
+// 开局接受后冻结的免费配装，全部槽位编号从一开始。
+message WeaponChoice {
+  uint32 cfg_id = 1;
+  uint32 ammo_cfg_id = 2;
+}
+message Loadout {
+  uint32 player_cfg_id = 1;
+  repeated uint32 health_segments = 2;
+  repeated WeaponChoice weapons = 3;
+  repeated uint32 tools = 4;
+  repeated uint32 consumables = 5;
+}
+message WeaponState {
+  uint32 slot = 1;
+  uint32 cfg_id = 2;
+  uint32 ammo_cfg_id = 3;
+  uint32 ammo = 4;
+  uint32 reserve = 5;
+  uint32 shot_ticks = 6;
+  uint32 reload_ticks = 7;
+}
+message ToolState {
+  uint32 slot = 1;
+  uint32 cfg_id = 2;
+  uint32 count = 3;
+  uint64 instance = 4;
+}
+message SceneState {
+  uint32 id = 1;
+  bool used = 2;
+}
+message ProjectileState {
+  uint64 id = 1;
+  uint32 cfg_id = 2;
+  sint32 x = 3;
+  sint32 y = 4;
+  sint32 vx = 5;
+  sint32 vy = 6;
+  uint32 remaining = 7;
 }
 message Loot {
   uint64 item_id = 1;
@@ -105,14 +166,18 @@ message Loot {
   uint64 owner_player_id = 7;
 }
 message ActionReq {
-  enum Kind { BAG = 0; PICKUP = 1; ABANDON = 2; }
+  enum Kind { BAG = 0; PICKUP = 1; ABANDON = 2; SWITCH_WEAPON = 3; SELECT_TOOL = 4; MELEE = 5; USE = 6; INTERACT = 7; }
   string req_id = 1;
   uint64 world_id = 2;
   uint64 match_id = 3;
   Kind kind = 4;
   uint64 item_id = 5;
+  uint64 action_seq = 6;
+  uint32 slot = 7;
+  uint32 target_id = 8;
 }
 message ActionRsp {
+  uint64 action_seq = 4;
   string req_id = 1;
   uint64 world_id = 2;
   uint64 match_id = 3;
@@ -157,6 +222,7 @@ message GameEvent {
 message PauseState {
   bool paused = 1;
   uint64 discard_through_seq = 2;
+  uint64 discard_action_seq = 3;
 }
 message Error {
   string code = 1;

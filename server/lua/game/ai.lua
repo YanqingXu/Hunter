@@ -37,7 +37,7 @@ return function(deps)
         local player = world_api.target(world, "monster")
         local px, py = Unit.read_motion(player.motion)
         local player_alive = Unit.get_alive(player.health)
-        local player_cfg = content.players[player.cfg_id]
+        local player_cfg = movement.shape(player, content)
         for _, id in ipairs(world_api.ids(world)) do
             local enemy = world_api.find(world, id)
             if enemy ~= nil and enemy.kind == "monster" then
@@ -102,7 +102,7 @@ return function(deps)
             return
         end
         local px, py = Unit.read_motion(player.motion)
-        local player_cfg = content.players[player.cfg_id]
+        local player_cfg = movement.shape(player, content)
         for _, id in ipairs(world_api.ids(world)) do
             local enemy = world_api.find(world, id)
             if enemy ~= nil and enemy.kind == "monster" then

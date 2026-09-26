@@ -22,6 +22,29 @@ wire::Envelope World::snapshot(u64 observer) const
     msg.set_extract_id(raid.extract_id);
     msg.set_extract_ticks(static_cast<u32>(raid.extract_ticks));
     msg.set_extract_reason(raid.extract_reason);
+    msg.set_action_seq(action_seq);
+
+    for (usize index = 0; index < content.at("scenes").size(); ++index)
+    {
+        auto& value = *msg.add_scenes();
+        value.set_id(static_cast<u32>(read_id(content.at("scenes")[index].at("id"))));
+        value.set_used(used_scenes[index]);
+    }
+
+    for (const auto& projectile : projectiles)
+    {
+        if (projectile.active)
+        {
+            auto& value = *msg.add_projectiles();
+            value.set_id(projectile.id);
+            value.set_cfg_id(projectile.cfg_id);
+            value.set_x(projectile.x);
+            value.set_y(projectile.y);
+            value.set_vx(projectile.vx);
+            value.set_vy(projectile.vy);
+            value.set_remaining(static_cast<u32>(projectile.remaining));
+        }
+    }
 
     if (content.contains("extracts"))
     {
@@ -90,9 +113,55 @@ wire::Envelope World::snapshot(u64 observer) const
             value.set_reserve(player->reserve);
             value.set_reload_ticks(player->weapon.reload_ticks);
             value.set_ai(unit.alive ? "idle" : "dead");
+            const auto& cfg = content.at("players").at(player->get_cfg_id());
+            value.set_prone(player->prone);
+            value.set_running(player->running);
+            value.set_stamina(static_cast<u32>(player->stamina));
+            value.set_width(cfg.at(player->prone ? "prone_width" : "width").get<u32>());
+            value.set_height(cfg.at(player->prone ? "prone_height" : "height").get<u32>());
+            value.set_active_weapon(static_cast<u32>(player->active_weapon));
+            value.set_selected_slot(static_cast<u32>(player->selected_slot));
+            value.set_use_slot(static_cast<u32>(player->use_slot));
+            value.set_use_ticks(static_cast<u32>(player->use_ticks));
+            value.set_ladder_id(static_cast<u32>(player->ladder_id));
+
+            for (const auto amount : player->health_segments)
+            {
+                value.add_health_segments(static_cast<u32>(amount));
+            }
+
+            for (i32 slot = 1; slot <= player->weapon_count; ++slot)
+            {
+                const auto& weapon = player->weapon_at(slot);
+                auto& state = *value.add_weapons();
+                state.set_slot(static_cast<u32>(slot));
+                state.set_cfg_id(weapon.cfg_id);
+                state.set_ammo_cfg_id(player->ammo_cfg_ids[static_cast<usize>(slot - 1)]);
+                state.set_ammo(static_cast<u32>(weapon.ammo));
+                state.set_reserve(static_cast<u32>(player->get_weapon_reserve(slot)));
+                state.set_shot_ticks(static_cast<u32>(weapon.shot_ticks));
+                state.set_reload_ticks(static_cast<u32>(weapon.reload_ticks));
+            }
+
+            for (usize slot = 0; slot < player->tools.size(); ++slot)
+            {
+                const auto& tool = player->tools[slot];
+
+                if (tool.cfg_id != 0)
+                {
+                    auto& state = *value.add_tools();
+                    state.set_slot(static_cast<u32>(slot + 1));
+                    state.set_cfg_id(tool.cfg_id);
+                    state.set_count(static_cast<u32>(tool.count));
+                    state.set_instance(tool.instance);
+                }
+            }
         }
         else
         {
+            const auto& cfg = content.at("monsters").at(unit.get_cfg_id());
+            value.set_width(cfg.at("width").get<u32>());
+            value.set_height(cfg.at("height").get<u32>());
             value.set_ai(std::get<Monster>(actor.value).state);
             value.set_attack_ticks(static_cast<u32>(std::get<Monster>(actor.value).attack_ticks));
         }

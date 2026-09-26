@@ -64,7 +64,7 @@ class Demo:
             enemies = [v for v in snap["entities"] if v["kind"] == "enemy" and v["alive"]]
             if enemies:
                 enemy = min(enemies, key=lambda e: abs(e["x"] - player["x"]))
-                fire = enemy["cfg_id"] == "2" and enemy["x"] < 15000 or player["x"] > 15800
+                fire = enemy["cfg_id"] == "1002" and enemy["x"] < 15000 or player["x"] > 15800
                 self.input(player, 0 if fire else 1, enemy, fire)
                 continue
             ground = [v for v in snap["items"] if v["place"] == "Ground"
@@ -76,8 +76,11 @@ class Demo:
                     self.cli.send({"cmd": "pickup", "req_id": "pick-" + item["item_id"],
                                    "world_id": self.world, "match_id": self.match,
                                    "item_id": item["item_id"]})
-                    self.cli.wait("action_rsp")
-                    picked.add(item["item_id"])
+                    response = self.cli.wait(("action_rsp", "error"))
+                    if response["type"] == "action_rsp":
+                        picked.add(item["item_id"])
+                    else:
+                        assert response["code"] == "out_of_range", response
                 else:
                     self.input(player, 1 if item["x"] > player["x"] else -1)
             else:

@@ -1,10 +1,11 @@
 # 注册真实契约、脚本工具与进程集成测试；生产测试使用显式提供的签名制品。
 set(HUNTER_FIXTURE "${HUNTER_GEN}/fixture")
 add_custom_command(OUTPUT "${HUNTER_FIXTURE}/content.json" "${HUNTER_FIXTURE}/ContentSpec.h"
-    COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/../export/combat.py"
-        --source "${CMAKE_CURRENT_SOURCE_DIR}/../design/combat_demo.json"
+    COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/../export/gameplay.py"
+        --fixture "${CMAKE_CURRENT_SOURCE_DIR}/../design/combat_demo.json"
         --output "${HUNTER_FIXTURE}/content.json" --header "${HUNTER_FIXTURE}/ContentSpec.h"
-    DEPENDS ../design/combat_demo.json ../export/combat.py tools/publish.py VERBATIM)
+    DEPENDS ../design/combat_demo.json ../export/gameplay.py ../export/combat.py
+        ../export/demo.py ../export/export.py tools/publish.py VERBATIM)
 add_custom_target(hunter_fixture_content DEPENDS "${HUNTER_FIXTURE}/ContentSpec.h")
 add_executable(hunter_session_contract tests/contract/SessionContract.cpp)
 hunter_target(hunter_session_contract)
@@ -17,6 +18,22 @@ add_executable(hunter_pve_contract tests/contract/PveContract.cpp)
 hunter_target(hunter_pve_contract)
 target_link_libraries(hunter_pve_contract PRIVATE hunter_script)
 add_dependencies(hunter_pve_contract hunter_scripts)
+add_executable(hunter_gameplay_contract tests/contract/GameplayContract.cpp)
+hunter_target(hunter_gameplay_contract)
+target_link_libraries(hunter_gameplay_contract PRIVATE hunter_script)
+add_dependencies(hunter_gameplay_contract hunter_scripts)
+add_executable(hunter_gameplay_edges_contract tests/contract/GameplayEdges.cpp)
+hunter_target(hunter_gameplay_edges_contract)
+target_link_libraries(hunter_gameplay_edges_contract PRIVATE hunter_script)
+add_dependencies(hunter_gameplay_edges_contract hunter_scripts)
+add_executable(hunter_action_contract tests/contract/ActionContract.cpp)
+hunter_target(hunter_action_contract)
+target_link_libraries(hunter_action_contract PRIVATE hunter_protocol)
+add_test(NAME hunter_action_contract COMMAND hunter_action_contract)
+add_executable(hunter_demo_contract tests/contract/DemoContract.cpp)
+hunter_target(hunter_demo_contract)
+target_link_libraries(hunter_demo_contract PRIVATE hunter_script)
+add_test(NAME hunter_demo_contract COMMAND hunter_demo_contract)
 add_executable(hunter_storage_contract tests/contract/StorageContract.cpp)
 hunter_target(hunter_storage_contract)
 target_link_libraries(hunter_storage_contract PRIVATE hunter_storage
@@ -95,6 +112,10 @@ if(HUNTER_PRODUCTION)
     set(process_args --bundle "${HUNTER_TEST_BUNDLE}" --policy "${HUNTER_TEST_POLICY}")
     add_test(NAME hunter_pve_contract COMMAND hunter_pve_contract
         "${HUNTER_TEST_BUNDLE}" "${HUNTER_TEST_POLICY}")
+    add_test(NAME hunter_gameplay_contract COMMAND hunter_gameplay_contract
+        "${HUNTER_TEST_BUNDLE}" "${HUNTER_TEST_POLICY}")
+    add_test(NAME hunter_gameplay_edges_contract COMMAND hunter_gameplay_edges_contract
+        "${HUNTER_TEST_BUNDLE}" "${HUNTER_TEST_POLICY}")
     add_test(NAME hunter_endurance_contract COMMAND hunter_perf
         "${HUNTER_TEST_BUNDLE}" "${HUNTER_FIXTURE}/content.json" "${HUNTER_TEST_POLICY}" 1800)
 else()
@@ -109,11 +130,19 @@ else()
     add_test(NAME hunter_async_contract COMMAND hunter_async_contract)
     set(process_args --source "${HUNTER_GEN}/game.lua")
     add_test(NAME hunter_pve_contract COMMAND hunter_pve_contract "${HUNTER_GEN}/game.lua")
+    add_test(NAME hunter_gameplay_contract COMMAND hunter_gameplay_contract "${HUNTER_GEN}/game.lua")
+    add_test(NAME hunter_gameplay_edges_contract COMMAND hunter_gameplay_edges_contract
+        "${HUNTER_GEN}/game.lua")
     add_test(NAME hunter_endurance_contract COMMAND hunter_perf
         "${HUNTER_GEN}/game.lua" "${HUNTER_FIXTURE}/content.json" 1800)
 endif()
 set_tests_properties(hunter_endurance_contract PROPERTIES TIMEOUT 90)
 if(TARGET hunter_server_desktop)
+    add_test(NAME hunter_gameplay_integration COMMAND ${Python3_EXECUTABLE}
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/gameplay_test.py"
+        --exe $<TARGET_FILE:hunter_server_desktop> --client $<TARGET_FILE:hunter_client>
+        ${process_args})
+    set_tests_properties(hunter_gameplay_integration PROPERTIES TIMEOUT 60)
     add_library(hunter_fault_core STATIC src/core/Runtime.cpp src/core/TickClock.cpp
         src/net/Protocol.cpp src/net/Transport.cpp)
     hunter_target(hunter_fault_core)
@@ -174,6 +203,8 @@ add_test(NAME hunter_content_contract COMMAND ${Python3_EXECUTABLE}
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/scripts/test_content.py")
 add_test(NAME hunter_demo_content_contract COMMAND ${Python3_EXECUTABLE}
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/scripts/test_demo.py")
+add_test(NAME hunter_gameplay_content_contract COMMAND ${Python3_EXECUTABLE}
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/scripts/test_gameplay_content.py")
 if(HUNTER_BUILD_TOOLS)
     add_test(NAME hunter_bundle_contract COMMAND ${Python3_EXECUTABLE}
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/scripts/test_bundle.py"

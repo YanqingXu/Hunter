@@ -15,6 +15,8 @@
 #include <cstdlib>
 #include <deque>
 #include <mutex>
+#include <limits>
+#include <algorithm>
 #include <optional>
 #include <stdexcept>
 #include <thread>
@@ -42,6 +44,20 @@ void fields(const Json& value, std::initializer_list<const char*> names)
             throw std::runtime_error("command_fields");
         }
     }
+}
+
+// 校验必需字段并允许有限的可选意图，仍拒绝未知键和拼写错误。
+void optional_fields(const Json& value, std::initializer_list<const char*> required,
+    std::initializer_list<const char*> optional)
+{
+    auto copy = value;
+
+    for (const auto* name : optional)
+    {
+        copy.erase(name);
+    }
+
+    fields(copy, required);
 }
 
 // 读取有界 JSON 整数，布尔和浮点不属于协议整数。
@@ -94,6 +110,57 @@ Str req_id(const Json& value)
     return text;
 }
 
+// 将完整免费配装转换为生成协议，属性和伤害由服务端配置决定。
+hunter::wire::Loadout loadout(const Json& doc)
+{
+    fields(doc, {"player_cfg_id", "health_segments", "weapons", "tools", "consumables"});
+    hunter::wire::Loadout value;
+    value.set_player_cfg_id(static_cast<u32>(number(doc.at("player_cfg_id"), 1, 2147483647)));
+
+    for (const auto& part : doc.at("health_segments"))
+    {
+        value.add_health_segments(static_cast<u32>(number(part, 1, 150)));
+    }
+
+    for (const auto& gun : doc.at("weapons"))
+    {
+        fields(gun, {"cfg_id", "ammo_cfg_id"});
+        auto& out = *value.add_weapons();
+        out.set_cfg_id(static_cast<u32>(number(gun.at("cfg_id"), 1, 2147483647)));
+        out.set_ammo_cfg_id(static_cast<u32>(number(gun.at("ammo_cfg_id"), 1, 2147483647)));
+    }
+
+    for (const auto& item : doc.at("tools"))
+    {
+        value.add_tools(static_cast<u32>(number(item, 1, 2147483647)));
+    }
+
+    for (const auto& item : doc.at("consumables"))
+    {
+        value.add_consumables(static_cast<u32>(number(item, 1, 2147483647)));
+    }
+
+    return value;
+}
+
+// 输出服务端接受的配装，便于客户端核对默认值和槽位顺序。
+Json loadout(const hunter::wire::Loadout& value)
+{
+    auto weapons = Json::array();
+
+    for (const auto& gun : value.weapons())
+    {
+        weapons.push_back({{"cfg_id", gun.cfg_id()}, {"ammo_cfg_id", gun.ammo_cfg_id()}});
+    }
+
+    return {{"player_cfg_id", value.player_cfg_id()},
+        {"health_segments", Vec<u32>(value.health_segments().begin(),
+            value.health_segments().end())},
+        {"weapons", std::move(weapons)},
+        {"tools", Vec<u32>(value.tools().begin(), value.tools().end())},
+        {"consumables", Vec<u32>(value.consumables().begin(), value.consumables().end())}};
+}
+
 // 将用户命令转换为生成协议对象，坐标、生命和伤害不接受客户端指定。
 hunter::wire::Envelope command(const Json& doc)
 {
@@ -106,15 +173,20 @@ hunter::wire::Envelope command(const Json& doc)
     }
     else if (cmd == "start")
     {
-        fields(doc, {"cmd", "req_id", "after_match_id"});
+        optional_fields(doc, {"cmd", "req_id", "after_match_id"}, {"loadout"});
         auto* start = msg.mutable_start_req();
         start->set_req_id(req_id(doc.at("req_id")));
         start->set_after_match_id(id(doc.at("after_match_id"), false));
+
+        if (doc.contains("loadout"))
+        {
+            *start->mutable_loadout() = loadout(doc.at("loadout"));
+        }
     }
     else if (cmd == "input")
     {
-        fields(doc, {"cmd", "seq", "match_id", "world_id", "move_x", "aim_x", "aim_y",
-            "jump", "fire", "reload"});
+        optional_fields(doc, {"cmd", "seq", "match_id", "world_id", "move_x", "aim_x", "aim_y",
+            "jump", "fire", "reload"}, {"move_y", "run", "prone"});
         auto* input = msg.mutable_input();
         input->set_seq(id(doc.at("seq"), true));
         input->set_match_id(id(doc.at("match_id"), true));
@@ -125,29 +197,39 @@ hunter::wire::Envelope command(const Json& doc)
         input->set_jump(doc.at("jump").get<bool>());
         input->set_fire(doc.at("fire").get<bool>());
         input->set_reload(doc.at("reload").get<bool>());
+        input->set_move_y(number(doc.value("move_y", Json(0)), -1, 1));
+        input->set_run(doc.value("run", false));
+        input->set_prone(doc.value("prone", false));
 
-        if (input->aim_x() == 0 && input->aim_y() == 0)
-        {
-            throw std::runtime_error("zero_aim");
-        }
     }
-    else if (cmd == "bag" || cmd == "pickup" || cmd == "abandon")
+    else if (cmd == "bag" || cmd == "pickup" || cmd == "abandon" || cmd == "switch_weapon"
+        || cmd == "select_tool" || cmd == "melee" || cmd == "use" || cmd == "interact")
     {
         if (cmd == "pickup")
         {
-            fields(doc, {"cmd", "req_id", "world_id", "match_id", "item_id"});
+            fields(doc, {"cmd", "req_id", "world_id", "match_id", "item_id", "action_seq"});
         }
         else
         {
-            fields(doc, {"cmd", "req_id", "world_id", "match_id"});
+            optional_fields(doc, {"cmd", "req_id", "world_id", "match_id", "action_seq"},
+                {"slot", "target_id"});
         }
 
         auto& req = *msg.mutable_action_req();
         req.set_req_id(req_id(doc.at("req_id")));
         req.set_world_id(id(doc.at("world_id"), true));
         req.set_match_id(id(doc.at("match_id"), true));
-        req.set_kind(cmd == "pickup" ? hunter::wire::ActionReq::PICKUP
-            : cmd == "abandon" ? hunter::wire::ActionReq::ABANDON : hunter::wire::ActionReq::BAG);
+        req.set_action_seq(id(doc.at("action_seq"), true));
+        const Map<Str, hunter::wire::ActionReq::Kind> kinds = {
+            {"bag", hunter::wire::ActionReq::BAG}, {"pickup", hunter::wire::ActionReq::PICKUP},
+            {"abandon", hunter::wire::ActionReq::ABANDON},
+            {"switch_weapon", hunter::wire::ActionReq::SWITCH_WEAPON},
+            {"select_tool", hunter::wire::ActionReq::SELECT_TOOL},
+            {"melee", hunter::wire::ActionReq::MELEE}, {"use", hunter::wire::ActionReq::USE},
+            {"interact", hunter::wire::ActionReq::INTERACT}};
+        req.set_kind(kinds.at(cmd));
+        req.set_slot(static_cast<u32>(number(doc.value("slot", Json(0)), 0, 8)));
+        req.set_target_id(static_cast<u32>(number(doc.value("target_id", Json(0)), 0, 2147483647)));
 
         if (cmd == "pickup")
         {
@@ -191,12 +273,37 @@ hunter::wire::Envelope command(const Json& doc)
 // 输出完整实体字段，默认零值和布尔也保留，便于肉眼与自动化工具检查。
 Json entity(const hunter::wire::Entity& value)
 {
+    auto weapons = Json::array();
+    auto tools = Json::array();
+
+    for (const auto& gun : value.weapons())
+    {
+        weapons.push_back({{"slot", gun.slot()}, {"cfg_id", gun.cfg_id()},
+            {"ammo_cfg_id", gun.ammo_cfg_id()}, {"ammo", gun.ammo()},
+            {"reserve", gun.reserve()}, {"shot_ticks", gun.shot_ticks()},
+            {"reload_ticks", gun.reload_ticks()}});
+    }
+
+    for (const auto& tool : value.tools())
+    {
+        tools.push_back({{"slot", tool.slot()}, {"cfg_id", tool.cfg_id()},
+            {"count", tool.count()}, {"instance", std::to_string(tool.instance())}});
+    }
+
     return {{"id", std::to_string(value.id())}, {"kind", value.kind()}, {"x", value.x()},
         {"y", value.y()}, {"vx", value.vx()}, {"vy", value.vy()}, {"hp", value.hp()},
         {"max_hp", value.max_hp()}, {"ammo", value.ammo()}, {"reserve", value.reserve()},
         {"reload_ticks", value.reload_ticks()}, {"grounded", value.grounded()},
         {"alive", value.alive()}, {"facing", value.facing()}, {"ai", value.ai()},
-        {"cfg_id", std::to_string(value.cfg_id())}, {"attack_ticks", value.attack_ticks()}};
+        {"cfg_id", std::to_string(value.cfg_id())}, {"attack_ticks", value.attack_ticks()},
+        {"prone", value.prone()}, {"running", value.running()}, {"stamina", value.stamina()},
+        {"width", value.width()}, {"height", value.height()},
+        {"active_weapon", value.active_weapon()}, {"weapons", std::move(weapons)},
+        {"tools", std::move(tools)}, {"use_slot", value.use_slot()},
+        {"use_ticks", value.use_ticks()}, {"ladder_id", value.ladder_id()},
+        {"selected_slot", value.selected_slot()},
+        {"health_segments", Vec<u32>(value.health_segments().begin(),
+            value.health_segments().end())}};
 }
 
 // 把服务端消息转换成一行 JSON；64 位标识统一保持规范十进制字符串。
@@ -226,7 +333,8 @@ Json response(const hunter::wire::Envelope& msg)
         return {{"type", "start_rsp"}, {"req_id", value.req_id()},
             {"world_id", std::to_string(value.world_id())},
             {"player_entity_id", std::to_string(value.player_entity_id())},
-            {"match_id", std::to_string(value.match_id())}, {"phase", value.phase()}};
+            {"match_id", std::to_string(value.match_id())}, {"phase", value.phase()},
+            {"loadout", loadout(value.loadout())}};
     }
 
     if (msg.has_ack())
@@ -242,6 +350,20 @@ Json response(const hunter::wire::Envelope& msg)
         const auto& value = msg.snapshot();
         auto entities = Json::array();
         auto items = Json::array();
+        auto scenes = Json::array();
+        auto projectiles = Json::array();
+
+        for (const auto& item : value.scenes())
+        {
+            scenes.push_back({{"id", item.id()}, {"used", item.used()}});
+        }
+
+        for (const auto& item : value.projectiles())
+        {
+            projectiles.push_back({{"id", std::to_string(item.id())}, {"cfg_id", item.cfg_id()},
+                {"x", item.x()}, {"y", item.y()}, {"vx", item.vx()}, {"vy", item.vy()},
+                {"remaining", item.remaining()}});
+        }
 
         for (const auto& item : value.items())
         {
@@ -265,6 +387,8 @@ Json response(const hunter::wire::Envelope& msg)
             {"extract_ticks", value.extract_ticks()}, {"extract_reason", value.extract_reason()},
             {"extract_remaining_ticks", value.extract_remaining_ticks()},
             {"extract_unlocked", value.extract_unlocked()},
+            {"action_seq", std::to_string(value.action_seq())},
+            {"scenes", std::move(scenes)}, {"projectiles", std::move(projectiles)},
             {"phase", value.phase()}, {"entities", std::move(entities)}};
     }
 
@@ -283,7 +407,8 @@ Json response(const hunter::wire::Envelope& msg)
     {
         const auto& value = msg.pause();
         return {{"type", "pause"}, {"paused", value.paused()},
-            {"discard_through_seq", std::to_string(value.discard_through_seq())}};
+            {"discard_through_seq", std::to_string(value.discard_through_seq())},
+            {"discard_action_seq", std::to_string(value.discard_action_seq())}};
     }
 
     if (msg.has_error())
@@ -299,7 +424,8 @@ Json response(const hunter::wire::Envelope& msg)
         const auto& value = msg.action_rsp();
         return {{"type", "action_rsp"}, {"req_id", value.req_id()},
             {"world_id", std::to_string(value.world_id())},
-            {"match_id", std::to_string(value.match_id())}};
+            {"match_id", std::to_string(value.match_id())},
+            {"action_seq", std::to_string(value.action_seq())}};
     }
 
     if (msg.has_save_rsp())
@@ -378,6 +504,7 @@ private:
     Str instance_;
     bool ready_ = false;
     bool authed_ = false;
+    u64 action_seq_ = 0;
     bool stopped_ = false;
     i32 result_ = 0;
     std::deque<Ptr<const hunter::Frame>> sends_;
@@ -597,13 +724,34 @@ void Client::commands()
                 input_bytes_ -= line.size();
             }
 
-            const auto doc = Json::parse(line);
+            auto doc = Json::parse(line);
             if (!ready_)
             {
                 connect(doc);
             }
             else
             {
+                const auto cmd = doc.value("cmd", "");
+                const Set<Str> actions = {"bag", "pickup", "abandon", "switch_weapon",
+                    "select_tool", "melee", "use", "interact"};
+
+                if (actions.contains(cmd))
+                {
+                    if (!doc.contains("action_seq"))
+                    {
+                        if (action_seq_ == std::numeric_limits<u64>::max())
+                        {
+                            throw std::runtime_error("action_sequence_exhausted");
+                        }
+
+                        doc["action_seq"] = std::to_string(++action_seq_);
+                    }
+                    else
+                    {
+                        action_seq_ = std::max(action_seq_, id(doc.at("action_seq"), true));
+                    }
+                }
+
                 send(command(doc));
             }
         }
@@ -617,7 +765,7 @@ void Client::commands()
 void Client::connect(const Json& ready)
 {
     if (!ready.is_object() || ready.at("type") != "Ready"
-        || number(ready.at("protocol_version"), 4, 4) != 4
+        || number(ready.at("protocol_version"), 5, 5) != 5
         || ready.at("content_version").get<Str>() != hunter::content::version)
     {
         throw std::runtime_error("ready_identity_mismatch");
@@ -633,7 +781,7 @@ void Client::connect(const Json& ready)
 
     hunter::wire::Envelope msg;
     auto* hello = msg.mutable_hello();
-    hello->set_protocol_version(4);
+    hello->set_protocol_version(5);
     hello->set_content_version(Str(hunter::content::version));
     hello->set_instance(instance_);
     hello->set_token(token);
@@ -756,7 +904,7 @@ void Client::read_body(usize size)
 
         if (!authed_)
         {
-            if (!msg->has_hello_ack() || msg->hello_ack().protocol_version() != 4
+            if (!msg->has_hello_ack() || msg->hello_ack().protocol_version() != 5
                 || msg->hello_ack().content_version() != hunter::content::version
                 || msg->hello_ack().instance() != instance_)
             {

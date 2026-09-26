@@ -1,5 +1,5 @@
 {
-  "version": 5,
+  "version": 6,
   "host_api": {
     "net.emit": {
       "args": [
@@ -42,7 +42,7 @@
     },
     "entry_returns": "boolean true except export_state returns string",
     "ctx": {
-      "v": 5,
+      "v": 6,
       "snapshot_every": "integer [1,3600]",
       "content": "validated exported content object"
     },
@@ -126,7 +126,61 @@
           "get_fire_once": "bool get_fire_once() const",
           "set_fire_once": "void set_fire_once(bool value)",
           "get_reload": "bool get_reload() const",
-          "set_reload": "void set_reload(bool value)"
+          "set_reload": "void set_reload(bool value)",
+          "get_move_y": "i64 get_move_y() const",
+          "set_move_y": "void set_move_y(i64 value)",
+          "get_run": "bool get_run() const",
+          "set_run": "void set_run(bool value)",
+          "get_prone": "bool get_prone() const",
+          "set_prone": "void set_prone(bool value)",
+          "get_want_prone": "bool get_want_prone() const",
+          "set_want_prone": "void set_want_prone(bool value)",
+          "get_running": "bool get_running() const",
+          "set_running": "void set_running(bool value)",
+          "get_stamina": "i64 get_stamina() const",
+          "set_stamina": "void set_stamina(i64 value)",
+          "get_stamina_delay": "i64 get_stamina_delay() const",
+          "set_stamina_delay": "void set_stamina_delay(i64 value)",
+          "get_stamina_rem": "i64 get_stamina_rem() const",
+          "set_stamina_rem": "void set_stamina_rem(i64 value)",
+          "get_health_delay": "i64 get_health_delay() const",
+          "set_health_delay": "void set_health_delay(i64 value)",
+          "get_health_rem": "i64 get_health_rem() const",
+          "set_health_rem": "void set_health_rem(i64 value)",
+          "get_melee_ticks": "i64 get_melee_ticks() const",
+          "set_melee_ticks": "void set_melee_ticks(i64 value)",
+          "get_ladder_id": "i64 get_ladder_id() const",
+          "set_ladder_id": "void set_ladder_id(i64 value)",
+          "get_selected_slot": "i64 get_selected_slot() const",
+          "set_selected_slot": "void set_selected_slot(i64 value)",
+          "get_use_slot": "i64 get_use_slot() const",
+          "set_use_slot": "void set_use_slot(i64 value)",
+          "get_use_ticks": "i64 get_use_ticks() const",
+          "set_use_ticks": "void set_use_ticks(i64 value)",
+          "get_melee": "bool get_melee() const",
+          "set_melee": "void set_melee(bool value)",
+          "get_segment_count": "i64 get_segment_count() const",
+          "get_segment": "i64 get_segment(i64 index) const",
+          "get_weapon_count": "i64 get_weapon_count() const",
+          "get_active_weapon": "i64 get_active_weapon() const",
+          "switch_weapon": "bool switch_weapon(i64 slot)",
+          "get_weapon_cfg": "Str get_weapon_cfg(i64 slot) const",
+          "get_weapon_reserve": "i64 get_weapon_reserve(i64 slot) const",
+          "set_weapon_reserve": "void set_weapon_reserve(i64 slot, i64 value)",
+          "get_tool_cfg": "Str get_tool_cfg(i64 slot) const",
+          "get_tool_count": "i64 get_tool_count(i64 slot) const",
+          "get_tool_instance": "Str get_tool_instance(i64 slot) const",
+          "change_tool": "void change_tool(i64 slot, const Str& tool_cfg_id, i64 count)",
+          "start_use": "bool start_use(i64 slot, i64 ticks)",
+          "cancel_use": "void cancel_use()",
+          "finish_use": "bool finish_use()",
+          "get_use_instance": "Str get_use_instance() const",
+          "get_weapon_ammo": "i64 get_weapon_ammo(i64 slot) const",
+          "set_weapon_ammo": "void set_weapon_ammo(i64 slot, i64 value)",
+          "get_weapon_shot_ticks": "i64 get_weapon_shot_ticks(i64 slot) const",
+          "set_weapon_shot_ticks": "void set_weapon_shot_ticks(i64 slot, i64 value)",
+          "get_weapon_reload_ticks": "i64 get_weapon_reload_ticks(i64 slot) const",
+          "set_weapon_reload_ticks": "void set_weapon_reload_ticks(i64 slot, i64 value)"
         },
         "ownership": "World",
         "handle": "type + slot + generation + owner + module epoch + capability",
@@ -225,7 +279,18 @@
           "hurt_now": "bool hurt_now() const",
           "get_extract_ticks": "i64 get_extract_ticks() const",
           "set_extract": "void set_extract(i64 id, i64 ticks, Str reason)",
-          "finish": "void finish(Str outcome)"
+          "finish": "void finish(Str outcome)",
+          "get_world_id": "Str get_world_id() const",
+          "scene_count": "i64 scene_count() const",
+          "scene_used": "bool scene_used(i64 index) const",
+          "set_scene_used": "void set_scene_used(i64 index, bool used)",
+          "projectile_free": "i64 projectile_free() const",
+          "spawn_projectile": "i64 spawn_projectile(const Str& cfg_id, i64 x, i64 y, i64 vx, i64 vy, i64 remaining)",
+          "projectile_alive": "bool projectile_alive(i64 index) const",
+          "read_projectile": "std::tuple<Str, i64, i64, i64, i64, i64> read_projectile(i64 index) const",
+          "write_projectile": "void write_projectile(i64 index, i64 x, i64 y, i64 remaining)",
+          "remove_projectile": "void remove_projectile(i64 index)",
+          "clear_actions": "void clear_actions()"
         },
         "ownership": "World",
         "handle": "type + slot + generation + owner + module epoch + capability",
@@ -258,20 +323,12 @@
     ]
   },
   "state": {
-    "v": 5,
+    "v": 6,
     "tick_id": "canonical decimal string [0,9223372036854775807]",
     "seq": "canonical decimal string [0,18446744073709551615]",
     "match_id": "canonical decimal string [0,18446744073709551615]",
-    "world_id": "canonical decimal string; scoped by session, increases for each new world",
-    "raid": {
-      "player_state": "Alive|Dead|Extracted|Abandoned",
-      "random": "canonical decimal uint32 string [1,4294967295]",
-      "dropped": "unique array of dead monster identities, at most 64",
-      "extract_id": "integer exit configuration id or zero",
-      "extract_ticks": "integer accumulated ticks [0,36000]",
-      "extract_reason": "locked|outside|hurt|dead|counting|complete",
-      "damage_tick": "canonical decimal tick string <= tick_id"
-    },
+    "world_id": "server assigned runtime identity, nonzero for an active match",
+    "raid": "native player_state/random/dropped/extract_id/extract_ticks/extract_reason/damage_tick",
     "player_id": "canonical decimal string [0,18446744073709551615]",
     "event_id": "canonical decimal string [0,18446744073709551615]",
     "phase": "Unauthenticated|Lobby|Preparing|Playing|Settling|Finished|Aborted; Dead/Cleared only in combat regression fixture",
@@ -312,13 +369,14 @@
           "fire_once": "boolean",
           "reload": "boolean"
         },
-        "reserve": "integer [0,weapon cfg reserve]",
+        "reserve": "integer [0,current weapon reserve]; inactive weapon uses demo.other_reserve",
         "weapon": {
-          "cfg_id": "map.spawn.weapon_cfg_id",
+          "cfg_id": "current accepted weapon selected by active_weapon slot; resolves content.weapons",
           "ammo": "integer [0,cfg.magazine]",
           "shot_ticks": "integer [0,cfg.fire_ticks]",
           "reload_ticks": "integer [0,cfg.reload_ticks]"
-        }
+        },
+        "demo": "typed native posture, stamina/recovery remainders, immutable health segments, stable two weapon slots, eight tool slots with instance identity, selected/use slot/ticks and reserved projectile slot"
       },
       "monster": {
         "spawn_id": "positive canonical cfg-range string; resolves to map.enemies spawn_id and matching cfg_id",
@@ -345,12 +403,14 @@
     },
     "invariants": [
       "entity_ids and entities form a bijection; no entity object aliases",
-      "sole player resolves from player_entity_id and matches initial player and weapon cfg",
-      "death zeros motion and own cooldowns; monster ai becomes dead",
+      "sole player resolves from player_entity_id and matches frozen accepted loadout",
+      "death zeros motion and every weapon cooldown; monster ai becomes dead",
       "paused or terminal player controls are neutral; terminal motion is zero",
-      "Playing requires live player; Boss death only unlocks exit; Settling/Finished require a final player outcome; Dead/Cleared remain regression fixture phases",
-      "inactive phases have empty entities and indices and zero allocator and player entity id",
-      "match_id is allocated persistently and exceeds last_start.after_match_id; existing request and sequence invariants retained"
+      "Playing requires live player; Boss death only unlocks exit; Settling/Finished require final player outcome",
+      "inactive phases have empty entities and indices and zero allocators",
+      "match_id is allocated persistently and exceeds last_start.after_match_id",
+      "effective prone body is used for collision/grounding; ladder scene ownership bounds climbing movement",
+      "tool use references current immutable slot instance; reservations cannot be orphaned; terminal projectiles are empty"
     ],
     "items": {
       "max": 64,
@@ -367,19 +427,23 @@
     },
     "last_item_id": "canonical uint64 string; per-match high water, never reused",
     "owner": "C++ World; Lua retains immutable identity and generation-checked handles only",
-    "world_id": "server assigned runtime identity, nonzero for an active match",
-    "raid": "native player_state/random/dropped/extract_id/extract_ticks/extract_reason/damage_tick"
+    "loadout": "player_cfg_id, health_segments, weapon choices, regular tools and consumables; frozen for the match",
+    "scene_used": "boolean array matching selected scene order; maximum 32; only supply may become used",
+    "projectiles": "fixed 16 slots with unique id/cfg_id/x/y/vx/vy/remaining/active/reserved; reservations belong to an active bomb use",
+    "last_projectile_id": "canonical uint64 high-water, never reused within a match",
+    "action_seq": "canonical uint64 accepted action high-water; responses retained in Runtime bounded cache"
   },
   "effect": {
-    "v": 4,
+    "v": 5,
     "events": {
       "input": 1,
       "login": 2,
       "start": 3,
-      "pause": 4
+      "pause": 4,
+      "action": 5
     },
     "input": {
-      "v": 4,
+      "v": 5,
       "seq": "positive uint64 decimal string",
       "match_id": "positive uint64 decimal string",
       "applied_tick": "nonnegative i64 decimal string",
@@ -389,7 +453,10 @@
       "jump": "boolean",
       "fire": "boolean",
       "reload": "boolean",
-      "transport": "native Protobuf FrameInput; no JSON or Lua input dispatch"
+      "transport": "native Protobuf FrameInput; no JSON or Lua input dispatch",
+      "move_y": "integer [-1,1]",
+      "run": "boolean explicit intent",
+      "prone": "boolean explicit intent"
     },
     "kinds": [
       "ack",
@@ -397,7 +464,8 @@
       "login",
       "start",
       "event",
-      "error"
+      "error",
+      "action"
     ],
     "schemas": {
       "ack": {
@@ -405,8 +473,8 @@
         "fields": {
           "v": {
             "type": "int",
-            "min": 4,
-            "max": 4
+            "min": 5,
+            "max": 5
           },
           "seq": {
             "type": "id",
@@ -430,8 +498,8 @@
         "fields": {
           "v": {
             "type": "int",
-            "min": 4,
-            "max": 4
+            "min": 5,
+            "max": 5
           },
           "tick_id": {
             "type": "id",
@@ -574,8 +642,8 @@
         "fields": {
           "v": {
             "type": "int",
-            "min": 4,
-            "max": 4
+            "min": 5,
+            "max": 5
           },
           "req_id": {
             "type": "string",
@@ -615,8 +683,8 @@
         "fields": {
           "v": {
             "type": "int",
-            "min": 4,
-            "max": 4
+            "min": 5,
+            "max": 5
           },
           "req_id": {
             "type": "string",
@@ -651,8 +719,8 @@
         "fields": {
           "v": {
             "type": "int",
-            "min": 4,
-            "max": 4
+            "min": 5,
+            "max": 5
           },
           "match_id": {
             "type": "id",
@@ -678,7 +746,11 @@
               "hit",
               "death",
               "reload",
-              "end"
+              "end",
+              "melee",
+              "heal",
+              "tool",
+              "explosion"
             ]
           },
           "actor_id": {
@@ -713,8 +785,8 @@
         "fields": {
           "v": {
             "type": "int",
-            "min": 4,
-            "max": 4
+            "min": 5,
+            "max": 5
           },
           "code": {
             "type": "string",
@@ -742,8 +814,38 @@
             "max": "18446744073709551615"
           }
         }
+      },
+      "action": {
+        "type": "object",
+        "fields": {
+          "v": {
+            "type": "int",
+            "min": 5,
+            "max": 5
+          },
+          "req_id": {
+            "type": "string",
+            "min": 1,
+            "max": 128
+          },
+          "world_id": {
+            "type": "id",
+            "min": "1",
+            "max": "18446744073709551615"
+          },
+          "match_id": {
+            "type": "id",
+            "min": "1",
+            "max": "18446744073709551615"
+          },
+          "action_seq": {
+            "type": "id",
+            "min": "1",
+            "max": "18446744073709551615"
+          }
+        }
       }
     },
-    "control_version": 4
+    "control_version": 5
   }
 }

@@ -1,5 +1,6 @@
 -- 提供射线与实心矩形遮挡计算，不持有实体、武器或伤害状态。
 return function(deps)
+    local movement = deps["game.movement"]
     local api = {}
 
     -- 求一个轴的射线参数区间，平行且在范围外时明确拒绝。
@@ -25,16 +26,30 @@ return function(deps)
         local near = math.max(0.0, x1, y1)
         local far = math.min(range, x2, y2)
         if near <= far then
-            return near
+            return near, far
         end
         return nil
+    end
+
+    -- 爆炸从碰撞表面向外可达，真正穿入实心矩形内部的连线才被遮挡。
+    function api.clear_path(solids, x, y, target_x, target_y)
+        local dx = target_x - x
+        local dy = target_y - y
+        for _, solid in ipairs(solids) do
+            local near, far = api.ray(x, y, dx, dy, 1.0,
+                solid.x, solid.y, solid.w, solid.h)
+            if near ~= nil and near < 1.0 and far > 0.000000001 then
+                return false
+            end
+        end
+        return true
     end
 
     -- 检查两点之间是否被实心地图矩形阻挡。
     function api.visible(content, x, y, target_x, target_y)
         local dx = target_x - x
         local dy = target_y - y
-        for _, solid in ipairs(content.map.solids) do
+        for _, solid in ipairs(movement.solids(content)) do
             local distance = api.ray(x, y, dx, dy, 1.0, solid.x, solid.y, solid.w, solid.h)
             if distance ~= nil and distance < 1.0 then
                 return false

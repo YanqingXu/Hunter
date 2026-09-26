@@ -6,6 +6,9 @@
 构建与运行见 [README.md](README.md)，验证范围见 [VERIFICATION.md](VERIFICATION.md)。
 SRV-007 提供 SQLite 底座；SRV-011 接通 Runtime 读档、持久局号、掉落背包、撤离与结算。
 首版任务和实际验证见 [V1_TASKS.md](V1_TASKS.md)，Unity 与 Android 仍为独立门槛。
+SRV-012 增加免费配装、姿态恢复、三枪四工具和场景交互；当前增量状态见
+[V1_GAMEPLAY_TASKS.md](V1_GAMEPLAY_TASKS.md)。生产内容从根工作簿与 `design/demo_sources.json`
+生成，旧首版工作簿仅作回归夹具。当前协议v5、内容v4、Host／状态v6，SQLite仍为V1。
 
 - `.gitkeep` 仅用于保留空目录。
 - `src/game/` 持有唯一权威状态，`lua/main.lua` 组装玩法规则；高频输入和网络投影由 C++ 实现。

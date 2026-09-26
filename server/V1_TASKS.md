@@ -1,5 +1,8 @@
 # 服务端 V1 实施记录
 
+本页保留 2026-09-25 首版历史记录；2026-09-26 验证玩法增量与当前配置入口见
+[V1_GAMEPLAY_TASKS.md](V1_GAMEPLAY_TASKS.md) 和 [README](README.md)。
+
 范围：Windows 单人 PvE 撤离持久化闭环。Unity、Android 为独立联调发布门槛。
 以 SRV-011 为增量契约；热更新不再作为本版前置。配置采用地图 2 的首版 Excel。
 2026-09-25：T01—T13 已实现并完成 Windows 验证；Unity／Android 不在此完成声明内。

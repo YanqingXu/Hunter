@@ -32,6 +32,20 @@ struct ItemSlot
     Item value;
 };
 
+// 保存飞行物或预留槽位；预留尚无身份，正式生成后使用本局唯一身份。
+struct Projectile
+{
+    u64 id = 0;
+    u32 cfg_id = 0;
+    i32 x = 0;
+    i32 y = 0;
+    i32 vx = 0;
+    i32 vy = 0;
+    i32 remaining = 0;
+    bool active = false;
+    bool reserved = false;
+};
+
 class World
 {
 public:
@@ -52,6 +66,12 @@ public:
     u64 match_id = 0;
     u64 world_id = 0;
     Raid raid;
+    wire::Loadout pending_loadout;
+    wire::Loadout active_loadout;
+    std::array<bool, 32> used_scenes{};
+    std::array<Projectile, 16> projectiles{};
+    u64 last_projectile_id = 0;
+    u64 action_seq = 0;
     u64 player_id = 0;
     u64 event_id = 0;
     Str phase = "Unauthenticated";
@@ -67,6 +87,51 @@ public:
     std::array<std::optional<Actor>, 64> actors;
     Vec<u32> order;
     std::array<std::optional<ItemSlot>, 64> items;
+
+    // 在分配局号之前验证完整配装；空配装展开为正式默认配置。
+    wire::Loadout check_loadout(const wire::Loadout& input) const;
+
+    // 保存已经验证的候选配装，由下一次开局消费。
+    void prepare_loadout(const wire::Loadout& input);
+
+    // 返回本局冻结的正式接受配装。
+    wire::Loadout get_loadout() const;
+
+    // 返回当前世界身份。
+    Str get_world_id() const;
+
+    // 返回场景实例数量。
+    i64 scene_count() const;
+
+    // 读取一基场景索引的已使用状态。
+    bool scene_used(i64 index) const;
+
+    // 写入一基场景索引的已使用状态。
+    void set_scene_used(i64 index, bool used);
+
+    // 返回可预留的投掷物容量。
+    i64 projectile_free() const;
+
+    // 预留固定槽位，容量不足返回零。
+    i32 reserve_projectile();
+
+    // 激活预留或空闲槽位并赋予永不重复的局内身份。
+    i64 spawn_projectile(const Str& cfg_id, i64 x, i64 y, i64 vx, i64 vy, i64 remaining);
+
+    // 查询一基投掷物槽位是否在飞行。
+    bool projectile_alive(i64 index) const;
+
+    // 批量读取投掷物标量，只用于当前脚本计算。
+    std::tuple<Str, i64, i64, i64, i64, i64> read_projectile(i64 index) const;
+
+    // 写入当前飞行位置及剩余距离。
+    void write_projectile(i64 index, i64 x, i64 y, i64 remaining);
+
+    // 原子移除飞行物或释放预留。
+    void remove_projectile(i64 index);
+
+    // 清理终态所持有的装填、工具和飞行物资源。
+    void clear_actions();
 
     // 仅在旧 VM 已关闭后重建空会话，仍拒绝其他线程调用。
     void reset();

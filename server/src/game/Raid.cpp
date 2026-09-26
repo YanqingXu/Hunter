@@ -96,6 +96,11 @@ Str World::pickup(const Str& owner, const Str& item_id)
         return "invalid_player";
     }
 
+    if (std::get<Player>(actors[actor]->value).ladder_id != 0)
+    {
+        return "action_locked";
+    }
+
     if (index == items.size() || items[index]->value.place != "Ground")
     {
         return "already_picked";
@@ -109,6 +114,48 @@ Str World::pickup(const Str& owner, const Str& item_id)
     if (dx * dx + dy * dy > radius * radius)
     {
         return "out_of_range";
+    }
+
+    if (content.at("tools").contains(item.get_cfg_id()))
+    {
+        const auto& cfg = content.at("tools").at(item.get_cfg_id());
+        const Str kind = cfg.at("kind");
+
+        if (kind == "needle" || kind == "bomb")
+        {
+            auto& player = std::get<Player>(actors[actor]->value);
+            i32 target = 0;
+
+            for (i32 tool_slot = 5; tool_slot <= 8; ++tool_slot)
+            {
+                if (player.get_tool_cfg(tool_slot) == item.get_cfg_id())
+                {
+                    target = tool_slot;
+                    break;
+                }
+
+                if (target == 0 && player.get_tool_cfg(tool_slot) == "0")
+                {
+                    target = tool_slot;
+                }
+            }
+
+            if (target == 0 || player.get_tool_count(target) + item.count
+                > cfg.at("uses").get<i32>())
+            {
+                return "consumable_full";
+            }
+
+            player.change_tool(target, item.get_cfg_id(),
+                player.get_tool_count(target) + item.count);
+            items[index].reset();
+            return "";
+        }
+    }
+
+    if (content.at("items").at(item.get_cfg_id()).value("kind", 5) != 5)
+    {
+        return "unsupported_pickup";
     }
 
     auto next = items;
@@ -198,6 +245,7 @@ void World::finish(Str outcome)
     raid.player_state = std::move(outcome);
     phase = "Settling";
     clear_input();
+    clear_actions();
 
     for (const auto index : order)
     {

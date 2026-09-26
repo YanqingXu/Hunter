@@ -1,11 +1,28 @@
 # 配置导出工具
 
-服务端首版构建使用 `demo.py`，复用 `export.py` 读取 `design/demo/首版.xlsx`，生成统一
-JSON、C++ 头文件和内容摘要；修改该工作簿后重新构建即可改变正式玩法。
-该适配器校验地图 2 的出生、技能、枪械、Boss、掉落、堆叠、容量和撤离引用。
-工作簿来源及与现行策划表的区别见 [首版内容说明](../design/demo/README.md)。
+正式 DEMO 使用 `gameplay.py` 按 `design/demo_sources.json` 读取根目录源表中明确选中的
+工作表和记录，生成内容 v4 的共享 JSON、C++ 头文件和 SHA-256 摘要。生产不扫描整个
+`design/`，不读取天赋草稿、重复关卡表或历史首版工作簿。
+字段、记录选择和本版默认值见 [DEMO 内容说明](../design/DEMO内容说明.md)。
+
+```powershell
+python export/gameplay.py --source design/demo_sources.json --check
+python export/gameplay.py --source design/demo_sources.json `
+    --output server/build/win-dev/generated/content.json `
+    --header server/build/win-dev/generated/ContentSpec.h
+python server/tests/scripts/test_gameplay_content.py -v
+```
+
+`--check` 完整读取和校验但不写文件。清单缺表、缺记录、重复身份、未选依赖、非法血段、
+超重初装、弹药不匹配和场景阻断既有巡逻均阻止导出。相同有效数据生成相同字节；未选
+草稿不参与摘要。发布继续使用 `server/tools/publish.py` 的暂存和回滚机制。
+
+旧 `demo.py` 与 `design/demo/首版.xlsx` 保留为历史撤离回归。旧灰盒 JSON 需要进入当前
+运行时测试时，显式使用 `gameplay.py --fixture design/combat_demo.json`，输出同样的 v4
+结构并保留旧地图与战斗数值；正式运行没有旧内容的隐式升级或回退。
 
 原 `export.py` 的 Excel → Lua 桌面导表工具继续保留；这些普通 Lua 配置不在运行时执行。
+以下历史通用导表示例不构成当前生产入口，根目录未选草稿仍可包含不完整的字段和记录。
 `combat.py` 只生成灰盒回归夹具。三个 Python 工具均只依赖标准库。
 
 ## 策划使用：改清单，双击导出

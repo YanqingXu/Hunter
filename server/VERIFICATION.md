@@ -1,5 +1,55 @@
 # 服务端验证记录
 
+## 验证 DEMO 玩法增量（2026-09-26）
+
+基线提交 `724e33c`，本轮实现 SRV-012 / G01—G06。Windows x64 Release、VS 2026，
+使用仓库固定依赖；未用历史二进制或旧签名制品代替本轮验证。实施及规则见
+[增量任务表](V1_GAMEPLAY_TASKS.md) 与 [SRV-012](intents/usecases/gameplay.intent.md)。
+
+| 验证 | 实际结果与证据 |
+| --- | --- |
+| 开发／Bundle 全量构建 | 均成功，无 C++ 编译警告；`build/gameplay-final-dev-build.log`、`gameplay-final-bundle-build.log` |
+| 开发完整 CTest | **30/30，301.71 秒**；`build/gameplay-final-dev-tests.log` |
+| Bundle 完整 CTest | **29/29，292.82 秒**；`build/gameplay-final-bundle-tests.log` |
+| 最后梯子修正，两模式重新构建 | 均成功；`build/gameplay-ladder-win-dev-build.log`、`gameplay-ladder-win-bundle-build.log` |
+| 最终开发增量、重新生成签名 Bundle | **8/8，15.77 秒**；`build/gameplay-ladder-dev-tests.log` |
+| 最终源码 Runtime 连续十局及十次启停 | **通过，123.21 秒**；`build/gameplay-final-dev-endurance.log` |
+| 最终 Bundle 增量，含连续十局／十次启停和生产链接检查 | **10/10，133.07 秒**；`build/gameplay-ladder-bundle-tests.log` |
+| 最终两种联调包解压运行 | 各完成真实战斗、拾取、撤离、Committed 和重启查询；`build/gameplay-package-final-source.log`、`gameplay-package-final-bundle.log` |
+
+两套完整回归通过后，最后把梯子从交互离梯收紧为**只接受移动，到达端点且站立空间足够时离梯**，
+并禁止梯上原生拾取。随后重新构建两模式，运行表中的最终增量与连续多局检查，重新签名、打包和
+解包验证。完整套件数字与最后增量证据分别列出，不把修正前的完整结果冒充修正后重跑全部项目。
+
+新增验证覆盖：完整配装先校验再分配局号、参数冲突、单调动作序号与 128 条缓存淘汰、补给重放、
+暂停作废动作、SQLite 写锁延迟分配时 Pause→Resume 后旧开局仍作废；零向量和匍匐瞄准、低顶起身、
+跑跳及近战体力、混合血段与恰好段界、整数恢复、死亡不回血；独立枪弹和装填、多弹丸、固定减伤、
+掩体优先和 Boss 阻断；工具实例绑定、完成 Tick 受伤／致命伤取消、耗尽留槽或清槽、投掷容量预留、
+路径碰撞和爆炸遮挡、端点受阻及离梯不重放旧动作。
+
+免费武器和常规工具不能进入奖励背包；消耗品拾取走专槽且容量不足原子拒绝。真实 TCP 测试验证
+免费物资不入永久仓库，并读取含旧 `demo-v3` 内容身份和战利品 `2800001/2800002` 的 SQLite V1
+数据夹具，历史结果逐字节一致。原有死亡／放弃空奖励、重复提交、写失败、提交边界强杀及重启查询
+在两套完整回归中继续通过。最终两模式均以同一 Runtime 完成十局撤离，再独立启动十次查询持久结果。
+
+生产源为根工作簿与 `design/demo_sources.json`，地图只来自地图表；原普通怪／Boss 移入独立记录，
+攻击使用 Attack，未读取天赋 Skill。旧首版只作回归夹具。选中记录空值、单位或引用非法会失败，
+未选草稿不影响摘要。新增导出契约 5 项包含 20 种拒绝场景，根导表／启动器 25 项及历史 DEMO 2 项通过。
+工作簿批注、VML、图片关系和未选工作表保留，修改后重新导入与渲染检查通过。
+
+版本：协议 **v5**、内容 **v4**、Host／内部状态 **v6**、SQLite **V1**。开发与 Bundle 生成内容逐字节一致：
+`gameplay-v4:65104619225ac997076578c36c5d4cca91ebf28af6fe7d66df19f13d1b056908`。
+
+最终 ZIP 已核对 CRC、manifest 中每个文件的长度和 SHA-256，并从独立目录运行。包摘要：
+
+- `hunter-v1-source.zip`：`9201f4582fa945006491434fdc53f743cd12f24736e793fd7a9bf7c3e7feb7ab`
+- `hunter-v1-bundle.zip`：`6f748ceeb0432505e0f383bdd4e5c727c9d68d1d7852abe51afe092cfea8273d`
+
+Bundle 使用公开测试向量签名，仅供联调；Unity、Android 工具链／真机及正式发行签名仍独立验收。
+本轮没有更改 SQLite 版本，也不提供未结算对局的崩溃续玩。此前完成记录继续保留如下。
+
+---
+
 ## 单人撤离持久化首版（2026-09-25）
 
 本轮实现 SRV-011 / V1-T01—T13；详见 [实施记录](V1_TASKS.md)。Windows x64 Release，

@@ -28,12 +28,15 @@ def files(args):
         selected["game.map.json"] = build / "generated/game.map.json"
         command = "--source game.lua"
     data = {name: path.read_bytes() for name, path in selected.items()}
-    note = ("Hunter 服务端 V1 Windows 联调包\n"
+    note = ("Hunter 验证 DEMO 服务端 Windows 联调包\n"
             "需要 x64 Windows 和兼容 VS 2026 的 VC++ 运行库。\n"
             f"在解压目录执行：.\\hunter_server_desktop.exe {command} --save saves/demo.sqlite\n"
             '向宿主 stdin 输入：{"cmd":"Start","req_id":"start"}\n'
             "同时读取 stdout 和 stderr。将 Ready 的完整 JSON 传给 hunter_client.exe 的第一行，"
-            "随后 login/start/input/pickup/status/result/stash。\n"
+            "随后 login/start/input/switch_weapon/select_tool/melee/use/interact/pickup/"
+            "status/result/stash。\n"
+            "协议 v5、内容 v4、Host/状态 v6；SQLite V1。Start 可带完整免费配装，"
+            "缺省使用默认配装。Action 重试必须保留原 action_seq。\n"
             "Boss 死亡后回到出生地附近出口，读条成功后等待 Committed。\n"
             "永久仓库只读；停止使用宿主 Stop。实例令牌只用于本次回环握手，不写共享日志。\n"
             "Unity、Android 与完整 Demo 尚未联调；Hunter.cs 为协议产物。\n")
@@ -43,8 +46,8 @@ def files(args):
     manifest = {
         "release": "hunter-server-v1-windows",
         "mode": "bundle" if args.bundle else "source",
-        "protocol": 4, "content": 3, "host_state": 5, "sqlite": 1,
-        "content_key": "demo-v3:" + hashlib.sha256(data["content.json"]).hexdigest(),
+        "protocol": 5, "content": 4, "host_state": 6, "sqlite": 1,
+        "content_key": "gameplay-v4:" + hashlib.sha256(data["content.json"]).hexdigest(),
         "test_signature": args.test_signature,
         "files": {name: {"bytes": len(value), "sha256": hashlib.sha256(value).hexdigest()}
                   for name, value in sorted(data.items())},

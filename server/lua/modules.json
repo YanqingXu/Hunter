@@ -15,7 +15,9 @@
     {
       "name": "game.combat",
       "file": "game/combat.lua",
-      "deps": []
+      "deps": [
+        "game.movement"
+      ]
     },
     {
       "name": "game.snapshot",
@@ -72,7 +74,8 @@
         "framework.state",
         "game.world",
         "game.combat",
-        "game.damage"
+        "game.damage",
+        "game.movement"
       ]
     },
     {
@@ -98,7 +101,10 @@
         "game.ai",
         "game.item",
         "game.loot",
-        "game.settlement"
+        "game.settlement",
+        "game.actions",
+        "game.projectile",
+        "game.vitals"
       ]
     },
     {
@@ -119,6 +125,32 @@
       "deps": [
         "game.world"
       ]
+    },
+    {
+      "name": "game.projectile",
+      "file": "game/projectile.lua",
+      "deps": [
+        "game.world",
+        "game.movement",
+        "game.combat",
+        "game.damage"
+      ]
+    },
+    {
+      "name": "game.actions",
+      "file": "game/actions.lua",
+      "deps": [
+        "game.world",
+        "game.movement",
+        "game.combat",
+        "game.projectile",
+        "framework.state"
+      ]
+    },
+    {
+      "name": "game.vitals",
+      "file": "game/vitals.lua",
+      "deps": []
     }
   ]
 }

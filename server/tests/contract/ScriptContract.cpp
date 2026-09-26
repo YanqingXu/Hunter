@@ -130,15 +130,15 @@ void output_schema(hunter::Cfg cfg)
 {
     struct JsonOut { Str kind; Str payload; };
     const Vec<JsonOut> bad{
-        {"ack", R"({"v":4,"seq":"0","match_id":"1","applied_tick":"1"})"},
-        {"ack", R"({"v":4,"seq":"01","match_id":"1","applied_tick":"1"})"},
-        {"ack", R"({"v":4,"seq":1,"match_id":"1","applied_tick":"1"})"},
-        {"ack", R"({"v":4,"seq":"1","match_id":"1","applied_tick":"9223372036854775808"})"},
-        {"ack", R"({"v":4,"seq":"1","match_id":"1","applied_tick":"1","extra":0})"},
-        {"ack", R"({"v":4.0,"seq":"1","match_id":"1","applied_tick":"1"})"},
-        {"snapshot", R"({"v":4,"seq":"0","tick_id":"0","match_id":"1","phase":"Playing",)"
+        {"ack", R"({"v":5,"seq":"0","match_id":"1","applied_tick":"1"})"},
+        {"ack", R"({"v":5,"seq":"01","match_id":"1","applied_tick":"1"})"},
+        {"ack", R"({"v":5,"seq":1,"match_id":"1","applied_tick":"1"})"},
+        {"ack", R"({"v":5,"seq":"1","match_id":"1","applied_tick":"9223372036854775808"})"},
+        {"ack", R"({"v":5,"seq":"1","match_id":"1","applied_tick":"1","extra":0})"},
+        {"ack", R"({"v":5.0,"seq":"1","match_id":"1","applied_tick":"1"})"},
+        {"snapshot", R"({"v":5,"seq":"0","tick_id":"0","match_id":"1","phase":"Playing",)"
             R"("entities":[{}]})"},
-        {"error", R"({"v":4,"code":"rejected","detail":"","req_id":"","seq":"0"})"}};
+        {"error", R"({"v":5,"code":"rejected","detail":"","req_id":"","seq":"0"})"}};
 
     for (const auto& item : bad)
     {
@@ -152,11 +152,11 @@ void output_schema(hunter::Cfg cfg)
     }
 
     const Vec<JsonOut> good{
-        {"ack", R"({"v":4,"seq":"18446744073709551615","match_id":"1",)"
+        {"ack", R"({"v":5,"seq":"18446744073709551615","match_id":"1",)"
             R"("applied_tick":"9223372036854775807"})"},
-        {"snapshot", R"({"v":4,"seq":"0","tick_id":"0","match_id":"0","phase":"Lobby",)"
+        {"snapshot", R"({"v":5,"seq":"0","tick_id":"0","match_id":"0","phase":"Lobby",)"
             R"("entities":[]})"},
-        {"error", R"({"v":4,"code":"paused","detail":"","req_id":"","seq":"0","match_id":"0"})"}};
+        {"error", R"({"v":5,"code":"paused","detail":"","req_id":"","seq":"0","match_id":"0"})"}};
 
     for (const auto& item : good)
     {
@@ -323,15 +323,15 @@ int main(int argc, char** argv)
         cfg.source_path = argv[1];
 #endif
         hunter::Script script;
-        const nlohmann::json ctx = {{"v", 5}, {"snapshot_every", 3},
+        const nlohmann::json ctx = {{"v", 6}, {"snapshot_every", 3},
             {"content", nlohmann::json::parse(hunter::content::json_text)}};
         take(script.open(cfg, ctx.dump()));
         const auto logs = script.take_logs();
         check(!logs.empty(), "script diagnostics are observable after the entry returns");
         check(script.take_logs().empty(), "diagnostic extraction drains the bounded buffer");
-        auto out = take(script.event(2, R"({"v":5,"req_id":"login","player_id":"1"})"));
+        auto out = take(script.event(2, R"({"v":6,"req_id":"login","player_id":"1"})"));
         check(out.size() == 1 && out[0].kind == "login", "local session login");
-        out = take(script.event(3, R"({"v":5,"req_id":"start","after_match_id":"0",)"
+        out = take(script.event(3, R"({"v":6,"req_id":"start","after_match_id":"0",)"
             R"("match_id":"1","world_id":"1"})"));
         check(out.size() == 2 && out[0].kind == "start" && out[1].kind == "snapshot",
             "start produces response and initial snapshot");
@@ -368,8 +368,8 @@ int main(int argc, char** argv)
         check(reopened["phase"] == "Unauthenticated" && reopened["tick_id"] == "0"
             && reopened["entities"].empty() && reopened["items"].empty(),
             "reopened session owns a fresh native world");
-        take(script.event(2, R"({"v":5,"req_id":"reopen","player_id":"1"})"));
-        take(script.event(3, R"({"v":5,"req_id":"start","after_match_id":"0",)"
+        take(script.event(2, R"({"v":6,"req_id":"reopen","player_id":"1"})"));
+        take(script.event(3, R"({"v":6,"req_id":"start","after_match_id":"0",)"
             R"("match_id":"1","world_id":"1"})"));
         check(script.shutdown("reopened").has_value(), "reopened native world closes");
 #if !HUNTER_PRODUCTION

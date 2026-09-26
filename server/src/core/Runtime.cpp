@@ -4,6 +4,7 @@
 #include "core/BoundedQueue.h"
 #include "core/TickClock.h"
 #include "core/Session.h"
+#include "core/ActionLog.h"
 #include "game/World.h"
 #include "storage/Storage.h"
 #include "net/Transport.h"
@@ -275,6 +276,8 @@ struct Runtime::Loop
                 session = "Paused";
                 timer.cancel();
                 discard_through_seq = received_seq;
+                discard_action_seq = actions.high();
+                pending_start_discarded = pending_start.has_value();
 
                 while (auto queued = inputs.pop())
                 {
@@ -288,7 +291,7 @@ struct Runtime::Loop
                     }
                     else if (queued->has_action_req())
                     {
-                        reject("paused", queued->action_req().req_id());
+                        reject_action("paused", queued->action_req());
                     }
                 }
 
@@ -299,7 +302,7 @@ struct Runtime::Loop
                     return;
                 }
 
-                if (!commit(script->event(4, R"({"v":5,"paused":true})")))
+                if (!commit(script->event(4, R"({"v":6,"paused":true})")))
                 {
                     return;
                 }
@@ -321,7 +324,7 @@ struct Runtime::Loop
 
                 if (was_paused)
                 {
-                    if (!commit(script->event(4, R"({"v":5,"paused":false})")))
+                    if (!commit(script->event(4, R"({"v":6,"paused":false})")))
                     {
                         return;
                     }
@@ -379,7 +382,7 @@ struct Runtime::Loop
             token = random_hex(32);
             instance_id = std::stoull(instance.substr(0, 16), nullptr, 16) | 1ULL;
             script = std::make_unique<Script>();
-            const nlohmann::json ctx = {{"v", 5},
+            const nlohmann::json ctx = {{"v", 6},
                 {"snapshot_every", cfg.tick_hz / cfg.snapshot_hz},
                 {"content", nlohmann::json::parse(content::json_text)}};
             auto out = script->open(cfg, ctx.dump());
@@ -491,7 +494,7 @@ struct Runtime::Loop
         evt["port"] = port;
         evt["instance"] = instance;
         evt["token"] = token;
-        evt["protocol_version"] = 4;
+        evt["protocol_version"] = 5;
         evt["content_version"] = content::version;
         emit(std::move(evt));
     }
@@ -503,7 +506,7 @@ struct Runtime::Loop
         {
             const auto& hello = msg.hello();
 
-            if (!msg.has_hello() || hello.protocol_version() != 4
+            if (!msg.has_hello() || hello.protocol_version() != 5
                 || hello.content_version() != content::version
                 || hello.instance() != instance || hello.token() != token)
             {
@@ -516,7 +519,7 @@ struct Runtime::Loop
             net->authenticate();
             wire::Envelope reply;
             auto* ack = reply.mutable_hello_ack();
-            ack->set_protocol_version(4);
+            ack->set_protocol_version(5);
             ack->set_content_version(Str(content::version));
             ack->set_instance(instance);
 
@@ -547,6 +550,31 @@ struct Runtime::Loop
             {
                 reject("invalid_request");
             }
+            else if (msg.has_action_req())
+            {
+                const auto result = actions.begin(msg.action_req());
+                if (result.kind == ActionLog::Kind::Rejected)
+                {
+                    reject(result.error, req, msg.action_req().action_seq(),
+                        msg.action_req().match_id());
+                }
+                else if (result.kind == ActionLog::Kind::Replay)
+                {
+                    send_msg(*result.response);
+                }
+                else if (result.kind == ActionLog::Kind::Accepted)
+                {
+                    if (paused)
+                    {
+                        discard_action_seq = actions.high();
+                        reject_action("paused", msg.action_req());
+                    }
+                    else
+                    {
+                        enqueue(std::move(msg));
+                    }
+                }
+            }
             else if (paused)
             {
                 reject("paused", req);
@@ -561,9 +589,9 @@ struct Runtime::Loop
 
         if (!msg.has_input() || msg.input().seq() == 0 || msg.input().match_id() == 0
             || msg.input().move_x() < -1 || msg.input().move_x() > 1
+            || msg.input().move_y() < -1 || msg.input().move_y() > 1
             || msg.input().aim_x() < -1000 || msg.input().aim_x() > 1000
-            || msg.input().aim_y() < -1000 || msg.input().aim_y() > 1000
-            || (msg.input().aim_x() == 0 && msg.input().aim_y() == 0))
+            || msg.input().aim_y() < -1000 || msg.input().aim_y() > 1000)
         {
             abort("invalid_input");
             return;
@@ -629,6 +657,19 @@ struct Runtime::Loop
         send_msg(msg);
     }
 
+    // 缓存动作的业务拒绝，暂停或失败后的重复请求不能再次执行消费逻辑。
+    void reject_action(const Str& code, const wire::ActionReq& req)
+    {
+        wire::Envelope msg;
+        auto* err = msg.mutable_error();
+        err->set_code(code);
+        err->set_req_id(req.req_id());
+        err->set_seq(req.action_seq());
+        err->set_match_id(req.match_id());
+        actions.complete(req.action_seq(), msg);
+        send_msg(msg);
+    }
+
     // 认证后的连接观察宿主暂停状态以及不允许重放的输入高水位。
     void notify_pause()
     {
@@ -637,6 +678,7 @@ struct Runtime::Loop
             wire::Envelope msg;
             msg.mutable_pause()->set_paused(paused);
             msg.mutable_pause()->set_discard_through_seq(discard_through_seq);
+            msg.mutable_pause()->set_discard_action_seq(discard_action_seq);
             send_msg(msg);
         }
     }
@@ -695,6 +737,7 @@ struct Runtime::Loop
                 auto* reply = value.message.mutable_start_rsp();
                 reply->set_world_id(world.world_id);
                 reply->set_player_entity_id(world.player_entity_id);
+                *reply->mutable_loadout() = world.get_loadout();
             }
         }
 
@@ -845,7 +888,7 @@ struct Runtime::Loop
                 continue;
             }
 
-            nlohmann::json payload = {{"v", 5}};
+            nlohmann::json payload = {{"v", 6}};
             i64 event_id = 2;
             if (input->has_login_req())
             {
@@ -880,9 +923,20 @@ struct Runtime::Loop
     }
 
     // 在 Tick 边界申请持久局号，同请求只保留一次分配，完成后才创建世界。
-    void start_match(const wire::StartReq& req)
+    void start_match(const wire::StartReq& incoming)
     {
         const auto& world = script->world();
+        auto req = incoming;
+
+        try
+        {
+            *req.mutable_loadout() = world.check_loadout(incoming.loadout());
+        }
+        catch (const std::exception& error)
+        {
+            reject(error.what(), req.req_id());
+            return;
+        }
 
         if (world.player_id == 0)
         {
@@ -893,9 +947,12 @@ struct Runtime::Loop
         if (pending_start)
         {
             if (pending_start->req_id() != req.req_id()
-                || pending_start->after_match_id() != req.after_match_id())
+                || pending_start->after_match_id() != req.after_match_id()
+                || pending_start->loadout().SerializeAsString()
+                    != req.loadout().SerializeAsString())
             {
-                reject("start_pending", req.req_id());
+                reject(pending_start->req_id() == req.req_id()
+                    ? "request_conflict" : "start_pending", req.req_id());
             }
 
             return;
@@ -903,6 +960,13 @@ struct Runtime::Loop
 
         if (req.req_id() == world.last_req)
         {
+            if (req.after_match_id() != world.last_after
+                || req.loadout().SerializeAsString() != world.get_loadout().SerializeAsString())
+            {
+                reject("request_conflict", req.req_id());
+                return;
+            }
+
             begin_match(req, world.match_id, world.world_id);
             return;
         }
@@ -920,6 +984,7 @@ struct Runtime::Loop
         }
 
         pending_start = req;
+        pending_start_discarded = false;
         const auto previous_phase = world.phase;
 
         if (!script->change([](World& value) { value.set_phase("Preparing"); }))
@@ -930,7 +995,9 @@ struct Runtime::Loop
 
         const auto accepted = storage->alloc_match([this, req, previous_phase](storage::Rsp result)
         {
+            const bool discarded = pending_start_discarded;
             pending_start.reset();
+            pending_start_discarded = false;
 
             if (stopped || !script || session == "Aborted")
             {
@@ -949,7 +1016,7 @@ struct Runtime::Loop
                 return;
             }
 
-            if (paused)
+            if (paused || discarded)
             {
                 reject("paused", req.req_id());
                 return;
@@ -977,7 +1044,14 @@ struct Runtime::Loop
     void begin_match(const wire::StartReq& req, u64 match, u64 world_id)
     {
         const auto previous = script->world().match_id;
-        const nlohmann::json payload = {{"v", 5}, {"req_id", req.req_id()},
+        if (previous != match && !script->change([&](World& world)
+            { world.prepare_loadout(req.loadout()); }))
+        {
+            abort("loadout_prepare_failed");
+            return;
+        }
+
+        const nlohmann::json payload = {{"v", 6}, {"req_id", req.req_id()},
             {"after_match_id", std::to_string(req.after_match_id())},
             {"match_id", std::to_string(match)}, {"world_id", std::to_string(world_id)}};
 
@@ -1006,7 +1080,66 @@ struct Runtime::Loop
 
         if (!ctx || ctx->match_id == 0)
         {
-            reject("stale_match", req.req_id());
+            reject_action("stale_match", req);
+            return;
+        }
+
+        if (req.slot() > 8)
+        {
+            reject_action("invalid_slot", req);
+            return;
+        }
+
+        if (!script->change([&](World& world) { world.action_seq = req.action_seq(); }))
+        {
+            abort("action_watermark_failed");
+            return;
+        }
+
+        if (req.kind() >= wire::ActionReq::SWITCH_WEAPON
+            && req.kind() <= wire::ActionReq::INTERACT)
+        {
+            static constexpr const char* names[] = {
+                "switch_weapon", "select_tool", "melee", "use", "interact"};
+            const nlohmann::json payload = {{"v", 6}, {"req_id", req.req_id()},
+                {"kind", names[req.kind() - wire::ActionReq::SWITCH_WEAPON]},
+                {"slot", req.slot()}, {"target_id", std::to_string(req.target_id())},
+                {"action_seq", std::to_string(req.action_seq())}};
+            auto output = script->event(5, payload.dump());
+            std::optional<wire::Envelope> response;
+
+            if (output)
+            {
+                for (const auto& value : *output)
+                {
+                    if ((value.message.has_action_rsp()
+                            && value.message.action_rsp().req_id() == req.req_id())
+                        || (value.message.has_error()
+                            && value.message.error().req_id() == req.req_id()))
+                    {
+                        if (response)
+                        {
+                            abort("duplicate_action_response");
+                            return;
+                        }
+
+                        response = value.message;
+                    }
+                }
+            }
+
+            if (!commit(std::move(output)))
+            {
+                return;
+            }
+
+            if (!response)
+            {
+                abort("missing_action_response");
+                return;
+            }
+
+            actions.complete(req.action_seq(), *response);
             return;
         }
 
@@ -1041,7 +1174,7 @@ struct Runtime::Loop
 
         if (!error.empty())
         {
-            reject(error, req.req_id());
+            reject_action(error, req);
             return;
         }
 
@@ -1050,6 +1183,8 @@ struct Runtime::Loop
         ack.set_req_id(req.req_id());
         ack.set_world_id(ctx->world_id);
         ack.set_match_id(ctx->match_id);
+        ack.set_action_seq(req.action_seq());
+        actions.complete(req.action_seq(), reply);
         send_to(ctx->session_id, reply);
 
         if (script)
@@ -1491,9 +1626,11 @@ struct Runtime::Loop
     UPtr<storage::Storage> storage;
     storage::PlayerSave profile;
     Session binding;
+    ActionLog actions;
     u64 instance_id = 0;
     u64 next_world = 0;
     std::optional<wire::StartReq> pending_start;
+    bool pending_start_discarded = false;
     std::optional<storage::CommitMatch> frozen;
     std::optional<storage::MatchResult> saved;
     Str save_state = "Idle";
@@ -1508,6 +1645,7 @@ struct Runtime::Loop
     u64 tick_id = 0;
     u64 received_seq = 0;
     u64 discard_through_seq = 0;
+    u64 discard_action_seq = 0;
     bool authenticated = false;
     bool paused = false;
     bool stopped = false;

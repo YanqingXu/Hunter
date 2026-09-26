@@ -59,10 +59,12 @@ target_compile_definitions(hunter_storage PRIVATE HUNTER_STORAGE_TESTING=0)
 set(HUNTER_GEN "${CMAKE_CURRENT_BINARY_DIR}/generated")
 file(MAKE_DIRECTORY "${HUNTER_GEN}" "${HUNTER_GEN}/csharp")
 add_custom_command(OUTPUT "${HUNTER_GEN}/content.json" "${HUNTER_GEN}/ContentSpec.h"
-    COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/../export/demo.py"
-        --source "${CMAKE_CURRENT_SOURCE_DIR}/../design/demo/首版.xlsx"
+    COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/../export/gameplay.py"
+        --source "${CMAKE_CURRENT_SOURCE_DIR}/../design/demo_sources.json"
         --output "${HUNTER_GEN}/content.json" --header "${HUNTER_GEN}/ContentSpec.h"
-    DEPENDS ../design/demo/首版.xlsx ../export/demo.py ../export/export.py
+    DEPENDS ../design/demo_sources.json ../design/角色表.xlsx ../design/武器表.xlsx
+        ../design/道具表.xlsx ../design/怪物表.xlsx ../design/掉落表.xlsx ../design/地图表.xlsx
+        ../export/gameplay.py ../export/demo.py ../export/export.py
         ../export/combat.py tools/publish.py VERBATIM)
 add_custom_target(hunter_content ALL DEPENDS
     "${HUNTER_GEN}/content.json" "${HUNTER_GEN}/ContentSpec.h")

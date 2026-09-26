@@ -480,7 +480,7 @@ std::expected<Vec<ScriptOut>, Str> Script::open(const Cfg& cfg, const Str& ctx_j
         const auto ctx = nlohmann::json::parse(ctx_json);
         if (ctx.contains("content"))
         {
-            require(ctx.at("v") == 5 && ctx.size() == 3, "invalid_context_version");
+            require(ctx.at("v") == 6 && ctx.size() == 3, "invalid_context_version");
             self.snapshot_every = ctx.at("snapshot_every").get<u64>();
             require(self.snapshot_every >= 1 && self.snapshot_every <= 3600,
                 "invalid_snapshot_frequency");

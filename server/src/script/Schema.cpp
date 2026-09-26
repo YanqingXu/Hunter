@@ -190,6 +190,118 @@ void encode_entity(const nlohmann::json& obj, wire::Entity& entity)
     entity.set_ai(obj.at("ai").get<Str>());
 }
 
+// 校验原生增量快照的有界集合和引用，不要求旧冷路径投影携带增量字段。
+bool valid_demo_snapshot(const wire::Envelope& output)
+{
+    if (!output.has_snapshot())
+    {
+        return true;
+    }
+
+    const auto& snapshot = output.snapshot();
+
+    if (snapshot.scenes_size() > 32 || snapshot.projectiles_size() > 16)
+    {
+        return false;
+    }
+
+    Set<u32> scenes;
+
+    for (const auto& scene : snapshot.scenes())
+    {
+        if (scene.id() == 0 || !scenes.insert(scene.id()).second)
+        {
+            return false;
+        }
+    }
+
+    Set<u64> projectiles;
+
+    for (const auto& projectile : snapshot.projectiles())
+    {
+        if (projectile.id() == 0 || !projectiles.insert(projectile.id()).second
+            || projectile.cfg_id() == 0 || projectile.cfg_id() > 2147483647
+            || projectile.x() < 0 || projectile.y() < 0
+            || projectile.x() > 1000000000 || projectile.y() > 1000000000
+            || projectile.vx() < -1000 || projectile.vx() > 1000
+            || projectile.vy() < -1000 || projectile.vy() > 1000
+            || (projectile.vx() == 0 && projectile.vy() == 0)
+            || projectile.remaining() == 0 || projectile.remaining() > 100000)
+        {
+            return false;
+        }
+    }
+
+    for (const auto& entity : snapshot.entities())
+    {
+        if (entity.weapons_size() > 2 || entity.tools_size() > 8
+            || entity.health_segments_size() > 6 || entity.stamina() > 100
+            || entity.width() > 100000 || entity.height() > 100000
+            || entity.use_slot() > 8 || entity.selected_slot() > 8
+            || entity.use_ticks() > 36000 || entity.ladder_id() > 2147483647)
+        {
+            return false;
+        }
+
+        Set<u32> weapons;
+
+        for (const auto& weapon : entity.weapons())
+        {
+            if (weapon.slot() == 0 || weapon.slot() > 2
+                || !weapons.insert(weapon.slot()).second || weapon.cfg_id() == 0
+                || weapon.ammo_cfg_id() == 0 || weapon.ammo() > 1000
+                || weapon.reserve() > 100000 || weapon.shot_ticks() > 3600
+                || weapon.reload_ticks() > 3600)
+            {
+                return false;
+            }
+        }
+
+        if (!weapons.empty() && !weapons.contains(entity.active_weapon()))
+        {
+            return false;
+        }
+
+        Set<u32> slots;
+        Set<u64> instances;
+
+        for (const auto& tool : entity.tools())
+        {
+            if (tool.slot() == 0 || tool.slot() > 8 || !slots.insert(tool.slot()).second
+                || tool.cfg_id() == 0 || tool.count() > 100000 || tool.instance() == 0
+                || !instances.insert(tool.instance()).second
+                || (tool.slot() > 4 && tool.count() == 0))
+            {
+                return false;
+            }
+        }
+
+        if (entity.use_slot() != 0 && !slots.contains(entity.use_slot()))
+        {
+            return false;
+        }
+
+        u32 health = 0;
+
+        for (const auto segment : entity.health_segments())
+        {
+            if (segment != 25 && segment != 50)
+            {
+                return false;
+            }
+
+            health += segment;
+        }
+
+        if (health != 0 && health != static_cast<u32>(entity.max_hp()))
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 // 按冻结输出种类构造信封；输入对象已经完成字段、精度和范围检查。
 wire::Envelope encode_output(const Str& kind, const nlohmann::json& obj)
 {
@@ -229,6 +341,14 @@ wire::Envelope encode_output(const Str& kind, const nlohmann::json& obj)
         start.set_req_id(obj.at("req_id").get<Str>());
         start.set_match_id(obj.at("match_id").get<u64>());
         start.set_phase(obj.at("phase").get<Str>());
+    }
+    else if (kind == "action")
+    {
+        auto& action = *msg.mutable_action_rsp();
+        action.set_req_id(obj.at("req_id").get<Str>());
+        action.set_world_id(obj.at("world_id").get<u64>());
+        action.set_match_id(obj.at("match_id").get<u64>());
+        action.set_action_seq(obj.at("action_seq").get<u64>());
     }
     else if (kind == "event")
     {
@@ -280,6 +400,11 @@ ScriptOut::ScriptOut(wire::Envelope value) : message(std::move(value))
         kind = "start";
     }
 
+    if (message.has_action_rsp())
+    {
+        kind = "action";
+    }
+
     if (message.has_event())
     {
         kind = "event";
@@ -315,7 +440,7 @@ ScriptOut::ScriptOut(Str name, const Str& payload) : kind(std::move(name))
 std::expected<void, Str> validate_output(const ScriptOut& out, usize max_bytes)
 {
     if (!out.error.empty() || !schema::valid_output(out.message)
-        || out.message.ByteSizeLong() > max_bytes)
+        || out.message.ByteSizeLong() > max_bytes || !valid_demo_snapshot(out.message))
     {
         return std::unexpected("output_schema");
     }
@@ -325,7 +450,7 @@ std::expected<void, Str> validate_output(const ScriptOut& out, usize max_bytes)
 
 nlohmann::json output_json(const ScriptOut& out)
 {
-    nlohmann::json result = {{"v", 4}};
+    nlohmann::json result = {{"v", 5}};
 
     if (out.message.has_ack())
     {
@@ -382,6 +507,15 @@ nlohmann::json output_json(const ScriptOut& out)
         result["req_id"] = msg.req_id();
         result["match_id"] = std::to_string(msg.match_id());
         result["phase"] = msg.phase();
+    }
+
+    if (out.message.has_action_rsp())
+    {
+        const auto& msg = out.message.action_rsp();
+        result["req_id"] = msg.req_id();
+        result["world_id"] = std::to_string(msg.world_id());
+        result["match_id"] = std::to_string(msg.match_id());
+        result["action_seq"] = std::to_string(msg.action_seq());
     }
 
     if (out.message.has_event())

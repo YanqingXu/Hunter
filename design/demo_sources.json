@@ -1,0 +1,24 @@
+{
+  "v": 1,
+  "sources": [
+    {"file": "角色表.xlsx", "sheet": "玩家|Player", "ids": [1, 2]},
+    {"file": "武器表.xlsx", "sheet": "武器|Weapon", "ids": [1, 2, 3]},
+    {"file": "武器表.xlsx", "sheet": "弹药|Ammunition", "ids": [1, 2, 3]},
+    {"file": "道具表.xlsx", "sheet": "道具总表|Item", "ids": [10001, 10002, 10003, 20001, 20002, 20003, 30001, 30002, 30004, 30006, 2800001, 2800002]},
+    {"file": "道具表.xlsx", "sheet": "枪械|Equip", "ids": [10001, 10002, 10003]},
+    {"file": "道具表.xlsx", "sheet": "工具|Tool", "ids": [30001, 30002, 30004, 30006]},
+    {"file": "怪物表.xlsx", "sheet": "怪物|Monster", "ids": [1002, 1003]},
+    {"file": "怪物表.xlsx", "sheet": "招式|Attack", "ids": [1002, 1003]},
+    {"file": "掉落表.xlsx", "sheet": "掉落组|Drop", "ids": [1, 2]},
+    {"file": "掉落表.xlsx", "sheet": "掉落明细|DropEntry", "ids": [1, 2, 3]},
+    {"file": "地图表.xlsx", "sheet": "地图|Map", "ids": [2]},
+    {"file": "地图表.xlsx", "sheet": "碰撞块|MapSolid", "ids": [201, 202, 203]},
+    {"file": "地图表.xlsx", "sheet": "玩家出生|PlayerSpawn", "ids": [2]},
+    {"file": "地图表.xlsx", "sheet": "怪物出生|MonsterSpawn", "ids": [12, 13, 14]},
+    {"file": "地图表.xlsx", "sheet": "撤离点|ExtractPoint", "ids": [1]},
+    {"file": "地图表.xlsx", "sheet": "背包|Bag", "ids": [1]},
+    {"file": "地图表.xlsx", "sheet": "DEMO规则|Rules", "ids": [1]},
+    {"file": "地图表.xlsx", "sheet": "DEMO初装|Loadout", "ids": [1]},
+    {"file": "地图表.xlsx", "sheet": "场景道具|Scene", "ids": [1, 2, 3]}
+  ]
+}

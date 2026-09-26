@@ -222,7 +222,7 @@ class Server:
         else:
             self.conn.sendall(hello)
         ack = wait_msg(self.conn, 2)
-        assert ack[1] == 4 and ack[3].decode() == self.ready["instance"]
+        assert ack[1] == 5 and ack[3].decode() == self.ready["instance"]
         return self.conn
 
     # 请求退出并确保旧端口不再监听；stdin 保持打开以覆盖阻塞读取取消。
@@ -407,7 +407,7 @@ def slow_reader(args):
         conn.connect(("127.0.0.1", srv.ready["port"]))
         srv.conn = conn
         conn.sendall(srv.hello())
-        assert wait_msg(conn, 2)[1] == 4
+        assert wait_msg(conn, 2)[1] == 5
         enter_game(conn)
         seq = 0
         for _ in range(10):
@@ -543,7 +543,7 @@ class Client:
             if isinstance(evt, Exception):
                 raise evt
             assert evt["type"] != "client_error", evt
-            if evt["type"] == kind:
+            if evt["type"] == kind or isinstance(kind, tuple) and evt["type"] in kind:
                 return evt
         raise AssertionError(f"CLI missing {kind}")
 
@@ -591,13 +591,18 @@ def combat_rounds(args):
                 snap = cli.wait("snapshot")
                 assert snap["match_id"] == current
                 if snap["phase"] != "Playing":
-                    assert snap["phase"] == expected, snap
+                    assert expected == "Dead" and snap["player_state"] == "Dead", snap
                     break
                 player = next(item for item in snap["entities"] if item["kind"] == "player")
                 assert all(item["cfg_id"] == "1" for item in snap["entities"])
                 enemies = [item for item in snap["entities"]
                            if item["kind"] == "enemy" and item["alive"]]
-                assert enemies
+                if not enemies:
+                    assert expected == "Cleared" and player["alive"], snap
+                    cli.send({"cmd": "abandon", "req_id": "finish-cleared",
+                              "world_id": current, "match_id": current})
+                    cli.wait("action_rsp")
+                    break
                 target = min(enemies, key=lambda item: abs(item["x"] - player["x"]))
                 dx, dy = target["x"] - player["x"], target["y"] - player["y"] - 100
                 scale = max(1, abs(dx), abs(dy))
@@ -614,6 +619,13 @@ def combat_rounds(args):
                           "fire": fire, "reload": player["ammo"] == 0})
             else:
                 raise AssertionError(f"combat did not reach {expected}: {snap}")
+            for _ in range(40):
+                cli.send({"cmd": "status", "req_id": "settled"})
+                saved = cli.wait("save_rsp")
+                if saved["req_id"] == "settled" and saved["state"] == "Committed":
+                    break
+                time.sleep(.025)
+            assert saved["state"] == "Committed", saved
             after = current
         cli.send({"cmd": "start", "req_id": "third", "after_match_id": after})
         assert cli.wait("start_rsp")["match_id"] == "3"
@@ -821,7 +833,7 @@ def main():
     assert fields(bytes.fromhex("08011001")) == {1: 1, 2: 1}
     for index in range(10):
         round_trip(args, index)
-    for override in ({"protocol_version": 1}, {"protocol_version": 2},
+    for override in ({"protocol_version": 1}, {"protocol_version": 2}, {"protocol_version": 4},
                      {"content_version": "wrong"},
                      {"instance": "wrong"}, {"token": "wrong"}):
         rejection(args, override=override)

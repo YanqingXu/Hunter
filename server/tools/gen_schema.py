@@ -7,7 +7,7 @@ import re
 import tempfile
 from pathlib import Path
 
-KINDS = {"ack", "snapshot", "login", "start", "event", "error"}
+KINDS = {"ack", "snapshot", "login", "start", "event", "error", "action"}
 FIELDS = {
     "ack": {"v", "seq", "match_id", "applied_tick"},
     "snapshot": {"v", "tick_id", "seq", "match_id", "phase", "entities"},
@@ -16,6 +16,7 @@ FIELDS = {
     "event": {"v", "match_id", "event_id", "tick_id", "kind", "actor_id",
               "target_id", "x", "y", "amount"},
     "error": {"v", "code", "detail", "req_id", "seq", "match_id"},
+    "action": {"v", "req_id", "world_id", "match_id", "action_seq"},
 }
 ENTITY_FIELDS = {"id", "cfg_id", "kind", "x", "y", "vx", "vy", "hp", "max_hp", "ammo", "reserve",
                  "reload_ticks", "grounded", "alive", "facing", "ai"}
@@ -28,7 +29,7 @@ def bounds(node, lower, upper):
         raise ValueError("invalid integer schema bounds")
 
 
-# 验证当前六类输出使用的有限描述集合，不提供引用、递归类型或任意扩展。
+# 验证当前七类输出使用的有限描述集合，不提供引用、递归类型或任意扩展。
 def validate_node(node, depth=0):
     if not isinstance(node, dict) or depth > 4:
         raise ValueError("invalid or excessively nested schema")
@@ -83,22 +84,22 @@ def validate_node(node, depth=0):
 
 # 校验冻结消息形状并生成唯一原生描述，合法边界改动会直接反映到产物。
 def generate(doc):
-    if not isinstance(doc, dict) or type(doc.get("version")) is not int or doc["version"] != 5:
+    if not isinstance(doc, dict) or type(doc.get("version")) is not int or doc["version"] != 6:
         raise ValueError("unsupported contract version")
     state = doc.get("state")
-    if not isinstance(state, dict) or type(state.get("v")) is not int or state["v"] != 5:
-        raise ValueError("state schema must declare version 5")
+    if not isinstance(state, dict) or type(state.get("v")) is not int or state["v"] != 6:
+        raise ValueError("state schema must declare version 6")
     effect = doc.get("effect")
-    if not isinstance(effect, dict) or type(effect.get("v")) is not int or effect["v"] != 4:
-        raise ValueError("effect schema must declare version 4")
+    if not isinstance(effect, dict) or type(effect.get("v")) is not int or effect["v"] != 5:
+        raise ValueError("effect schema must declare version 5")
     host = doc.get("host_api")
     ctx = host.get("ctx") if isinstance(host, dict) else None
-    if not isinstance(ctx, dict) or type(ctx.get("v")) is not int or ctx["v"] != 5:
-        raise ValueError("context schema must declare version 5")
+    if not isinstance(ctx, dict) or type(ctx.get("v")) is not int or ctx["v"] != 6:
+        raise ValueError("context schema must declare version 6")
     input_spec = effect.get("input", {})
     if not isinstance(input_spec, dict) or type(input_spec.get("v")) is not int \
-            or input_spec["v"] != 4:
-        raise ValueError("input schema must declare version 4")
+            or input_spec["v"] != 5:
+        raise ValueError("input schema must declare version 5")
     schemas = effect.get("schemas")
     kinds = effect.get("kinds")
     if not isinstance(kinds, list) or len(kinds) != len(KINDS) or set(kinds) != KINDS:
@@ -109,11 +110,11 @@ def generate(doc):
         validate_node(node)
         if node["type"] != "object" or set(node["fields"]) != FIELDS[name]:
             raise ValueError("unsupported message fields")
-        if node["fields"]["v"] != {"type": "int", "min": 4, "max": 4}:
-            raise ValueError("all messages require integer version 4")
+        if node["fields"]["v"] != {"type": "int", "min": 5, "max": 5}:
+            raise ValueError("all messages require integer version 5")
         for field, spec in node["fields"].items():
             expected = ("id" if (field.endswith("_id") and field != "req_id")
-                        or field in {"seq", "applied_tick"} else
+                        or field in {"seq", "action_seq", "applied_tick"} else
                         "int" if field in {"v", "x", "y", "amount"} else
                         "array" if field == "entities" else "string")
             if spec["type"] != expected:
@@ -136,7 +137,7 @@ def generate(doc):
             if field in {"tick_id", "applied_tick"}:
                 if spec["type"] != "id" or int(spec["max"]) > (1 << 63) - 1:
                     raise ValueError("Tick exceeds signed runtime range")
-            elif (field.endswith("_id") and field != "req_id") or field == "seq":
+            elif (field.endswith("_id") and field != "req_id") or field in {"seq", "action_seq"}:
                 if spec["type"] != "id":
                     raise ValueError("domain IDs require exact decimal representation")
     payload = json.dumps(schemas, sort_keys=True, ensure_ascii=True, separators=(",", ":"))
@@ -144,7 +145,7 @@ def generate(doc):
             "#pragma once\n\n"
             '#include "common/Types.h"\n#include "hunter.pb.h"\n\n'
             "namespace hunter::schema\n{\n"
-            "inline constexpr i32 version = 4;\n"
+            "inline constexpr i32 version = 5;\n"
             'inline constexpr const char* outputs = R"SCHEMA(' + payload + ')SCHEMA";\n'
             + contract_hashes(doc) + native_checks(schemas) + "}\n")
 
@@ -164,7 +165,7 @@ def contract_hashes(doc):
 # 将冻结的输出字段投影为直接访问 Protobuf 的有界校验代码。
 def native_checks(schemas):
     mapping = {"ack": "ack", "snapshot": "snapshot", "login": "login_rsp",
-               "start": "start_rsp", "event": "event", "error": "error"}
+               "start": "start_rsp", "event": "event", "error": "error", "action": "action_rsp"}
     lines = ["// 直接校验原生协议输出，热路径不解析 JSON。",
              "inline bool valid_output(const wire::Envelope& out)", "{"]
     for kind, method in mapping.items():

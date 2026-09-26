@@ -32,7 +32,9 @@ void World::configure(const nlohmann::json& cfg)
 {
     access.read();
     require(content.is_null(), "already_configured");
-    require(cfg.is_object() && cfg.at("v") == 3 && cfg.at("tick_hz") == 60, "invalid_content");
+    require(cfg.is_object() && cfg.at("v") == 4 && cfg.at("tick_hz") == 60, "invalid_content");
+    require(cfg.at("scenes").is_array() && cfg.at("scenes").size() <= 32,
+        "scene_capacity");
     content = cfg;
     content_key = cfg.dump();
 }
@@ -107,6 +109,12 @@ void World::begin(const Str& req, const Str& after, const Str& match, const Str&
     require(assigned > match_id && assigned <= static_cast<u64>(std::numeric_limits<i64>::max())
         && next_world > world_id && revision < std::numeric_limits<u32>::max(),
         "identity_exhausted");
+    active_loadout = check_loadout(pending_loadout);
+    pending_loadout.Clear();
+    used_scenes = {};
+    projectiles = {};
+    last_projectile_id = 0;
+    action_seq = 0;
     actors = {};
     items = {};
     order.clear();
@@ -168,7 +176,8 @@ Str World::spawn(const Str& kind, const Str& spawn_id)
         return ":invalid_kind";
     }
 
-    const auto cfg_id = spawn->at("cfg_id").get<Str>();
+    const auto cfg_id = kind == "player" ? std::to_string(active_loadout.player_cfg_id())
+        : spawn->at("cfg_id").get<Str>();
     const auto& cfgs = content.at(kind == "player" ? "players" : "monsters");
 
     if (!cfgs.contains(cfg_id))
@@ -187,19 +196,42 @@ Str World::spawn(const Str& kind, const Str& spawn_id)
     }
     else
     {
-        const auto gun_id = spawn->at("weapon_cfg_id").get<Str>();
-        if (!content.at("weapons").contains(gun_id))
+        auto& player = std::get<Player>(actor.value);
+        player.access = &access;
+        player.world = this;
+        player.player_id = player_id;
+        player.weapon_count = active_loadout.weapons_size();
+        player.active_weapon = 1;
+        player.stamina = cfgs.at(cfg_id).at("stamina");
+
+        for (i32 index = 0; index < player.weapon_count; ++index)
         {
-            return ":invalid_cfg";
+            const auto& choice = active_loadout.weapons(index);
+            auto& weapon = index == 0 ? player.weapon : player.other_weapon;
+            weapon.access = &access;
+            weapon.cfg_id = choice.cfg_id();
+            const auto& gun = content.at("weapons").at(weapon.get_cfg_id());
+            weapon.ammo = gun.at("magazine");
+            (index == 0 ? player.reserve : player.other_reserve) = gun.at("reserve");
+            player.ammo_cfg_ids[static_cast<usize>(index)] = choice.ammo_cfg_id();
         }
 
-        auto& player = std::get<Player>(actor.value);
-        player.weapon.access = &access;
-        player.weapon.cfg_id = static_cast<u32>(read_id(gun_id));
-        const auto& gun = content.at("weapons").at(gun_id);
-        player.weapon.ammo = gun.at("magazine");
-        player.reserve = gun.at("reserve");
-        player.player_id = player_id;
+        for (const auto amount : active_loadout.health_segments())
+        {
+            player.health_segments.push_back(static_cast<i32>(amount));
+        }
+
+        for (i32 index = 0; index < active_loadout.tools_size(); ++index)
+        {
+            const auto id = std::to_string(active_loadout.tools(index));
+            player.change_tool(index + 1, id, content.at("tools").at(id).at("uses"));
+        }
+
+        for (i32 index = 0; index < active_loadout.consumables_size(); ++index)
+        {
+            const auto id = std::to_string(active_loadout.consumables(index));
+            player.change_tool(index + 5, id, content.at("tools").at(id).at("uses"));
+        }
     }
 
     auto& unit = actor.unit();
@@ -300,7 +332,11 @@ void World::clear_input()
 
     auto& player = std::get<Player>(actors[index]->value);
     player.move_x = 0;
-    player.aim_x = 1000;
+    player.move_y = 0;
+    player.run = false;
+    player.want_prone = player.prone;
+    player.melee = false;
+    player.aim_x = player.facing * 1000;
     player.aim_y = 0;
     player.jump = false;
     player.fire = false;
@@ -314,7 +350,7 @@ wire::Envelope World::input(const wire::FrameInput& input, u64 applied_tick)
     require(input.seq() != 0 && input.move_x() >= -1 && input.move_x() <= 1
         && input.aim_x() >= -1000 && input.aim_x() <= 1000
         && input.aim_y() >= -1000 && input.aim_y() <= 1000
-        && (input.aim_x() != 0 || input.aim_y() != 0), "invalid_input");
+        && input.move_y() >= -1 && input.move_y() <= 1, "invalid_input");
     Str error;
 
     if (input.seq() <= seq)
@@ -354,8 +390,17 @@ wire::Envelope World::input(const wire::FrameInput& input, u64 applied_tick)
         && applied_tick == tick_id + 1, "invalid_applied_tick");
     auto& player = std::get<Player>(actors[slot(player_entity_id)]->value);
     player.move_x = input.move_x();
+    player.move_y = input.move_y();
+    player.run = input.run();
+    player.want_prone = input.prone();
     player.aim_x = input.aim_x();
     player.aim_y = input.aim_y();
+
+    if (player.aim_x == 0 && player.aim_y == 0)
+    {
+        player.aim_x = (input.move_x() != 0 ? input.move_x() : player.facing) * 1000;
+    }
+
     player.jump = player.jump || input.jump();
     player.fire = input.fire();
     player.fire_once = player.fire_once || input.fire();
@@ -479,5 +524,254 @@ void World::set_paused(bool value)
     access.write();
     paused = value;
     clear_input();
+}
+
+wire::Loadout World::check_loadout(const wire::Loadout& input) const
+{
+    access.read();
+    wire::Loadout result = input;
+
+    if (result.ByteSizeLong() == 0)
+    {
+        const auto& defaults = content.at("default_loadout");
+        result.set_player_cfg_id(static_cast<u32>(read_id(defaults.at("player_cfg_id"))));
+
+        for (const auto& value : defaults.at("hp_segments"))
+        {
+            result.add_health_segments(value.get<u32>());
+        }
+
+        for (usize index = 0; index < defaults.at("weapons").size(); ++index)
+        {
+            auto* weapon = result.add_weapons();
+            weapon->set_cfg_id(static_cast<u32>(read_id(defaults.at("weapons")[index])));
+            weapon->set_ammo_cfg_id(static_cast<u32>(read_id(defaults.at("ammo")[index])));
+        }
+
+        for (const auto& value : defaults.at("tools"))
+        {
+            result.add_tools(static_cast<u32>(read_id(value)));
+        }
+
+        for (const auto& value : defaults.at("consumables"))
+        {
+            result.add_consumables(static_cast<u32>(read_id(value)));
+        }
+    }
+
+    const auto player_key = std::to_string(result.player_cfg_id());
+    require(content.at("players").contains(player_key), "invalid_player_cfg");
+    const auto& player = content.at("players").at(player_key);
+    require(result.health_segments_size() > 0 && result.health_segments_size() <= 6,
+        "invalid_health_segments");
+    u32 total = 0;
+
+    for (const auto value : result.health_segments())
+    {
+        require(value == 25 || value == 50, "invalid_health_segments");
+        total += value;
+    }
+
+    require(total == player.at("hp").get<u32>(), "invalid_health_segments");
+    require(result.weapons_size() > 0 && result.weapons_size() <= 2,
+        "invalid_weapon_slots");
+    i64 weight = 0;
+
+    for (const auto& choice : result.weapons())
+    {
+        const auto key = std::to_string(choice.cfg_id());
+        require(content.at("weapons").contains(key), "invalid_weapon_cfg");
+        const auto& gun = content.at("weapons").at(key);
+        require(gun.at("ammo_cfg_id") == std::to_string(choice.ammo_cfg_id())
+            && content.at("ammo").contains(std::to_string(choice.ammo_cfg_id())),
+            "invalid_ammo_cfg");
+        weight += gun.at("weight").get<i32>();
+    }
+
+    require(weight <= player.at("weight").get<i32>(), "loadout_overweight");
+    require(result.tools_size() <= 4 && result.consumables_size() <= 4,
+        "invalid_tool_slots");
+    Set<u32> selected;
+    const auto validate_tool = [&](u32 id, bool consumable)
+    {
+        const auto key = std::to_string(id);
+        require(content.at("tools").contains(key) && selected.insert(id).second,
+            "invalid_tool_cfg");
+        const Str kind = content.at("tools").at(key).at("kind");
+        require(kind == "knife" || kind == "medkit" || kind == "needle" || kind == "bomb",
+            "invalid_tool_kind");
+        require((kind == "needle" || kind == "bomb") == consumable, "invalid_tool_slot");
+    };
+
+    for (const auto id : result.tools())
+    {
+        validate_tool(id, false);
+    }
+
+    for (const auto id : result.consumables())
+    {
+        validate_tool(id, true);
+    }
+
+    return result;
+}
+
+void World::prepare_loadout(const wire::Loadout& input)
+{
+    access.write();
+    pending_loadout = check_loadout(input);
+}
+
+wire::Loadout World::get_loadout() const
+{
+    access.read();
+    return active_loadout;
+}
+
+Str World::get_world_id() const
+{
+    return std::to_string(world_id);
+}
+
+i64 World::scene_count() const
+{
+    return static_cast<i64>(content.at("scenes").size());
+}
+
+bool World::scene_used(i64 index) const
+{
+    range(index, 1, scene_count());
+    return used_scenes[static_cast<usize>(index - 1)];
+}
+
+void World::set_scene_used(i64 index, bool used)
+{
+    access.write();
+    range(index, 1, scene_count());
+    require(!used || content.at("scenes")[static_cast<usize>(index - 1)].at("kind") == "supply",
+        "invalid_scene_usage");
+    used_scenes[static_cast<usize>(index - 1)] = used;
+}
+
+i64 World::projectile_free() const
+{
+    return static_cast<i64>(std::count_if(projectiles.begin(), projectiles.end(),
+        [](const auto& value) { return !value.active && !value.reserved; }));
+}
+
+i32 World::reserve_projectile()
+{
+    access.write();
+
+    for (usize index = 0; index < projectiles.size(); ++index)
+    {
+        if (!projectiles[index].active && !projectiles[index].reserved)
+        {
+            projectiles[index].reserved = true;
+            return static_cast<i32>(index + 1);
+        }
+    }
+
+    return 0;
+}
+
+i64 World::spawn_projectile(const Str& cfg_id, i64 x, i64 y, i64 vx, i64 vy, i64 remaining)
+{
+    access.write();
+    require(phase == "Playing" && !paused && raid.player_state == "Alive", "invalid_state");
+    require(content.at("tools").contains(cfg_id)
+        && content.at("tools").at(cfg_id).at("kind") == "bomb", "invalid_projectile_cfg");
+    range(x, 0, content.at("map").at("width"));
+    range(y, 0, content.at("map").at("height"));
+    range(vx, -1000, 1000);
+    range(vy, -1000, 1000);
+    range(remaining, 1, content.at("tools").at(cfg_id).at("throw_range"));
+    require(vx != 0 || vy != 0, "invalid_projectile_velocity");
+    require(last_projectile_id < std::numeric_limits<u64>::max(), "projectile_id_exhausted");
+    Player* player = nullptr;
+    const auto player_slot = slot(player_entity_id);
+
+    if (player_slot < actors.size())
+    {
+        player = std::get_if<Player>(&actors[player_slot]->value);
+    }
+
+    i32 reserved = player ? player->reserved_projectile : 0;
+
+    if (reserved == 0)
+    {
+        reserved = reserve_projectile();
+    }
+
+    require(reserved > 0, "projectile_capacity");
+    auto& value = projectiles[static_cast<usize>(reserved - 1)];
+    require(value.reserved && !value.active, "invalid_projectile_reservation");
+    value = {++last_projectile_id, static_cast<u32>(read_id(cfg_id)),
+        static_cast<i32>(x), static_cast<i32>(y), static_cast<i32>(vx), static_cast<i32>(vy),
+        static_cast<i32>(remaining), true, false};
+
+    if (player)
+    {
+        player->reserved_projectile = 0;
+    }
+
+    return reserved;
+}
+
+bool World::projectile_alive(i64 index) const
+{
+    range(index, 1, 16);
+    return projectiles[static_cast<usize>(index - 1)].active;
+}
+
+std::tuple<Str, i64, i64, i64, i64, i64> World::read_projectile(i64 index) const
+{
+    require(projectile_alive(index), "missing_projectile");
+    const auto& value = projectiles[static_cast<usize>(index - 1)];
+    return {std::to_string(value.cfg_id), value.x, value.y, value.vx, value.vy, value.remaining};
+}
+
+void World::write_projectile(i64 index, i64 x, i64 y, i64 remaining)
+{
+    access.write();
+    require(projectile_alive(index), "missing_projectile");
+    range(x, 0, content.at("map").at("width"));
+    range(y, 0, content.at("map").at("height"));
+    auto& value = projectiles[static_cast<usize>(index - 1)];
+    range(remaining, 0, value.remaining);
+    value.x = static_cast<i32>(x);
+    value.y = static_cast<i32>(y);
+    value.remaining = static_cast<i32>(remaining);
+}
+
+void World::remove_projectile(i64 index)
+{
+    access.write();
+    range(index, 1, 16);
+    projectiles[static_cast<usize>(index - 1)] = {};
+}
+
+void World::clear_actions()
+{
+    access.write();
+
+    for (auto& actor : actors)
+    {
+        if (actor)
+        {
+            if (auto* player = std::get_if<Player>(&actor->value))
+            {
+                player->cancel_use();
+                player->weapon.reload_ticks = 0;
+                player->weapon.shot_ticks = 0;
+                player->other_weapon.reload_ticks = 0;
+                player->other_weapon.shot_ticks = 0;
+                player->running = false;
+                player->melee_ticks = 0;
+            }
+        }
+    }
+
+    projectiles = {};
 }
 }

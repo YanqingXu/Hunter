@@ -16,12 +16,15 @@ return function(deps)
     function api.clear_input(player)
         local input = player.controls
         Player.set_move_x(input, 0)
-        Player.set_aim_x(input, 1000)
+        Player.set_aim_x(input, Entity.get_facing(player.pose) * 1000)
         Player.set_aim_y(input, 0)
         Player.set_jump(input, false)
         Player.set_fire(input, false)
         Player.set_fire_once(input, false)
         Player.set_reload(input, false)
+        Player.set_move_y(input, 0)
+        Player.set_run(input, false)
+        Player.set_melee(input, false)
     end
 
     return api

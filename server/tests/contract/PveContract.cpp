@@ -50,10 +50,10 @@ int main(int argc, char** argv)
 #endif
         hunter::Script game;
         auto content = nlohmann::json::parse(hunter::content::json_text);
-        take(game.open(cfg, nlohmann::json{{"v", 5}, {"snapshot_every", 3},
+        take(game.open(cfg, nlohmann::json{{"v", 6}, {"snapshot_every", 3},
             {"content", content}}.dump()));
-        take(game.event(2, R"({"v":5,"req_id":"login","player_id":"73"})"));
-        take(game.event(3, R"({"v":5,"req_id":"start","after_match_id":"0",
+        take(game.event(2, R"({"v":6,"req_id":"login","player_id":"73"})"));
+        take(game.event(3, R"({"v":6,"req_id":"start","after_match_id":"0",
             "match_id":"101","world_id":"9"})"));
         u64 tick = 0;
         const auto step = [&] { take(game.tick(++tick, 1.0 / 60)); };
@@ -111,10 +111,10 @@ int main(int argc, char** argv)
         setup([](hunter::World& w) { w.actors[0]->unit().x = 2000; });
         step();
         check(game.world().raid.extract_ticks == 1, "automatic extraction begins");
-        take(game.event(4, R"({"v":5,"paused":true})"));
+        take(game.event(4, R"({"v":6,"paused":true})"));
         step();
         check(game.world().raid.extract_ticks == 1, "pause freezes extraction");
-        take(game.event(4, R"({"v":5,"paused":false})"));
+        take(game.event(4, R"({"v":6,"paused":false})"));
         setup([&](hunter::World& w) { w.raid.damage_tick = tick + 1; });
         step();
         check(game.world().raid.extract_ticks == 0 && game.world().raid.extract_reason == "hurt",

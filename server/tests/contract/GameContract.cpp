@@ -68,7 +68,7 @@ struct Game
     Game(const hunter::Cfg& cfg, Json data) : content(std::move(data))
     {
         const auto output = take(script.open(cfg,
-            Json{{"v", 5}, {"snapshot_every", 3}, {"content", content}}.dump()));
+            Json{{"v", 6}, {"snapshot_every", 3}, {"content", content}}.dump()));
         check(output.empty(), "init must not send network output");
     }
 
@@ -101,7 +101,7 @@ struct Game
             payload["world_id"] = std::to_string(next);
         }
 
-        payload["v"] = 5;
+        payload["v"] = 6;
         return take(script.event(id, payload.dump()));
     }
 
@@ -280,6 +280,7 @@ void weapons(const hunter::Cfg& cfg, const Json& base)
 {
     auto content = arena(base, 8000);
     content["monsters"]["1"]["hp"] = 1000;
+    content["monsters"]["1"]["detect_range"] = 1000;
     Game game(cfg, content);
     game.start();
     const auto first = game.input(0, false, true);
@@ -307,8 +308,20 @@ void weapons(const hunter::Cfg& cfg, const Json& base)
         "reload does not finish early");
     reply = game.steps();
     player = game.state()["entities"]["1"];
-    check(player["weapon"]["ammo"] == 6 && player["reserve"] == 24 && events(reply, "reload") == 1,
-        "reload transfers exact reserve after duration");
+    check(player["weapon"]["ammo"] == 1 && player["reserve"] == 29 && events(reply, "reload") == 1,
+        "single-round reload transfers one round after its duration");
+    for (i32 rounds = 2; rounds <= 6; ++rounds)
+    {
+        game.steps(89);
+        player = game.state()["entities"]["1"];
+        check(player["weapon"]["ammo"] == rounds - 1 && player["weapon"]["reload_ticks"] == 1,
+            "each additional round waits for its full reload duration");
+        reply = game.steps();
+        player = game.state()["entities"]["1"];
+        check(player["weapon"]["ammo"] == rounds && player["reserve"] == 30 - rounds
+            && events(reply, "reload") == 1, "each completed reload transfers exactly one round");
+    }
+    check(player["weapon"]["reload_ticks"] == 0, "full magazine ends single-round reload");
 
     game.event(1, game.input(1, true, true));
     game.event(4, {{"paused", true}});
@@ -652,14 +665,18 @@ void enemies(const hunter::Cfg& cfg, const Json& base)
     check(attack.state()["entities"]["1"]["health"]["hp"] == 80, "melee resumes at exact cooldown");
 
     auto content = arena(base, 2800);
-    content["players"]["1"]["hp"] = 10;
+    content["players"]["1"]["hp"] = 25;
+    content["players"]["1"]["hp_segments"] = Json::array({25});
+    content["default_loadout"]["hp_segments"] = Json::array({25});
+    content["monsters"]["1"]["damage"] = 25;
     Game death(cfg, content);
     death.start();
     death.event(1, death.input());
     auto reply = death.steps();
-    check(death.state()["phase"] == "Dead" && events(reply, "death") == 1
-        && events(reply, "end") == 1, "player death is a single terminal transition");
-    check(message(reply, "snapshot")["phase"] == "Dead", "terminal snapshot is immediate");
+    check(death.state()["phase"] == "Settling" && death.state()["raid"]["player_state"] == "Dead"
+        && events(reply, "death") == 1 && events(reply, "end") == 0,
+        "player death enters settlement once without claiming a committed result");
+    check(message(reply, "snapshot")["phase"] == "Settling", "settlement snapshot is immediate");
     const auto final_entities = death.state()["entities"];
     reply = death.steps(10);
     check(reply.size() <= 4 && death.state()["entities"] == final_entities,
@@ -668,11 +685,18 @@ void enemies(const hunter::Cfg& cfg, const Json& base)
     moving_dead["entities"]["2"]["motion"]["vx"] = 1;
     Game invalid_dead(cfg, content);
     check(!invalid_dead.script.import_state(moving_dead.dump()),
-        "Dead state rejects a living enemy with nonzero horizontal velocity");
+        "death settlement rejects a living enemy with nonzero horizontal velocity");
+    reply = death.event(3, {{"req_id", "pending-restart"}, {"after_match_id", "1"}});
+    check(message(reply, "error")["code"] == "invalid_state",
+        "death settlement cannot restart before result commit");
+    // 数据库提交由独立 Runtime 契约验证；这里导入已提交状态覆盖重开的玩法边界。
+    auto committed = death.state();
+    committed["phase"] = "Finished";
+    death.restore(committed);
     reply = death.event(3, {{"req_id", "restart"}, {"after_match_id", "1"}});
     check(message(reply, "start")["match_id"] == "2" && death.state()["seq"] == "1",
         "restart allocates match while preserving input high water");
-    check(death.state()["entities"]["1"]["health"]["hp"] == 10
+    check(death.state()["entities"]["1"]["health"]["hp"] == 25
         && death.state()["entities"]["1"]["weapon"]["ammo"] == 6,
         "restart restores health and ammo");
     reply = death.event(3, {{"req_id", "start"}, {"after_match_id", "0"}});
@@ -681,26 +705,43 @@ void enemies(const hunter::Cfg& cfg, const Json& base)
 
     content = arena(base, 2800);
     content["monsters"]["1"]["hp"] = 20;
+    content["monsters"]["1"]["rank"] = 3;
+    content["extracts"] = Json::array({{{"id", 1}, {"x", 1000}, {"y", 0},
+        {"w", 2000}, {"h", 2200}, {"hold_ticks", 3}, {"boss_spawn_id", "2"}}});
     Game clear(cfg, content);
     clear.start();
     clear.event(1, clear.input(0, false, true));
     reply = clear.steps();
-    check(clear.state()["phase"] == "Cleared"
+    check(clear.state()["phase"] == "Playing"
         && clear.state()["entities"]["1"]["health"]["hp"] == 100,
         "player shot kills enemy before its same tick attack");
-    check(events(reply, "death") == 1 && events(reply, "end") == 1,
-        "last enemy emits exactly one death and end");
+    check(events(reply, "death") == 1 && events(reply, "end") == 0,
+        "last enemy death keeps the raid active until extraction");
+    reply = clear.event(3, {{"req_id", "early-clear-restart"}, {"after_match_id", "1"}});
+    check(message(reply, "error")["code"] == "invalid_state",
+        "killing all enemies does not permit an early restart");
+    reply = clear.steps(2);
+    check(clear.state()["phase"] == "Settling"
+        && clear.state()["raid"]["player_state"] == "Extracted"
+        && events(reply, "death") == 0 && events(reply, "end") == 0,
+        "completed extraction enters settlement without repeating the kill");
     auto moving_clear = clear.state();
     moving_clear["entities"]["1"]["pose"]["y"] = 10;
     moving_clear["entities"]["1"]["motion"]["grounded"] = false;
     moving_clear["entities"]["1"]["motion"]["vy"] = 1;
     Game invalid_clear(cfg, content);
     check(!invalid_clear.script.import_state(moving_clear.dump()),
-        "Cleared state rejects a living airborne player with nonzero vertical velocity");
+        "extraction settlement rejects a living airborne player with nonzero vertical velocity");
+    reply = clear.event(3, {{"req_id", "pending-clear-restart"}, {"after_match_id", "1"}});
+    check(message(reply, "error")["code"] == "invalid_state",
+        "extraction settlement cannot restart before result commit");
+    committed = clear.state();
+    committed["phase"] = "Finished";
+    clear.restore(committed);
     clear.event(3, {{"req_id", "clear-restart"}, {"after_match_id", "1"}});
     check(clear.state()["phase"] == "Playing"
         && clear.state()["entities"]["2"]["health"]["alive"] == true,
-        "clear terminal permits fresh living enemies");
+        "committed extraction permits fresh living enemies");
 }
 
 // 同局怪物按各自配置运动、感知、碰撞和攻击，枪械及玩家配置也可独立选择。
@@ -758,8 +799,14 @@ void configs(const hunter::Cfg& cfg, const Json& base)
         && melee.state() == resumed.state(), "independent melee cooldown survives restore");
 
     content = arena(base, 5000);
-    content["weapons"]["2"] = {{"range", 2000}, {"damage", 35}, {"magazine", 2},
-        {"reserve", 5}, {"fire_ticks", 3}, {"reload_ticks", 4}};
+    content["weapons"]["2"] = content["weapons"]["1"];
+    content["weapons"]["2"].update({{"range", 2000}, {"damage", 35}, {"magazine", 2},
+        {"reserve", 5}, {"fire_ticks", 3}, {"reload_ticks", 4}, {"reload_kind", 2},
+        {"ammo_cfg_id", "2"}});
+    content["ammo"]["2"] = content["ammo"]["1"];
+    content["ammo"]["2"]["damage"] = 35;
+    content["default_loadout"]["weapons"] = Json::array({"2"});
+    content["default_loadout"]["ammo"] = Json::array({"2"});
     content["map"]["spawn"]["weapon_cfg_id"] = "2";
     Game gun(cfg, content);
     gun.start();
@@ -790,7 +837,10 @@ void configs(const hunter::Cfg& cfg, const Json& base)
 
     content["players"]["2"] = content["players"]["1"];
     content["players"]["2"].update({{"hp", 150}, {"speed", 60}, {"jump_speed", 120}});
+    content["players"]["2"]["hp_segments"] = Json::array({50, 50, 25, 25});
     content["map"]["spawn"]["cfg_id"] = "2";
+    content["default_loadout"]["player_cfg_id"] = "2";
+    content["default_loadout"]["hp_segments"] = Json::array({50, 50, 25, 25});
     Game player(cfg, content);
     player.start();
     player.event(1, player.input(1, true));

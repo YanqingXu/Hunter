@@ -3,13 +3,14 @@
 技术栈为 **C++23 / Standalone Asio 1.36.0 / Luax / Protobuf / CMake**。
 构建显式定义 `ASIO_STANDALONE`，使用独立 Asio 头文件，不依赖 Boost。
 
-当前交付 Windows 单人 PvE 撤离与持久化闭环：读档、持久局号开局、权威战斗与 Boss、
-掉落拾取、8 格背包、撤离读条、SQLite 结算、重启查询永久仓库。
+当前实现 Windows 单人验证玩法：免费配装、分段回血与体力、走跑匍匐、双枪与穿透、
+医疗和炸药、梯子与补给；复用 Boss、掉落背包、撤离读条、SQLite 结算和重启查询。
 C++ 持有唯一世界、物品和计时状态，Luax 编写玩法规则；热更新、Unity 与 Android Service
 属于独立后续工作。仅接纳一个客户端、一名玩家和一个活动世界，不提供永久物品携入或交易。
 Entity/Unit/Player/Monster/Item/Weapon/World 各有 C++ 类及同名小写 Lua 模块；
 实体按 ID 管理，玩家输入和枪械状态与怪物 AI 分离，支持不同配置怪物共存。
-正式内容从 [首版 Excel](../design/demo/README.md) 生成；原灰盒 JSON 仅用于回归。
+正式内容从 [根目录 Excel 与显式来源清单](../design/DEMO内容说明.md) 生成；
+旧首版 Excel 和灰盒 JSON 仅用于回归。
 设计见 [规划](plan.md)，契约见 [intents](intents/README.md)，实际结果见 [验证记录](VERIFICATION.md)。
 
 ## 构建与测试
@@ -70,13 +71,14 @@ Ready 之前必须完成存档打开和玩家加载；省略 `--save` 使用 `%L
 客户端连接 `127.0.0.1:<port>`；每帧为四字节大端正文长度加 Protobuf `hunter.wire.Envelope`。
 第一次消息必须为 Hello，逐项回传 Ready 的版本、实例和令牌，5 秒内完成握手。
 正式定义位于根目录 `protobuf/hunter.proto`，不能另建私有协议来源。
-网络协议为 v4，Host 契约、上下文和内部状态为 v5，内容为 v3，SQLite 仍为 V1。
+网络协议为 v5，Host 契约、上下文和内部状态为 v6，内容为 v4，SQLite 仍为 V1。
 旧协议客户端和旧内部状态拒绝接入／导入，不提供状态迁移；客户端仍按 `kind/cfg_id` 选择配置。
 
 Hello 后发送 LoginReq，再发送 StartReq。首个 StartReq 的 after_match_id 为 0，后续使用
-当前局 ID；重复成功请求不重建世界。局 ID 来自 SQLite，允许跳号，跨启动不复用。
+当前局 ID；先完整校验配装再分配局号，重复成功请求不重建世界，同请求改变配装返回冲突。
+缺省配装由服务端展开，StartRsp 返回接受后冻结的配装。局 ID 来自 SQLite，允许跳号，跨启动不复用。
 登录与开局响应包含世界和控制实体身份。FrameInput 必须携带对应 world_id/match_id、
-连接内单调的非零 uint64 序号、移动、瞄准、跳跃、开火和换弹。
+连接内单调的非零 uint64 序号、横纵移动、瞄准、跳跃、开火和换弹，以及明确的 run/prone 意图。
 InputAck 仅确认操作已处理；命中、伤害和死亡以事件与快照为准，客户端不提交这些结果。
 60 Hz 固定模拟、20 Hz 快照；整数毫米坐标，脚底中心，X 向右、Y 向上。
 高频输入、确认、事件和快照在 C++ 直接处理；Lua 不编解码这些消息的 JSON。
@@ -97,9 +99,11 @@ InputAck 仅确认操作已处理；命中、伤害和死亡以事件与快照�
 
 ## Excel 配置与协议客户端
 
-正式共享源为 `../design/demo/首版.xlsx`；构建自动运行 `../export/demo.py`，生成
+正式共享源由 `../design/demo_sources.json` 选择根目录工作簿、工作表和记录；
+清单不保存数值覆盖。构建自动运行 `../export/gameplay.py --source`，生成
 `generated/content.json` 与 `ContentSpec.h`。内容摘要进入 Ready／Hello，客户端应使用同一导出数据。
-源配置包含毫米地图、实心平台、玩家与怪物出生点以及枪械数值；数据校验失败会阻止构建。
+唯一生产地图来源为地图表；旧怪物和 Boss 使用独立记录及 Attack 招式表，不读取天赋 Skill。
+所选记录缺值、单位或引用非法会阻止构建；未选草稿不进入内容摘要，禁止回退旧工作簿。
 具体导出和单位约定见 [导表说明](../export/README.md)。
 
 开发构建同时生成 `hunter_client.exe`。分别运行桌面服务和客户端，向客户端第一行输入服务端
@@ -111,6 +115,9 @@ Ready 的完整 JSON；握手成功后逐行发送以下命令。客户端持续
 {"cmd":"input","seq":"1","world_id":"1","match_id":"1","move_x":1,"aim_x":1000,"aim_y":0,"jump":true,"fire":false,"reload":false}
 {"cmd":"bag","req_id":"bag-1","world_id":"1","match_id":"1"}
 {"cmd":"pickup","req_id":"pick-1","world_id":"1","match_id":"1","item_id":"1"}
+{"cmd":"switch_weapon","req_id":"switch-1","world_id":"1","match_id":"1","action_seq":"3","slot":2}
+{"cmd":"use","req_id":"use-1","world_id":"1","match_id":"1","action_seq":"4","slot":6}
+{"cmd":"interact","req_id":"scene-1","world_id":"1","match_id":"1","action_seq":"5","target_id":1}
 {"cmd":"status","req_id":"save-1"}
 {"cmd":"retry","req_id":"retry-1","match_id":"1"}
 {"cmd":"result","req_id":"result-1","match_id":"1"}
@@ -119,15 +126,25 @@ Ready 的完整 JSON；握手成功后逐行发送以下命令。客户端持续
 ```
 
 这些命令在客户端 stdin 使用 JSON，真实 TCP 始终传输 Protobuf。移动与开火持续到下一条输入改变；
-跳跃与换弹为按下动作。示例中的身份必须替换成实际响应值。暂停通过宿主控制通道执行。
-只有保存状态 Committed 后才能重开，输入序号继续递增。
+跳跃与换弹为按下动作，run/prone 为目标状态。示例中的身份与场景 ID 必须替换成实际配置或响应值。
+枪槽从 1 开始，常规工具槽为 1～4，消耗品槽为 5～8；melee/select_tool/use/interact 均走 ActionReq。
+动作使用独立单调 action_seq，缓存最近 128 个响应；相同请求重发返回原响应，改变参数返回冲突，
+缓存淘汰后的旧序号仍拒绝。生成客户端省略 action_seq 时自动递增，重试必须显式保留原序号。
+PauseState 同步输入和动作的作废水位；暂停冻结前摇和恢复计时，恢复不补执行旧动作。
+只有保存状态 Committed 后才能重开，输入和动作序号继续递增。
 客户端 EOF／对端正常 EOF 返回 0；协议错误或连接重置输出 client_error 并返回 1，均有界收尾。
 `hunter_process_integration` 自动管理两个真实进程，包含死亡／清怪／重开场景。
 
-Boss 前摇、恢复和冷却由 Skill 表驱动，快照提供 ai/attack_ticks。Boss 出生实例死亡仅解锁
+Boss 前摇、恢复和冷却由 Attack 表驱动，快照提供 ai/attack_ticks。Boss 出生实例死亡仅解锁
 出口；回到出生地附近出口自动读条 180 Tick。快照提供资格、累计／剩余 Tick 和取消原因。
 正伤害、死亡、离区清零，暂停冻结。拾取必须在 1500 mm 内，整份成功或整份拒绝。
 地面 ItemId、配置 cfg_id 和永久 item_uid 分离；实体／物品引用须带本局 world_id/match_id。
+免费武器、工具、消费品拾取及补给进入局内装备槽，不进入奖励背包或永久仓库。
+进入梯子使用 interact；梯上只处理纵向移动，拾取及其他玩法动作均拒绝。
+向梯顶或梯底移动到端点且站立空间足够时自动离梯，空间不足则保持梯上；旧动作不会补执行。
+快照还提供有效体型、体力、血段、独立枪弹、工具次数、使用剩余 Tick、场景和飞行物。
+本轮完整规则及验收条件见 [SRV-012](intents/usecases/gameplay.intent.md)，实施进度见
+[增量记录](V1_GAMEPLAY_TASKS.md)。
 
 对局阶段 Preparing → Playing → Settling → Finished；玩家状态独立为 Alive/Dead/Extracted/
 Abandoned。撤离只冻结背包奖励，死亡／放弃冻结空奖励；只有数据库 Committed 才到账。
@@ -178,7 +195,8 @@ python tools/package_demo.py --build build/win-bundle `
 ```
 
 包内 START.txt 给出启动命令；内容、协议、C# 和客户端一起交付。
-测试签名包只用于联调；逐项实施及当前已知边界见 [V1_TASKS.md](V1_TASKS.md)。
+测试签名包只用于联调；当前进度见 [V1_GAMEPLAY_TASKS.md](V1_GAMEPLAY_TASKS.md)，
+[V1_TASKS.md](V1_TASKS.md) 保留此前版本的实际完成记录。
 
 ## 独立持久化模块（SRV-007）
 
