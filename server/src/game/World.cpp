@@ -130,9 +130,16 @@ void World::begin(const Str& req, const Str& after, const Str& match, const Str&
     active_loadout = pending_loadout;
     pending_loadout.Clear();
     used_scenes = {};
+    scene_state = {};
     projectiles = {};
     last_projectile_id = 0;
     action_seq = 0;
+    wave = 1;
+    bounty_id = 0;
+    boss_region = 0;
+    region_count = 0;
+    boss_spawn = 0;
+    excluded_regions = 0;
     actors = {};
     items = {};
     order.clear();
@@ -186,6 +193,11 @@ Str World::spawn(const Str& kind, const Str& text)
         player.access = &access;
         player.world = this;
         player.player_id = player_id;
+        for (const auto skill : active_loadout.skills())
+        {
+            require(player.add_skill(std::to_string(skill)), "invalid_player_skill");
+        }
+
         player.stamina = read_integer(spec.at("stamina"), 0, 1000000);
         const auto& weapons = spec.at("weapons");
         const auto& segments = spec.at("health_segments");
@@ -259,6 +271,12 @@ Str World::spawn(const Str& kind, const Str& text)
     unit.y = read_integer(spec.at("y"), 0, map_height - unit.height);
     require(spec.at("grounded").is_boolean(), "invalid_grounded");
     unit.grounded = spec.at("grounded").get<bool>();
+    if (auto* monster = std::get_if<Monster>(&actor.value))
+    {
+        monster->last_hp = unit.hp;
+        monster->wave = wave;
+    }
+
     if (const auto* player = std::get_if<Player>(&actor.value))
     {
         require(player->cfg_id == active_loadout.player_cfg_id()
@@ -419,6 +437,16 @@ wire::Envelope World::input(const wire::FrameInput& input, u64 applied_tick)
     require(tick_id < static_cast<u64>(std::numeric_limits<i64>::max())
         && applied_tick == tick_id + 1, "invalid_applied_tick");
     auto& player = std::get<Player>(actors[slot(player_entity_id)]->value);
+    if (player.downed || player.vision)
+    {
+        clear_input();
+        auto& ack = *out.mutable_ack();
+        ack.set_seq(seq);
+        ack.set_match_id(match_id);
+        ack.set_applied_tick(applied_tick);
+        return out;
+    }
+
     player.move_x = input.move_x();
     player.move_y = input.move_y();
     player.run = input.run();
@@ -562,7 +590,15 @@ void World::prepare_loadout(const wire::Loadout& input)
     require(input.player_cfg_id() > 0 && input.player_cfg_id() <= 2147483647
         && input.weapons_size() > 0 && input.weapons_size() <= 2
         && input.health_segments_size() > 0 && input.health_segments_size() <= 6
-        && input.tools_size() <= 4 && input.consumables_size() <= 4, "invalid_loadout");
+        && input.tools_size() <= 4 && input.consumables_size() <= 4
+        && input.skills_size() <= 32, "invalid_loadout");
+    Set<u32> skill_ids;
+
+    for (const auto id : input.skills())
+    {
+        require(id > 0 && id <= 2147483647 && skill_ids.insert(id).second,
+            "invalid_loadout_skill");
+    }
 
     for (const auto& gun : input.weapons())
     {
@@ -718,6 +754,7 @@ void World::remove_projectile(i64 index)
 void World::clear_actions()
 {
     access.write();
+    scene_cancel();
 
     for (auto& actor : actors)
     {

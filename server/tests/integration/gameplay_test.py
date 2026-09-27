@@ -26,8 +26,8 @@ def exercise(args, path):
     srv = Server(args, extra=["--save", str(path)])
     cli = Client(args, srv.start())
     try:
-        assert srv.ready["protocol_version"] == 5
-        assert srv.ready["content_version"].startswith("gameplay-v4:")
+        assert srv.ready["protocol_version"] == 6
+        assert srv.ready["content_version"].startswith("gameplay-v5:")
         cli.send({"cmd": "login", "req_id": "login"})
         cli.wait("login_rsp")
         invalid = {"player_cfg_id": 1, "health_segments": [50, 50, 25, 25],
@@ -52,6 +52,17 @@ def exercise(args, path):
         assert cli.wait("error")["code"] == "request_conflict"
         context = {"world_id": accepted["world_id"], "match_id": accepted["match_id"]}
 
+        # 未杀 Boss 也能撤离；先走到补给点，避免长动作验证在出生撤离区自动结算。
+        travel = {"cmd": "input", "seq": "1", **context, "move_x": 1,
+                  "aim_x": 1000, "aim_y": 0, "jump": False, "fire": False,
+                  "reload": False, "move_y": 0, "run": False, "prone": False}
+        cli.send(travel)
+        cli.wait("ack")
+        snapshot(cli, lambda s, p: p["x"] >= 3400)
+        cli.send(dict(travel, seq="2", move_x=0))
+        cli.wait("ack")
+        snapshot(cli, lambda s, p: p["vx"] == 0 and s["extract_reason"] == "outside")
+
         # 所有消费序号都由调用方显式指定，重发保留请求全部字段。
         def action(seq, cmd, **values):
             request = {"cmd": cmd, "req_id": "a-" + str(seq),
@@ -69,12 +80,12 @@ def exercise(args, path):
         assert len(player["weapons"]) == 2 and len(player["tools"]) == 4
 
         # 零瞄准向量按前向接受；姿态意图重复发送不能变回站立。
-        movement = {"cmd": "input", "seq": "1", **context, "move_x": 0,
+        movement = {"cmd": "input", "seq": "3", **context, "move_x": 0,
                     "aim_x": 0, "aim_y": 0, "jump": False, "fire": False,
                     "reload": False, "move_y": 0, "run": False, "prone": True}
         cli.send(movement)
         cli.wait("ack")
-        cli.send(dict(movement, seq="2"))
+        cli.send(dict(movement, seq="4"))
         cli.wait("ack")
         _, player = snapshot(cli, lambda s, p: p["prone"])
         assert player["width"] == 1000 and player["height"] == 600
@@ -138,7 +149,7 @@ def exercise(args, path):
         cli.send({"cmd": "stash", "req_id": "stash", "revision": "0",
                   "cursor": "0", "limit": 128})
         assert cli.wait("save_rsp")["items"] == []
-        print("v5 loadout/action/pause/free-equipment TCP contract passed", flush=True)
+        print("v6 loadout/action/pause/free-equipment TCP contract passed", flush=True)
     finally:
         srv.stop()
         cli.close()
@@ -152,7 +163,7 @@ def raw_action(args):
         conn = srv.connect()
         conn.sendall(frame(10, blob(1, "raw-login")))
         wait_msg(conn, 11)
-        conn.sendall(frame(12, blob(1, "raw-start")))
+        conn.sendall(frame(12, blob(1, "raw-start") + number(6, 1)))
         started = wait_msg(conn, 13)
         context = number(2, started[4]) + number(3, started[2])
         request = frame(16, blob(1, "raw-invalid") + context + number(4, 4)
@@ -173,7 +184,7 @@ def raw_action(args):
 def old_save(args, path):
     key = "demo-v3:79b1b12379ed4969c2bad2bdcec1577d0a53eee3e1451f3b4b031b59c9a5fde4"
     with closing(sqlite3.connect(path)) as db:
-        assert db.execute("PRAGMA user_version").fetchone()[0] == 1
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 2
         request, result = db.execute(
             "SELECT request_json,result_json FROM match_result WHERE match_id=1").fetchone()
         request, result = json.loads(request), json.loads(result)

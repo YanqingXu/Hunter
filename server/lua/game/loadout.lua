@@ -1,13 +1,15 @@
 -- 在分配局号之前只读校验完整配装，并从同一份配置生成原生实体初始化参数。
 return function(deps)
     local state = deps["framework.state"]
+    local skill = deps["game.skill"]
     local api = {}
 
     -- 构造独立默认配装，不允许请求污染缓存的只读源表。
     function api.default(content)
         local cfg = content.default_loadout
         local result = {player_cfg_id = cfg.player_cfg_id, health_segments = json.array({}),
-            weapons = json.array({}), tools = json.array({}), consumables = json.array({})}
+            weapons = json.array({}), tools = json.array({}), consumables = json.array({}),
+            skills = json.array({})}
         for _, value in ipairs(cfg.hp_segments) do
             result.health_segments[#result.health_segments + 1] = value
         end
@@ -20,25 +22,37 @@ return function(deps)
         for _, value in ipairs(cfg.consumables) do
             result.consumables[#result.consumables + 1] = value
         end
+        for _, value in ipairs(cfg.skills) do
+            result.skills[#result.skills + 1] = value
+        end
         return result
     end
 
     -- 仅完整空配装采用默认值，其余缺项均返回原有业务错误。
-    function api.check(content, value)
+    function api.check(content, value, owned)
+        if state.fields(value,
+            {"player_cfg_id", "health_segments", "weapons", "tools", "consumables"}) then
+            value = json.decode(json.encode(value))
+            value.skills = json.array({})
+        end
         if state.fields(value, {}) or (state.fields(value,
-            {"player_cfg_id", "health_segments", "weapons", "tools", "consumables"})
+            {"player_cfg_id", "health_segments", "weapons", "tools", "consumables", "skills"})
             and value.player_cfg_id == "0" and state.array(value.health_segments, 0, 0)
             and state.array(value.weapons, 0, 0) and state.array(value.tools, 0, 0)
-            and state.array(value.consumables, 0, 0)) then
+            and state.array(value.consumables, 0, 0) and state.array(value.skills, 0, 0)) then
             value = api.default(content)
         end
         if not state.fields(value,
-            {"player_cfg_id", "health_segments", "weapons", "tools", "consumables"}) then
+            {"player_cfg_id", "health_segments", "weapons", "tools", "consumables", "skills"}) then
             return nil, "invalid_loadout"
         end
         local player = content.players[value.player_cfg_id]
         if player == nil then
             return nil, "invalid_player_cfg"
+        end
+        local ids, error = skill.check(content, value.player_cfg_id, value.skills, owned)
+        if ids == nil then
+            return nil, error
         end
         if not state.array(value.health_segments, 1, 6) then
             return nil, "invalid_health_segments"
@@ -68,9 +82,6 @@ return function(deps)
             end
             weight = weight + gun.weight
         end
-        if weight > player.weight then
-            return nil, "loadout_overweight"
-        end
         if not state.array(value.tools, 0, content.rules.tool_slots)
             or not state.array(value.consumables, 0, content.rules.consumable_slots) then
             return nil, "invalid_tool_slots"
@@ -92,7 +103,20 @@ return function(deps)
                 end
             end
         end
-        return value, nil
+        local result = json.decode(json.encode(value))
+        result.skills = ids
+        local valid, effective = pcall(skill.effective, content, result)
+        if not valid then
+            return nil, "invalid_skill_effect"
+        end
+        if weight > effective.players[value.player_cfg_id].weight then
+            return nil, "loadout_overweight"
+        end
+        local revive_valid = pcall(skill.revive, content, result, ids)
+        if not revive_valid then
+            return nil, "invalid_revive_effect"
+        end
+        return result, nil
     end
 
     -- 将冻结配装转换为只含实例初值的参数，原生层不再解析枪械或工具配置。

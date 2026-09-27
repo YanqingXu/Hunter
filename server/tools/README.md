@@ -79,7 +79,7 @@ Hunter 契约；Runtime 身份包含预算成本模型、标准库和 VM 实现�
 生产程序以 `--bundle <game.luxb> --policy <policy.json>` 启动；不提供 policy、签名不符、
 身份不符或 Bundle 损坏都必须失败。测试公钥只用于测试，不能复制成发行公钥。
 宿主还将 policy 的 Host、capability、state、effect 摘要与编译时契约核对，旧 Bundle 和旧
-policy 即使彼此匹配，也不能与当前 v7 Host 混用。内部状态为 v7，网络为 v5，内容为 v4。
+policy 即使彼此匹配，也不能与当前 v8 Host 混用。内部状态为 v8，网络为 v6，内容为 v5。
 
 ## 发布失败与恢复边界
 

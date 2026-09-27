@@ -69,7 +69,7 @@ struct Game
     Game(const hunter::Cfg& cfg, Json data) : content(std::move(data))
     {
         const auto output = take(script.open(hunter::test_cfg(cfg, content),
-            Json{{"v", 7}, {"snapshot_every", 3}}.dump()));
+            Json{{"v", 8}, {"snapshot_every", 3}}.dump()));
         check(output.empty(), "init must not send network output");
     }
 
@@ -102,7 +102,7 @@ struct Game
             payload["world_id"] = std::to_string(next);
         }
 
-        payload["v"] = 7;
+        payload["v"] = 8;
         return take(script.event(id, payload.dump()));
     }
 

@@ -6,6 +6,9 @@ return function(deps)
     local projectile = deps["game.projectile"]
     local state = deps["framework.state"]
     local inventory = deps["game.inventory"]
+    local hunt = deps["game.hunt"]
+    local scene_api = deps["game.scene"]
+    local exploration = deps["game.exploration"]
     local api = {}
 
     -- 切换持有物清空旧射击和装填意图，不把被取消的动作带到新槽位。
@@ -26,15 +29,7 @@ return function(deps)
 
     -- 对当前场景矩形做服务端距离检查，交互不能隔着实心物到达。
     local function reachable(player, scene, content)
-        local x = Entity.get_x(player.pose)
-        local y = Entity.get_y(player.pose)
-        local px = math.max(scene.x, math.min(scene.x + scene.w, x))
-        local py = math.max(scene.y, math.min(scene.y + scene.h, y))
-        local dx = px - x
-        local dy = py - y
-        local radius = content.bag.pickup_radius
-        return dx * dx + dy * dy <= radius * radius
-            and combat.clear_path(movement.solids(content), x, y, px, py)
+        return scene_api.reachable(player, scene, content)
     end
 
     -- 补给先形成完整候选，再一次消耗箱子，不能增加任何可结算背包物品。
@@ -120,16 +115,35 @@ return function(deps)
     end
 
     -- 场景身份来自只读清单，原生索引保存本局消耗状态。
-    local function interact(world, content, player, target)
+    local function interact(world, content, player, target, finished)
         for index, scene in ipairs(content.scenes) do
             if scene.id == target then
                 if not reachable(player, scene, content) then
                     return "out_of_range"
                 end
+                if scene.kind == "barrel" or scene.kind == "cover" then
+                    return "invalid_target"
+                end
+                if (scene.kind == "supply" or scene.kind == "clue")
+                    and World.scene_used(world, index) then
+                    return "already_used"
+                end
+                if not finished and scene.interaction ~= false
+                    and scene.interaction.mode == "channel" then
+                    if Player.get_use_slot(player.controls) ~= 0 then
+                        return "action_locked"
+                    end
+                    if not World.scene_begin(world, index, scene.interaction.hold_ticks) then
+                        return "interaction_busy"
+                    end
+                    return nil
+                end
                 if scene.kind == "ladder" then
                     return ladder(player, scene, content)
                 elseif scene.kind == "supply" then
                     return supply(world, content, player, index)
+                elseif scene.kind == "clue" then
+                    return exploration.clue(world, content, index)
                 end
                 return "invalid_target"
             end
@@ -192,12 +206,28 @@ return function(deps)
             return "invalid_state"
         end
         local player = world_api.find(world, World.find_player(world, World.get_player_id(world)))
-        if player == nil or not Unit.get_alive(player.health) then
+        if player == nil then
             return "invalid_state"
         end
         local input = player.controls
         if req.kind == "abandon" then
             World.finish(world, "Abandoned")
+            return nil
+        elseif req.kind == "revive" then
+            return hunt.revive(world, content, player, req.death_seq)
+        elseif not Unit.get_alive(player.health) then
+            return "invalid_state"
+        elseif req.kind == "vision_off" then
+            Player.set_vision(input, false)
+            return nil
+        elseif Player.get_vision(input) then
+            return "action_locked"
+        elseif req.kind == "vision_on" then
+            if Player.get_ladder_id(input) ~= 0 then
+                return "action_locked"
+            end
+            Player.set_vision(input, true)
+            World.scene_cancel(world)
             return nil
         elseif Player.get_ladder_id(input) ~= 0 then
             return "action_locked"
@@ -209,9 +239,14 @@ return function(deps)
             if not Player.switch_weapon(input, req.slot) then
                 return "invalid_slot"
             end
+            World.scene_cancel(world)
             return nil
         elseif req.kind == "select_tool" then
-            return select_tool(player, req.slot)
+            local error = select_tool(player, req.slot)
+            if error == nil then
+                World.scene_cancel(world)
+            end
+            return error
         elseif req.kind == "use" then
             return use(player, content, req.slot)
         elseif req.kind == "melee" then
@@ -232,6 +267,7 @@ return function(deps)
             Player.set_fire_once(input, false)
             Player.set_weapon_reload_ticks(input, Player.get_active_weapon(input), 0)
             Player.set_reload(input, false)
+            World.scene_cancel(world)
             return nil
         end
         return "invalid_request"
@@ -239,6 +275,9 @@ return function(deps)
 
     -- 怪物攻击之后取消伤亡使用；仍有效的读条到期才提交效果与次数。
     function api.finish(world, content, player)
+        scene_api.finish(world, content, player, function(target)
+            return interact(world, content, player, target, true)
+        end)
         local input = player.controls
         local slot = Player.get_use_slot(input)
         if slot == 0 then

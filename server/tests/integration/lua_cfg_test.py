@@ -125,7 +125,7 @@ def measure(args, artifact, expected, content):
     server = Server(options)
     try:
         ready = server.start()
-        assert ready["content_version"] == "gameplay-v4:" + digest(content)
+        assert ready["content_version"] == "gameplay-v5:" + digest(content)
         conn = server.connect()
         initial = enter_game(conn)
         conn.sendall(input_frame(1, -1, match=initial[4], world=initial[7]))

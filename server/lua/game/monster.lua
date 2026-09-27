@@ -18,6 +18,7 @@ return function(deps)
         local value = unit.view(id)
         value.ai = Monster.find(id)
         value.spawn_id = Monster.get_spawn_id(value.ai)
+        value.owner_id = Monster.get_owner_id(value.ai)
         return value
     end
 
@@ -25,7 +26,8 @@ return function(deps)
     function api.activate(value, content)
         assert(Monster.get_state(value.ai) == "spawn", "monster already spawned")
         local spawn = api.spawn_cfg(content, value.spawn_id)
-        assert(spawn ~= nil and spawn.cfg_id == value.cfg_id, "invalid monster spawn")
+        assert(spawn ~= nil and (spawn.cfg_id == value.cfg_id or value.owner_id ~= "0"),
+            "invalid monster spawn")
         Entity.set_facing(value.pose, spawn.x == spawn.patrol_max and -1 or 1)
         Monster.set_state(value.ai, "patrol")
     end

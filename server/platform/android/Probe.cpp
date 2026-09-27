@@ -41,7 +41,7 @@ int main(int argc, char** argv)
     cfg.bundle_path = argv[1];
     cfg.policy_path = argv[2];
     hunter::Script script;
-    const nlohmann::json ctx = {{"v", 7}, {"snapshot_every", 3}};
+    const nlohmann::json ctx = {{"v", 8}, {"snapshot_every", 3}};
     auto opened = script.open(cfg, ctx.dump());
     if (!opened)
     {
@@ -50,9 +50,9 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    auto login = script.event(2, R"({"v":7,"req_id":"login","player_id":"1"})");
+    auto login = script.event(2, R"({"v":8,"req_id":"login","player_id":"1"})");
     auto start = login ? script.event(3,
-        R"({"v":7,"req_id":"start","after_match_id":"0","match_id":"1","world_id":"1"})") : login;
+        R"({"v":8,"req_id":"start","after_match_id":"0","match_id":"1","world_id":"1"})") : login;
 
     if (!login || !start)
     {

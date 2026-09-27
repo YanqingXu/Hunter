@@ -53,7 +53,7 @@ return function(deps)
     -- 以原表主键顺序筛选父记录的子项。
     local function children(tables, name, field, key)
         local result = json.array({})
-        for _, pair in ipairs(rows(tables[name])) do
+        for _, pair in ipairs(rows(tables[name] or {})) do
             if pair[2][field] == key then
                 result[#result + 1] = pair[2]
             end
@@ -68,6 +68,141 @@ return function(deps)
             target[key] = value
         end
         return target
+    end
+
+    -- 免费价格显式写零；付费价格必须包含货币 ID 和正整数数量。
+    local function price(text)
+        assert(type(text) == "string", "recruit price is required")
+        if text == "0" then
+            return {currency_id = "0", amount = 0}
+        end
+        local id, amount = string.match(text, "^([1-9][0-9]*):([1-9][0-9]*)$")
+        assert(id and amount and #id <= 10 and #amount <= 10, "invalid recruit price")
+        local count = integer.create(tonumber(amount))
+        assert(count and count <= 2147483647 and tonumber(id) <= 2147483647,
+            "recruit price overflow")
+        return {currency_id = id, amount = count}
+    end
+
+    -- 新机制仅从显式选中表投影，缺少关联和参数直接阻止发布。
+    local function additions(tables, doc)
+        doc.skills, doc.abilities = json.object({}), json.object({})
+        doc.encounter, doc.legacy_ai, doc.career, doc.exploration = false, false, false, false
+        if tables.Skill ~= nil then
+            assert(tables.SkillEffect ~= nil, "selected skills require SkillEffect")
+            for _, pair in ipairs(rows(tables.Skill)) do
+                local value = pair[2]
+                local cfg = pick(value, {name = "Name", target = "Target", category = "Category",
+                    kind = "Lifetime", cost = "Cost"})
+                cfg.effects = json.array({})
+                for _, effect in ipairs(children(tables, "SkillEffect", "SkillIdx", pair[1])) do
+                    cfg.effects[#cfg.effects + 1] = pick(effect,
+                        {stat = "Stat", op = "Op", value = "Value"})
+                end
+                doc.skills[tostring(pair[1])] = cfg
+            end
+        end
+        for _, pair in ipairs(rows(tables.SkillEffect or {})) do
+            row(tables, "Skill", pair[2].SkillIdx)
+        end
+        for _, pair in ipairs(rows(tables.Ability or {})) do
+            local value = pair[2]
+            local cfg = pick(value, {kind = "Kind", range = "Range", damage = "Damage",
+                windup = "WindupTicks", recover = "RecoveryTicks", cooldown = "CooldownTicks",
+                despawn_ticks = "DespawnTicks"})
+            cfg.summon_cfg_id = tostring(value.SummonMonsterIdx)
+            doc.abilities[tostring(pair[1])] = cfg
+        end
+        for _, pair in ipairs(rows(tables.MonsterAi or {})) do
+            local value = pair[2]
+            local monster = assert(doc.monsters[tostring(value.MonsterIdx)],
+                "AI references unselected monster")
+            assert(monster.ai == false, "duplicate monster AI")
+            local cfg = pick(value, {alert_speed = "AlertSpeed", disengage_ticks = "DisengageTicks",
+                damage_reduction_bp = "DamageReductionBp", rage_ticks = "RageTicks"})
+            assert(value.Basic == 0 or value.Basic == 1, "invalid AI Basic")
+            cfg.basic, cfg.abilities = value.Basic == 1, json.array({})
+            cfg.rage_thresholds = value.RageThresholds == "" and json.array({})
+                or numbers(value.RageThresholds)
+            cfg.rage_ability_id = tostring(value.RageAbilityIdx)
+            for _, bind in ipairs(children(tables, "MonsterAbility", "MonsterIdx",
+                value.MonsterIdx)) do
+                cfg.abilities[#cfg.abilities + 1] = {cfg_id = tostring(bind.AbilityIdx),
+                    phase = bind.Phase, priority = bind.Priority}
+            end
+            monster.ai = cfg
+        end
+        for _, pair in ipairs(rows(tables.MonsterAbility or {})) do
+            local monster = assert(doc.monsters[tostring(pair[2].MonsterIdx)],
+                "ability binding references unselected monster")
+            assert(monster.ai ~= false, "ability binding requires explicit monster AI")
+        end
+        if tables.Encounter ~= nil then
+            assert(#rows(tables.Encounter) == 1, "exactly one Encounter is required")
+            local value = row(tables, "Encounter", 1)
+            assert(value.MapIdx == 2, "Encounter must belong to selected map")
+            local cfg = {bounty_cfg_id = tostring(value.BountyItemIdx),
+                alert_scale_bp = value.AlertScaleBp, second_wave = json.array({})}
+            for _, id in ipairs(numbers(value.SecondWave)) do
+                cfg.second_wave[#cfg.second_wave + 1] = tostring(id)
+            end
+            doc.encounter = cfg
+        end
+        local scenes = {}
+        for _, scene in ipairs(doc.scenes) do
+            scenes[scene.id] = scene
+        end
+        for _, pair in ipairs(rows(tables.SceneAction or {})) do
+            local value = pair[2]
+            local scene = assert(scenes[tostring(value.SceneIdx)], "unknown action scene")
+            assert(scene.interaction == false, "duplicate scene action")
+            scene.interaction = pick(value, {mode = "Mode", hold_ticks = "HoldTicks"})
+        end
+        for _, pair in ipairs(rows(tables.Barrel or {})) do
+            local value = pair[2]
+            local scene = assert(scenes[tostring(value.SceneIdx)], "unknown barrel scene")
+            assert(scene.barrel == false, "duplicate barrel scene")
+            scene.barrel = pick(value, {hp = "Hp", fuse_ticks = "FuseTicks",
+                radius = "Radius", damage = "Damage"})
+        end
+        if tables.Region ~= nil then
+            doc.exploration = {regions = json.array({})}
+            for _, pair in ipairs(rows(tables.Region)) do
+                local value = pair[2]
+                local cfg = pick(value, {x = "X", y = "Y", w = "W", h = "H"})
+                cfg.id = tostring(pair[1])
+                cfg.boss_spawns, cfg.clues = json.array({}), json.array({})
+                for _, id in ipairs(numbers(value.BossSpawns)) do
+                    cfg.boss_spawns[#cfg.boss_spawns + 1] = tostring(id)
+                end
+                for _, id in ipairs(numbers(value.Clues)) do
+                    cfg.clues[#cfg.clues + 1] = tostring(id)
+                end
+                doc.exploration.regions[#doc.exploration.regions + 1] = cfg
+            end
+        end
+        if tables.Career ~= nil then
+            assert(#rows(tables.Career) == 1, "exactly one Career row is required")
+            local value = row(tables, "Career", 1)
+            local cfg = pick(value, {extract_xp = "ExtractXp", bounty_xp = "BountyXp",
+                bounty_currency = "BountyCurrency", retire_xp = "RetireXp"})
+            cfg.levels, cfg.kill_xp = json.array({}), json.object({})
+            assert(tables.CareerLevel ~= nil and tables.KillXp ~= nil,
+                "career requires explicit levels and kill rewards")
+            for index, pair in ipairs(rows(tables.CareerLevel)) do
+                assert(pair[1] == index, "career level IDs must be consecutive from one")
+                cfg.levels[#cfg.levels + 1] = pair[2].Xp
+            end
+            for _, pair in ipairs(rows(tables.KillXp)) do
+                local key = tostring(pair[2].MonsterIdx)
+                assert(cfg.kill_xp[key] == nil, "duplicate kill XP")
+                cfg.kill_xp[key] = pair[2].Xp
+            end
+            doc.career = cfg
+        else
+            assert(tables.CareerLevel == nil and tables.KillXp == nil,
+                "career data requires selected Career rules")
+        end
     end
 
     -- 从十九张选中源表建立单位、默认弹药和实体引用明确的内容模型。
@@ -88,7 +223,7 @@ return function(deps)
         end
         local source = row(tables, "Map", 2)
         assert(source.Mode == 2, "Map[2]: extraction mode required")
-        local doc = {v = 4, tick_hz = 60, players = json.object({}),
+        local doc = {v = 5, tick_hz = 60, players = json.object({}),
             weapons = json.object({}), ammo = json.object({}), monsters = json.object({}),
             tools = json.object({}), items = json.object({})}
         local player_fields = {width = "Width", height = "Height", hp = "Hp", speed = "Speed",
@@ -96,15 +231,17 @@ return function(deps)
             prone_width = "ProneWidth", prone_height = "ProneHeight", stamina = "Stamina",
             stamina_delay = "StaminaDelay", stamina_rate = "StaminaRate", run_cost = "RunCost",
             jump_cost = "JumpCost", health_delay = "HealthDelay", health_rate = "HealthRate",
-            weight = "EquipmentLimit"}
+            weight = "EquipmentLimit", skill_points = "SkillPoints"}
         for _, pair in ipairs(rows(tables.Player)) do
             local cfg = pick(pair[2], player_fields)
             cfg.hp_segments = numbers(pair[2].HPSetting)
+            cfg.recruit_cost = price(pair[2].Cost)
             doc.players[tostring(pair[1])] = cfg
         end
         for _, pair in ipairs(rows(tables.Item)) do
             doc.items[tostring(pair[1])] = pick(pair[2], {name = "Name",
                 max_stack = "MaxStack", kind = "Kind", type = "Type"})
+            doc.items[tostring(pair[1])].skill_cfg_id = tostring(pair[2].SkillIdx or 0)
         end
         for _, pair in ipairs(rows(tables.Ammunition)) do
             local value = pair[2]
@@ -131,6 +268,9 @@ return function(deps)
             assert(row(tables, "Item", pair[2].ItemIdx).Kind == 2,
                 "Equip: gun must reference a gun item")
             row(tables, "Weapon", pair[2].WeaponIdx)
+            local cfg = doc.weapons[tostring(pair[2].WeaponIdx)]
+            assert(cfg.item_cfg_id == nil, "weapon requires exactly one equipment item")
+            cfg.item_cfg_id = tostring(pair[2].ItemIdx)
         end
         doc.rules = pick(row(tables, "Rules", 1), {weapon_slots = "WeaponSlots",
             tool_slots = "ToolSlots", consumable_slots = "ConsumableSlots",
@@ -164,6 +304,7 @@ return function(deps)
             merge(cfg, pick(attack, {attack_range = "Range", damage = "Damage",
                 attack_ticks = "CooldownTicks", windup = "WindupTicks", recover = "RecoveryTicks"}))
             cfg.drops = json.array({})
+            cfg.ai = false
             for _, entry in ipairs(children(tables, "DropEntry", "DropIdx", value.DropIdx)) do
                 assert(row(tables, "Item", entry.ItemIdx).Kind == 5,
                     "only extraction loot may drop")
@@ -206,6 +347,7 @@ return function(deps)
             assert(value.Penetrable == 0 or value.Penetrable == 1, "invalid Scene.Penetrable")
             local cfg = pick(value, {kind = "Kind", x = "X", y = "Y", w = "W", h = "H"})
             cfg.id, cfg.penetrable = tostring(value.SceneIdx), value.Penetrable == 1
+            cfg.interaction, cfg.barrel = false, false
             doc.scenes[#doc.scenes + 1] = cfg
             scene_kinds[cfg.kind] = true
         end
@@ -224,6 +366,8 @@ return function(deps)
         local player = doc.players[doc.default_loadout.player_cfg_id]
         assert(player, "default player not selected")
         doc.default_loadout.hp_segments = player.hp_segments
+        doc.default_loadout.skills = json.array({})
+        additions(tables, doc)
         return doc
     end
 

@@ -3,30 +3,13 @@ return function(deps)
     local world_api = deps["game.world"]
     local movement = deps["game.movement"]
     local combat = deps["game.combat"]
-    local damage = deps["game.damage"]
+    local scene_api = deps["game.scene"]
     local api = {}
 
-    -- 按最近身体点判定半径，实心地图和掩体遮挡爆炸，不伤害玩家或破坏场景。
+    -- 最近身体点参与爆炸半径和遮挡判定，投掷者免疫直属爆炸，桶另行连锁。
     local function explode(world, content, cfg, x, y)
         local source_id = World.find_player(world, World.get_player_id(world))
-        local solids = movement.solids(content)
-        world_api.emit(world, "explosion", source_id, "0", x, y, cfg.radius)
-        for _, id in ipairs(world_api.ids(world)) do
-            local enemy = world_api.find(world, id)
-            if enemy ~= nil and enemy.kind == "monster" and Unit.get_alive(enemy.health) then
-                local shape = movement.shape(enemy, content)
-                local ex = Entity.get_x(enemy.pose)
-                local ey = Entity.get_y(enemy.pose)
-                local px = math.max(ex - shape.width // 2, math.min(ex + shape.width // 2, x))
-                local py = math.max(ey, math.min(ey + shape.height, y))
-                local dx = px - x
-                local dy = py - y
-                if dx * dx + dy * dy <= cfg.radius * cfg.radius
-                    and combat.clear_path(solids, x, y, px, py) then
-                    damage.hit(world, source_id, enemy, cfg.damage)
-                end
-            end
-        end
+        scene_api.blast(world, content, source_id, x, y, cfg.radius, cfg.damage, false)
     end
 
     -- 查找这一段路径的首个实心物或存活怪物，地图边界同样触发爆炸。
@@ -56,6 +39,14 @@ return function(deps)
                 if at ~= nil then
                     nearest = at
                     hit = true
+                end
+            end
+        end
+        for index, cfg in ipairs(content.scenes) do
+            if cfg.barrel ~= false and not World.barrel_exploded(world, index) then
+                local at = combat.ray(x, y, dx, dy, nearest, cfg.x, cfg.y, cfg.w, cfg.h)
+                if at ~= nil then
+                    nearest, hit = at, true
                 end
             end
         end

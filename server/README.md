@@ -3,17 +3,24 @@
 技术栈为 **C++23 / Standalone Asio 1.36.0 / Luax / Protobuf / CMake**。
 构建显式定义 `ASIO_STANDALONE`，使用独立 Asio 头文件，不依赖 Boost。
 
-当前实现 Windows 单人验证玩法：免费配装、分段回血与体力、走跑匍匐、双枪与穿透、
-医疗和炸药、梯子与补给；复用 Boss、掉落背包、撤离读条、SQLite 结算和重启查询。
+当前增量 [SRV-014](intents/usecases/hunt.intent.md) 接入怪物能力、狂暴与召唤、玩家天赋和
+手动复活、赏金第二波、区域线索与特殊视角、场景读条和炸药桶，以及 SQLite V2 永久猎人。
+保留分段回血与体力、走跑匍匐、双枪与穿透、医疗、投掷、梯子、补给和幂等结算。
 C++ 持有唯一世界、物品和计时状态，Luax 编写玩法规则；热更新、Unity 与 Android Service
-属于独立后续工作。仅接纳一个客户端、一名玩家和一个活动世界，不提供永久物品携入或交易。
+属于独立后续工作。仅接纳一个客户端、一名玩家和一个活动世界。永久出战使用持有资产；
+免费配装必须显式 `test_mode=true`，命令行测试客户端的普通 start 会补上该标志。
 Entity/Unit/Player/Monster/Item/Weapon/World 各有 C++ 类及同名小写 Lua 模块；
 实体按 ID 管理，玩家输入和枪械状态与怪物 AI 分离，支持不同配置怪物共存。
 正式内容从 [根目录 Excel 与显式来源清单](../design/DEMO内容说明.md) 生成；
 旧首版 Excel 和灰盒 JSON 仅用于回归。
 设计见 [规划](plan.md)，契约见 [intents](intents/README.md)，实际结果见 [验证记录](VERIFICATION.md)。
 
-当前增量 [SRV-013](intents/modules/cfg.intent.md) 已完成 Windows 实现与验证：源表导出独立 Lua，
+协议为 v6、内容为 v5、Host／内部状态为 v8、SQLite 为 V2。实现与验证状态见
+[本轮任务表](V1_HUNT_TASKS.md)，永久接口见 [猎人接口](HUNTER_API.md)。新技能、怪物能力、
+区域和经济数值仍须策划完整填写并显式选入；正式内容保持原 19 张表，`career=false` 时
+允许免费招募、查询，但拒绝永久出战及退役。独立机制夹具不作为生产数值。
+
+此前 [SRV-013](intents/modules/cfg.intent.md) 已完成 Windows 实现与验证：源表导出独立 Lua，
 由 Lua 加载配置、解析关联并决定配装、拾取、消耗、掉落和状态语义。C++ 保留权威状态、
 网络、存储及有界原子修改接口，不再持有完整配置文档。本轮任务与实际进度见
 [Lua 配置迁移记录](V1_LUA_CFG_TASKS.md)。开发完整回归 32/32、Bundle 31/31，两种联调包
@@ -68,7 +75,8 @@ stdin 每行一个 JSON 对象；`req_id` 为非空字符串，最多 128 字节
 
 Start 成功返回 `type=Ready`，包含 `port/instance/token/protocol_version/content_version`。
 Ready 之前必须完成存档打开和玩家加载；省略 `--save` 使用 `%LOCALAPPDATA%/Hunter/save.sqlite`。
-首次启动创建 SQLite V1，损坏、陌生版本、不可写路径返回失败，禁止自动清档。
+首次启动创建 SQLite V2；旧 V1 在事务中迁移并保留 UID、局号高水位和历史结果原文。
+损坏、陌生版本、不可写路径返回失败，禁止自动清档。
 后续控制返回 `Rsp` 或 `Error`，关联原始 `req_id`。错误与状态的精确定义见
 [宿主契约](intents/architecture/host.intent.md)。一个进程承载一次服务实例，Stop 后退出；
 重复 Start 在 Ready 状态返回同一个实例。标准输入 EOF、输出管道断开也触发收尾。
@@ -78,7 +86,7 @@ Ready 之前必须完成存档打开和玩家加载；省略 `--save` 使用 `%L
 客户端连接 `127.0.0.1:<port>`；每帧为四字节大端正文长度加 Protobuf `hunter.wire.Envelope`。
 第一次消息必须为 Hello，逐项回传 Ready 的版本、实例和令牌，5 秒内完成握手。
 正式定义位于根目录 `protobuf/hunter.proto`，不能另建私有协议来源。
-网络协议为 v5，Host 契约、上下文和内部状态为 v7，内容为 v4，SQLite 仍为 V1。
+网络协议为 v6，Host 契约、上下文和内部状态为 v8，内容为 v5，SQLite 为 V2。
 旧协议客户端和旧内部状态拒绝接入／导入，不提供状态迁移；客户端仍按 `kind/cfg_id` 选择配置。
 
 Hello 后发送 LoginReq，再发送 StartReq。首个 StartReq 的 after_match_id 为 0，后续使用
@@ -286,7 +294,7 @@ ctest --preset win-dev -R hunter_storage
 `hunter_storage_contract` 覆盖事务、重启、容量和线程；`hunter_storage_crash_integration`
 由父进程在精确事务检查点强杀并重新读取，同时验证真实 SQLITE_FULL 回滚。
 注入点只编译到测试专用 `hunter_storage_fault`，正式库没有故障开关。
-Runtime 已接入启动读档、持久对局 ID、冻结奖励与网络查询。SQLite V1 仍限定一局一名玩家。
+Runtime 已接入启动读档、持久对局 ID、冻结奖励与网络查询。SQLite V2 仍限定一局一名玩家。
 `hunter_runtime_fault` 只供测试，在相同桌面 Runtime／TCP 链路注入事务检查点，不能发行。
 
 ## Android 探针与后续边界

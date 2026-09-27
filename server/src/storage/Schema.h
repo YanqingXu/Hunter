@@ -7,7 +7,7 @@
 namespace hunter::storage
 {
 
-// 检查已有结构和完整性，配置 WAL/FULL 后仅对空库执行原子初始化。
+// 检查已有结构和完整性，配置 WAL/FULL 后原子初始化或将完整 V1 增量迁移至 V2。
 void open_schema(Db& db);
 
 // 返回持久化使用的系统时钟毫秒，不参与模拟或超时判断。

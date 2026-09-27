@@ -3,11 +3,42 @@ return function(deps)
     local state = deps["framework.state"]
     local api = {}
 
+    -- 历史夹具显式保留旧 AI，生产表不经过本升级路径。
+    local function version_five(doc)
+        doc.v = 5
+        doc.skills, doc.abilities = json.object({}), json.object({})
+        doc.encounter, doc.legacy_ai, doc.career, doc.exploration = false, true, false, false
+        doc.default_loadout.skills = json.array({})
+        for _, cfg in pairs(doc.players) do
+            cfg.skill_points = 0
+            cfg.recruit_cost = {currency_id = "0", amount = 0}
+        end
+        for _, cfg in pairs(doc.monsters) do
+            cfg.ai = false
+        end
+        for id, cfg in pairs(doc.weapons) do
+            cfg.item_cfg_id = tostring(10000 + integer.create(tonumber(id)))
+            if doc.items[cfg.item_cfg_id] == nil then
+                doc.items[cfg.item_cfg_id] = {name = "回归枪械", max_stack = 1, kind = 2, type = 1}
+            end
+        end
+        for _, cfg in pairs(doc.items) do
+            cfg.skill_cfg_id = "0"
+        end
+        for _, cfg in ipairs(doc.scenes) do
+            cfg.interaction, cfg.barrel = false, false
+        end
+        return doc
+    end
+
     -- 旧版本仅保留历史地图与战斗数值，补充当前契约要求的测试字段。
     function api.upgrade(source)
         local doc = json.decode(json.encode(source))
-        if doc.v == 4 then
+        if doc.v == 5 then
             return doc
+        end
+        if doc.v == 4 then
+            return version_five(doc)
         end
         assert(doc.v == 3, "unsupported fixture content version")
         assert(state.fields(doc, {"v", "tick_hz", "map", "players", "weapons", "monsters"}),
@@ -47,7 +78,7 @@ return function(deps)
             weapons = json.array({spawn.weapon_cfg_id}), ammo = json.array({spawn.weapon_cfg_id}),
             tools = json.array({}), consumables = json.array({}),
             hp_segments = doc.players[spawn.cfg_id].hp_segments}
-        return doc
+        return version_five(doc)
     end
 
     return api

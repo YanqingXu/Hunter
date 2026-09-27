@@ -5,6 +5,8 @@ return function(deps)
     local world_api = deps["game.world"]
     local monster_api = deps["game.monster"]
     local damage = deps["game.damage"]
+    local ability = deps["game.ability"]
+    local encounter = deps["game.encounter"]
     local api = {}
 
     -- 巡逻在端点前缩短步长，区外对象逐步返回巡逻区间。
@@ -37,6 +39,7 @@ return function(deps)
         local player = world_api.target(world, "monster")
         local px, py = Unit.read_motion(player.motion)
         local player_alive = Unit.get_alive(player.health)
+        local targetable = player_alive and Player.get_quiet_ticks(player.controls) == 0
         local player_cfg = movement.shape(player, content)
         for _, id in ipairs(world_api.ids(world)) do
             local enemy = world_api.find(world, id)
@@ -48,8 +51,21 @@ return function(deps)
                 if alive then
                     local cfg = content.monsters[enemy.cfg_id]
                     local spawn = monster_api.spawn_cfg(content, enemy.spawn_id)
+                    if not content.legacy_ai then
+                        encounter.sense(world, content, enemy, player, targetable)
+                    end
+                    if cfg.ai then
+                        ability.tick(enemy, cfg)
+                    end
+                    local aware = content.legacy_ai and targetable
+                        or (not content.legacy_ai and Monster.get_aware(enemy.ai))
+                    local speed = cfg.speed
+                    if cfg.ai and aware and (cfg.rank ~= 3
+                        or Monster.get_rage_ticks(enemy.ai) > 0) then
+                        speed = cfg.ai.alert_speed
+                    end
                     local direction = facing
-                    local distance = cfg.speed
+                    local distance = speed
                     local attack_ticks = Monster.get_attack_ticks(enemy.ai)
                     if attack_ticks > 0 then
                         Monster.set_attack_ticks(enemy.ai, attack_ticks - 1)
@@ -58,20 +74,28 @@ return function(deps)
                     local windup = cfg.windup or 0
                     local recover = cfg.recover or 0
                     local remaining = Monster.get_attack_ticks(enemy.ai)
-                    if windup > 0 and remaining > cfg.attack_ticks - windup - recover then
+                    if Monster.get_ability_phase(enemy.ai) ~= "idle" then
+                        state = Monster.get_ability_phase(enemy.ai)
+                        direction = 0
+                    elseif windup > 0 and remaining > cfg.attack_ticks - windup - recover then
                         state = remaining >= cfg.attack_ticks - windup and "windup" or "recover"
                         direction = 0
-                    elseif player_alive and can_attack(x, y, px, py, cfg, player_cfg, content) then
+                    elseif targetable and (not cfg.ai or cfg.ai.basic)
+                        and can_attack(x, y, px, py, cfg, player_cfg, content) then
                         state = "attack"
                         facing = px >= x and 1 or -1
                         direction = 0
-                    elseif player_alive and math.abs(px - x) <= cfg.detect_range
-                        and math.abs(py - y) <= cfg.detect_range then
+                    elseif targetable and ((content.legacy_ai
+                        and math.abs(px - x) <= cfg.detect_range
+                        and math.abs(py - y) <= cfg.detect_range)
+                        or (not content.legacy_ai and aware)) then
                         state = "chase"
                         direction = px == x and 0 or (px > x and 1 or -1)
-                        distance = math.min(cfg.speed, math.abs(px - x))
+                        distance = math.min(speed, math.abs(px - x))
+                    elseif cfg.rank == 3 and not content.legacy_ai then
+                        direction = 0
                     else
-                        direction, distance = patrol_move(x, facing, spawn, cfg.speed)
+                        direction, distance = patrol_move(x, facing, spawn, speed)
                     end
                     Monster.set_state(enemy.ai, state)
                     if direction ~= 0 and grounded and not movement.supported(enemy, cfg,
@@ -80,7 +104,9 @@ return function(deps)
                         direction = 0
                     end
                     Entity.set_facing(enemy.pose, facing)
-                    local moved = movement.step(enemy, cfg, content, direction, false, distance)
+                    local motion = {width = cfg.width, height = cfg.height, speed = speed,
+                        jump_speed = 0}
+                    local moved = movement.step(enemy, motion, content, direction, false, distance)
                     if direction ~= 0 and moved == 0 then
                         Entity.set_facing(enemy.pose, -direction)
                     elseif state == "patrol" and moved ~= 0 then
@@ -95,12 +121,9 @@ return function(deps)
         end
     end
 
-    -- 玩家射击之后才执行仍然存活的怪物近战，玩家死亡后停止后续攻击。
+    -- 玩家射击后推进怪物动作；等待复活仍推进旧施法，但不能获取死亡目标。
     function api.attack(world, content)
         local player = world_api.target(world, "monster")
-        if not Unit.get_alive(player.health) then
-            return
-        end
         local px, py = Unit.read_motion(player.motion)
         local player_cfg = movement.shape(player, content)
         for _, id in ipairs(world_api.ids(world)) do
@@ -108,24 +131,29 @@ return function(deps)
             if enemy ~= nil and enemy.kind == "monster" then
                 local x, y, vx, vy, grounded, facing, alive = Unit.read_motion(enemy.motion)
                 if alive then
+                    local targetable = Unit.get_alive(player.health)
+                        and Player.get_quiet_ticks(player.controls) == 0
                     local cfg = content.monsters[enemy.cfg_id]
+                    local forced = encounter.rage(world, enemy, cfg)
+                    local used = cfg.ai
+                        and ability.step(world, content, enemy, player, forced, targetable)
+                    local basic = not cfg.ai or cfg.ai.basic
                     local remaining = Monster.get_attack_ticks(enemy.ai)
                     local windup = cfg.windup or 0
                     local hit = false
-                    if remaining == 0 and can_attack(x, y, px, py, cfg, player_cfg, content) then
+                    if not used and basic and targetable and remaining == 0
+                        and can_attack(x, y, px, py, cfg, player_cfg, content) then
                         Monster.set_state(enemy.ai, windup > 0 and "windup" or "attack")
                         Monster.set_attack_ticks(enemy.ai, cfg.attack_ticks)
                         hit = windup == 0
-                    elseif windup > 0 and remaining == cfg.attack_ticks - windup then
+                    elseif not used and basic and Unit.get_alive(player.health) and windup > 0
+                        and remaining == cfg.attack_ticks - windup then
                         Monster.set_state(enemy.ai, "recover")
                         hit = can_attack(x, y, px, py, cfg, player_cfg, content)
                     end
 
                     if hit then
                         damage.apply(world, enemy, player, cfg.damage)
-                        if not Unit.get_alive(player.health) then
-                            return
-                        end
                     end
                 end
             end

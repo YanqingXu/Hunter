@@ -5,6 +5,9 @@ return function(deps)
 
     -- 按出生实例查找 Boss 死亡条件，不把实体删除或普通怪清空当作成功。
     local function unlocked(world, point)
+        if not point.legacy_gate then
+            return true
+        end
         if point.boss_spawn_id == "0" then
             return true
         end
@@ -40,6 +43,9 @@ return function(deps)
         local player = world_api.find(world, World.find_player(world, World.get_player_id(world)))
         if not Unit.get_alive(player.health) then
             World.set_extract(world, 0, 0, "dead")
+            if Player.get_downed(player.controls) then
+                return
+            end
             World.finish(world, "Dead")
             return
         end

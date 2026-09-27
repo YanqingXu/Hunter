@@ -6,6 +6,7 @@
 #include "game/Monster.h"
 #include "game/Item.h"
 #include "game/Raid.h"
+#include "game/SceneState.h"
 #include "hunter.pb.h"
 #include <array>
 #include <optional>
@@ -73,9 +74,17 @@ public:
     wire::Loadout pending_loadout;
     wire::Loadout active_loadout;
     Arr<bool, 32> used_scenes{};
+    SceneState scene_state;
     Arr<Projectile, 16> projectiles{};
     u64 last_projectile_id = 0;
     u64 action_seq = 0;
+    i32 wave = 0;
+    u64 bounty_id = 0;
+    u64 hunter_id = 0;
+    i32 boss_region = 0;
+    i32 region_count = 0;
+    u32 boss_spawn = 0;
+    u32 excluded_regions = 0;
     u64 player_id = 0;
     u64 event_id = 0;
     Str phase = "Unauthenticated";
@@ -109,6 +118,33 @@ public:
 
     // 写入一基场景索引的已使用状态。
     void set_scene_used(i64 index, bool used);
+
+    // 开始唯一场景读条；已有读条时拒绝且不覆盖旧动作。
+    bool scene_begin(i64 index, i64 ticks);
+
+    // 取消当前场景读条，不改变场景使用状态。
+    void scene_cancel();
+
+    // 返回当前交互场景的一基索引，无交互时为零。
+    i64 scene_index() const;
+
+    // 返回当前场景交互的剩余 Tick。
+    i64 scene_ticks() const;
+
+    // 写入当前读条的有界剩余 Tick。
+    void scene_set_ticks(i64 ticks);
+
+    // 读取对应场景槽的炸药桶生命。
+    i64 barrel_hp(i64 index) const;
+
+    // 读取对应场景槽的炸药桶引信倒计时。
+    i64 barrel_fuse(i64 index) const;
+
+    // 查询对应炸药桶是否已经结算爆炸。
+    bool barrel_exploded(i64 index) const;
+
+    // 一次写入桶状态；已爆炸不能复位，已点燃不能重新加血。
+    bool barrel_write(i64 index, i64 hp, i64 fuse, bool exploded);
 
     // 返回可预留的投掷物容量。
     i64 projectile_free() const;
@@ -209,6 +245,39 @@ public:
     // 按 Lua 提供的初值创建实体，结构或容量拒绝不消费身份。
     Str spawn(const Str& kind, const Str& spec);
 
+    // 返回当前刷新波次，未开局为零。
+    i64 get_wave() const;
+
+    // 返回已经触发第二波的赏金实例身份。
+    Str get_bounty_id() const;
+
+    // 返回本次出战的永久猎人身份，免费模板返回零。
+    Str get_hunter_id() const;
+
+    // 完整校验赏金拾取及新怪物后原子发布第二波，拒绝不修改背包或实体身份。
+    Str commit_wave(const Str& batch, const Str& specs, const Str& bounty);
+
+    // 为存活召唤者创建唯一召唤物，容量或重复拒绝不消耗身份。
+    Str spawn_summon(const Str& owner, i64 ability_slot, const Str& spec);
+
+    // 在开局阶段登记随机选中的区域与出生模板，不保存完整地图配置。
+    void set_exploration(i64 region, const Str& spawn, i64 count);
+
+    // 返回服务端选中的 Boss 区域，仅供规则和状态校验使用。
+    i64 get_boss_region() const;
+
+    // 返回本局唯一 Boss 出生模板。
+    Str get_boss_spawn() const;
+
+    // 返回按配置区域顺序排列的已排除位图。
+    i64 get_excluded_regions() const;
+
+    // 在候选完整校验后原子消费线索和排除一个区域，拒绝不消耗随机数。
+    i64 reveal_region(i64 scene_index, const Str& candidates);
+
+    // 原子提交物品消费与技能获得，已有或已消费的同技能一律拒绝。
+    Str commit_skill(const Str& batch, const Str& skill);
+
     // 标记怪物移除，使其立即停止参与玩法。
     bool remove(const Str& id);
 
@@ -242,6 +311,9 @@ public:
 
     // 在独立候选完整校验后替换局内数据，旧对象句柄失效。
     void load(const Str& text);
+
+    // 只读检查候选结构，失败不替换活动对象或其句柄代次。
+    bool can_load(const Str& text) const;
 
     // 检查当前原生结构，不执行配置语义、不修复状态或发送消息。
     bool valid() const;

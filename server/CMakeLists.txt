@@ -49,7 +49,7 @@ function(hunter_target target)
 endfunction()
 
 set(HUNTER_STORAGE_SOURCES src/storage/Db.cpp src/storage/Schema.cpp
-    src/storage/Store.cpp src/storage/Storage.cpp)
+    src/storage/Store.cpp src/storage/Storage.cpp src/storage/HunterStore.cpp)
 add_library(hunter_storage STATIC ${HUNTER_STORAGE_SOURCES})
 hunter_target(hunter_storage)
 target_link_libraries(hunter_storage PUBLIC hunter_asio Threads::Threads
@@ -78,6 +78,7 @@ add_custom_command(OUTPUT "${HUNTER_GEN}/content.json" "${HUNTER_GEN}/ContentId.
         --cfg "${HUNTER_GEN}/cfg" --luax "${HUNTER_LUAX}"
     DEPENDS ../design/demo_sources.json ../design/角色表.xlsx ../design/武器表.xlsx
         ../design/道具表.xlsx ../design/怪物表.xlsx ../design/掉落表.xlsx ../design/地图表.xlsx
+        ../design/技能表.xlsx lua/game/skill.lua
         ../export/gameplay.py ../export/export.py tools/publish.py tools/assemble.py
         ${HUNTER_CFG_LUA} ${HUNTER_LUAX_DEP} VERBATIM)
 add_custom_target(hunter_content ALL DEPENDS
@@ -127,8 +128,10 @@ add_custom_command(OUTPUT "${HUNTER_GEN}/SchemaSpec.h"
     DEPENDS lua/contract.json tools/gen_schema.py VERBATIM)
 add_library(hunter_script STATIC src/common/Digest.cpp src/script/Script.cpp src/script/Async.cpp
     src/script/Objects.cpp src/game/Value.cpp src/game/Entity.cpp src/game/Unit.cpp
-    src/game/Player.cpp src/game/Monster.cpp src/game/Weapon.cpp src/game/Item.cpp
-    src/game/World.cpp src/game/Raid.cpp src/game/State.cpp src/game/Snapshot.cpp
+    src/game/Player.cpp src/game/PlayerHunt.cpp src/game/Monster.cpp src/game/Weapon.cpp src/game/Item.cpp
+    src/game/World.cpp src/game/Encounter.cpp
+    src/game/SceneState.cpp
+    src/game/Explore.cpp src/game/Raid.cpp src/game/State.cpp src/game/Snapshot.cpp
     src/script/Schema.cpp "${HUNTER_GEN}/SchemaSpec.h")
 add_dependencies(hunter_script hunter_content)
 hunter_target(hunter_script)

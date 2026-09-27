@@ -14,13 +14,18 @@ return function(deps)
     local cfg_api = deps["game.cfg"]
     local loadout_api = deps["game.loadout"]
     local statecheck = deps["game.statecheck"]
+    local hunt = deps["game.hunt"]
+    local damage = deps["game.damage"]
+    local encounter = deps["game.encounter"]
+    local career = deps["game.career"]
+    local scene = deps["game.scene"]
     local api = {}
     local world = nil
     local content = nil
 
     -- 发送统一业务拒绝，不把正常操作错误升级为脚本故障。
     local function reject(code, req_id, seq)
-        net.emit("error", json.encode({v = 5, code = code, detail = "",
+        net.emit("error", json.encode({v = 6, code = code, detail = "",
             req_id = req_id or "", seq = seq or "0", match_id = World.get_match_id(world)}))
     end
 
@@ -32,12 +37,12 @@ return function(deps)
 
     -- 本机令牌握手后显式建立玩家，重复登录保持同一身份和当前局。
     local function login(payload)
-        assert(state.fields(payload, {"v", "req_id", "player_id"}) and payload.v == 7
+        assert(state.fields(payload, {"v", "req_id", "player_id"}) and payload.v == 8
             and state.req(payload.req_id), "invalid login contract")
         if World.get_phase(world) == "Unauthenticated" then
             World.login(world, payload.player_id)
         end
-        net.emit("login", json.encode({v = 5, req_id = payload.req_id,
+        net.emit("login", json.encode({v = 6, req_id = payload.req_id,
             player_id = World.get_player_id(world), match_id = World.get_match_id(world),
             phase = World.get_phase(world)}))
     end
@@ -45,7 +50,7 @@ return function(deps)
     -- 只从大厅或终态开局，重复成功请求返回原局而不重置实体。
     local function start(payload)
         assert(state.fields(payload, {"v", "req_id", "after_match_id", "match_id", "world_id"})
-            and payload.v == 7
+            and payload.v == 8
             and state.req(payload.req_id) and state.is_id(payload.after_match_id),
             "invalid start contract")
         if World.get_phase(world) == "Unauthenticated" then
@@ -66,11 +71,12 @@ return function(deps)
             return
         else
             world_api.start(world, content, payload)
+            scene.init(world, content)
         end
         local req_id = payload.req_id
         local match_id = World.get_match_id(world)
         local phase = World.get_phase(world)
-        net.emit("start", json.encode({v = 5, req_id = req_id,
+        net.emit("start", json.encode({v = 6, req_id = req_id,
             match_id = match_id, phase = phase}))
         snapshot()
     end
@@ -79,10 +85,11 @@ return function(deps)
     function api.init(ctx_json)
         assert(world == nil, "session already initialized")
         local ctx = json.decode(ctx_json)
-        assert(state.fields(ctx, {"v", "snapshot_every"}) and ctx.v == 7
+        assert(state.fields(ctx, {"v", "snapshot_every"}) and ctx.v == 8
             and state.integer(ctx.snapshot_every, 1, 3600), "invalid context")
         assert(json.encode(ctx) == json.encode(json.decode(cfg.get())), "context mismatch")
         content = cfg_api.load()
+        damage.configure(content)
         local scene_ids = json.array({})
         for _, scene in ipairs(content.scenes) do
             scene_ids[#scene_ids + 1] = scene.id
@@ -106,6 +113,12 @@ return function(deps)
         return json.encode({ok = true, loadout = accepted})
     end
 
+    -- 永久资产交易仅返回候选参数，提交与重放由持久层负责。
+    function api.check_hunter(request_json)
+        assert(world ~= nil, "session not initialized")
+        return json.encode(career.check(content, json.decode(request_json)))
+    end
+
     -- 分发已鉴权宿主送达的登录、开局与暂停事件。
     function api.on_event(event_id, payload_json)
         assert(world ~= nil, "session not initialized")
@@ -115,21 +128,21 @@ return function(deps)
         elseif event_id == 3 then
             start(payload)
         elseif event_id == 4 then
-            assert(state.fields(payload, {"v", "paused"}) and payload.v == 7
+            assert(state.fields(payload, {"v", "paused"}) and payload.v == 8
                 and type(payload.paused) == "boolean", "invalid pause contract")
             World.set_paused(world, payload.paused)
             world_api.clear_input(world)
         elseif event_id == 5 then
             assert(state.fields(payload,
-                {"v", "req_id", "kind", "slot", "target_id", "action_seq"})
-                and payload.v == 7 and state.req(payload.req_id)
+                {"v", "req_id", "kind", "slot", "target_id", "action_seq", "death_seq"})
+                and payload.v == 8 and state.req(payload.req_id)
                 and state.integer(payload.slot, 0, 8) and state.is_id(payload.target_id)
                 and state.is_id(payload.action_seq), "invalid action contract")
-            local error = actions.apply(world, content, payload)
+            local error = actions.apply(world, hunt.content(world, content), payload)
             if error ~= nil then
                 reject(error, payload.req_id, payload.action_seq)
             else
-                net.emit("action", json.encode({v = 5, req_id = payload.req_id,
+                net.emit("action", json.encode({v = 6, req_id = payload.req_id,
                     world_id = World.get_world_id(world),
                     match_id = World.get_match_id(world),
                     action_seq = payload.action_seq}))
@@ -151,14 +164,18 @@ return function(deps)
         if World.get_phase(world) == "Playing" and not World.get_paused(world) then
             local player_id = World.find_player(world, World.get_player_id(world))
             local player = world_api.find(world, player_id)
-            local moved, stamina_reset = movement.player(player, content)
-            ai.move(world, content)
-            weapon.step(world, content, player)
-            stamina_reset = weapon.melee(world, content, player) or stamina_reset
-            projectile.step(world, content)
-            ai.attack(world, content)
-            actions.finish(world, content, player)
-            vitals.step(world, content, player, stamina_reset)
+            local active = hunt.content(world, content)
+            scene.step(world, active)
+            local moved, stamina_reset = movement.player(player, active)
+            ai.move(world, active)
+            weapon.step(world, active, player)
+            stamina_reset = weapon.melee(world, active, player) or stamina_reset
+            projectile.step(world, active)
+            encounter.step(world, active)
+            ai.attack(world, active)
+            hunt.tick(player)
+            actions.finish(world, active, player)
+            vitals.step(world, active, player, stamina_reset)
             loot.step(world, content)
             world_api.flush(world)
             settlement.step(world, content)
@@ -182,7 +199,12 @@ return function(deps)
 
     -- 完整验证独立候选之后才替换活动世界。
     function api.import_state(snapshot_json)
-        statecheck.validate(json.decode(snapshot_json), content)
+        local valid = pcall(function()
+            statecheck.validate(json.decode(snapshot_json), content)
+        end)
+        if not valid or not World.can_load(world, snapshot_json) then
+            return false
+        end
         World.load(world, snapshot_json)
         return true
     end

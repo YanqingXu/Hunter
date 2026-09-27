@@ -2,6 +2,7 @@
 return function(deps)
     local state = deps["framework.state"]
     local geometry = deps["game.cfg_geometry"]
+    local skill = deps["game.skill"]
     local api = {}
 
     -- 把静态空格分隔字段名转换为可审阅的校验列表。
@@ -71,7 +72,13 @@ return function(deps)
         for _, cfg in pairs(doc.players) do
             actor(cfg, "jump_speed run_speed prone_speed prone_width prone_height stamina "
                 .. "stamina_delay stamina_rate run_cost jump_cost health_delay health_rate "
-                .. "weight hp_segments", "player")
+                .. "weight hp_segments skill_points recruit_cost", "player")
+            integer_value(cfg.skill_points, 0, 10000, "player.skill_points")
+            fields(cfg.recruit_cost, "currency_id amount", "player.recruit_cost")
+            local price = cfg.recruit_cost
+            assert(state.is_id(price.currency_id, "2147483647"), "invalid recruit currency")
+            integer_value(price.amount, 0, 2147483647, "player.recruit_cost.amount")
+            assert((price.currency_id == "0") == (price.amount == 0), "invalid free price")
             integer_value(cfg.jump_speed, 1, 1000, "player.jump_speed")
             for _, name in ipairs({"run_speed", "prone_speed"}) do
                 integer_value(cfg[name], 1, 1000, "player." .. name)
@@ -102,7 +109,9 @@ return function(deps)
     -- 校验枪弹投影一致、射程单位、装填方式和常规工具参数。
     local function equipment(doc)
         for _, cfg in pairs(doc.items) do
-            fields(cfg, "name max_stack kind type", "item")
+            fields(cfg, "name max_stack kind type skill_cfg_id", "item")
+            assert(cfg.skill_cfg_id == "0" or doc.skills[cfg.skill_cfg_id] ~= nil,
+                "item references an unselected skill")
             assert(type(cfg.name) == "string" and #cfg.name > 0, "item.name is required")
             integer_value(cfg.max_stack, 1, 2147483647, "item.max_stack")
             integer_value(cfg.kind, 1, 5, "item.kind")
@@ -120,7 +129,9 @@ return function(deps)
         end
         for _, cfg in pairs(doc.weapons) do
             fields(cfg, "range damage magazine reserve fire_ticks reload_ticks ammo_cfg_id "
-                .. "reload_kind weight melee_damage melee_range", "weapon")
+                .. "reload_kind weight melee_damage melee_range item_cfg_id", "weapon")
+            assert(ref(doc.items, cfg.item_cfg_id, "weapon.item").kind == 2,
+                "weapon must reference a gun item")
             local ammo = ref(doc.ammo, cfg.ammo_cfg_id, "weapon.ammo")
             assert(cfg.range == ammo.range and cfg.damage == ammo.damage,
                 "weapon projection differs from default ammunition")
@@ -141,8 +152,11 @@ return function(deps)
             assert(cfg.kind == "knife" or cfg.kind == "medkit" or cfg.kind == "needle"
                 or cfg.kind == "bomb", "unsupported tool kind")
             integer_value(cfg.uses, 1, 100, "tool.uses")
-            for _, name in ipairs({"use_ticks", "heal", "damage", "range", "radius",
-                "throw_range", "speed", "stamina", "cooldown_ticks"}) do
+            integer_value(cfg.use_ticks, cfg.kind == "knife" and 0 or 1, 36000, "tool.use_ticks")
+            integer_value(cfg.throw_range, 0, 100000, "tool.throw_range")
+            integer_value(cfg.speed, 0, 1000, "tool.speed")
+            for _, name in ipairs({"heal", "damage", "range", "radius",
+                "stamina", "cooldown_ticks"}) do
                 integer_value(cfg[name], 0, 1000000, "tool." .. name)
             end
             assert(cfg.kind ~= "bomb" or (cfg.radius > 0 and cfg.throw_range > 0 and cfg.speed > 0),
@@ -153,8 +167,9 @@ return function(deps)
     -- 默认配装必须能够完整接受，所有免费槽位和负重均采用角色配置。
     local function loadout(doc)
         local load, rules = doc.default_loadout, doc.rules
-        fields(load, "player_cfg_id hp_segments weapons ammo tools consumables", "loadout")
+        fields(load, "player_cfg_id hp_segments weapons ammo tools consumables skills", "loadout")
         local player = ref(doc.players, load.player_cfg_id, "loadout.player")
+        assert(skill.check(doc, load.player_cfg_id, load.skills), "invalid default skills")
         array(load.hp_segments, 1, 40000, "loadout.hp_segments")
         assert(#load.hp_segments == #player.hp_segments, "default blood segment mismatch")
         for index, value in ipairs(load.hp_segments) do
@@ -187,13 +202,13 @@ return function(deps)
     local function monsters(doc)
         local totals = {}
         for key, cfg in pairs(doc.monsters) do
-            actor(cfg, "detect_range attack_range damage attack_ticks rank windup recover drops",
+            actor(cfg, "detect_range attack_range damage attack_ticks rank windup recover drops ai",
                 "monster")
             integer_value(cfg.detect_range, 1, 100000, "monster.detect_range")
             integer_value(cfg.attack_range, 1, cfg.detect_range, "monster.attack_range")
             integer_value(cfg.damage, 1, 1000000, "monster.damage")
             integer_value(cfg.attack_ticks, 1, 3600, "monster.attack_ticks")
-            integer_value(cfg.rank, 1, 3, "monster.rank")
+            integer_value(cfg.rank, 1, 4, "monster.rank")
             integer_value(cfg.windup, 0, 3600, "monster.windup")
             integer_value(cfg.recover, 0, 3600, "monster.recover")
             assert(cfg.windup + cfg.recover < cfg.attack_ticks,
@@ -222,6 +237,117 @@ return function(deps)
         assert(maximum <= 64, "worst-case drop capacity exceeds 64")
     end
 
+    -- 新怪物能力必须拥有完整时序、合法召唤引用及有限的实例闭包。
+    local function abilities(doc)
+        cfg_table(doc.abilities, "abilities", true)
+        for _, cfg in pairs(doc.abilities) do
+            fields(cfg, "kind range damage windup recover cooldown summon_cfg_id despawn_ticks",
+                "ability")
+            assert(cfg.kind == "melee" or cfg.kind == "summon", "invalid ability kind")
+            integer_value(cfg.range, 1, 100000, "ability.range")
+            integer_value(cfg.damage, 0, 1000000, "ability.damage")
+            integer_value(cfg.windup, 0, 3600, "ability.windup")
+            integer_value(cfg.recover, 0, 3600, "ability.recover")
+            integer_value(cfg.cooldown, 1, 36000, "ability.cooldown")
+            integer_value(cfg.despawn_ticks, 0, 36000, "ability.despawn_ticks")
+            assert(cfg.windup + cfg.recover < cfg.cooldown, "invalid ability timing")
+            if cfg.kind == "melee" then
+                assert(cfg.damage > 0 and cfg.summon_cfg_id == "0" and cfg.despawn_ticks == 0,
+                    "invalid melee ability")
+            else
+                local summon = ref(doc.monsters, cfg.summon_cfg_id, "ability.summon")
+                assert(cfg.damage == 0 and cfg.despawn_ticks > 0 and summon.rank == 4
+                    and #summon.drops == 0, "summon requires a rewardless rank-four monster")
+            end
+        end
+        local summons = {}
+        for id, monster in pairs(doc.monsters) do
+            local ai = monster.ai
+            assert(ai == false or type(ai) == "table", "invalid monster AI")
+            if ai ~= false then
+                fields(ai, "alert_speed disengage_ticks damage_reduction_bp basic abilities "
+                    .. "rage_thresholds rage_ticks rage_ability_id", "monster.ai")
+                integer_value(ai.alert_speed, 1, 1000, "ai.alert_speed")
+                integer_value(ai.disengage_ticks, 1, 36000, "ai.disengage_ticks")
+                integer_value(ai.damage_reduction_bp, 0, 10000, "ai.damage_reduction_bp")
+                assert(type(ai.basic) == "boolean", "invalid ai.basic")
+                array(ai.abilities, 0, 8, "ai.abilities")
+                array(ai.rage_thresholds, 0, 16, "ai.rage_thresholds")
+                local seen, forced = {}, false
+                for _, bind in ipairs(ai.abilities) do
+                    fields(bind, "cfg_id phase priority", "ability binding")
+                    identity(bind.cfg_id, seen, "ability binding")
+                    local cfg = ref(doc.abilities, bind.cfg_id, "ability binding")
+                    assert(bind.phase == "alert" or bind.phase == "rage", "invalid ability phase")
+                    integer_value(bind.priority, 1, 1000, "ability priority")
+                    assert(cfg.range <= monster.detect_range, "ability exceeds alert range")
+                    if cfg.kind == "summon" then
+                        assert(cfg.summon_cfg_id ~= id, "recursive summon")
+                        summons[id] = true
+                    end
+                    if bind.cfg_id == ai.rage_ability_id then
+                        assert(bind.phase == "rage", "rage trigger must use a rage ability")
+                        forced = true
+                    end
+                end
+                local previous = monster.hp
+                for _, threshold in ipairs(ai.rage_thresholds) do
+                    integer_value(threshold, 1, previous - 1, "rage threshold")
+                    previous = threshold
+                end
+                if #ai.rage_thresholds > 0 then
+                    assert(monster.rank == 3 and forced, "rage requires Boss and trigger ability")
+                    integer_value(ai.rage_ticks, 1, 36000, "ai.rage_ticks")
+                else
+                    assert(ai.rage_ticks == 0 and ai.rage_ability_id == "0", "unused rage settings")
+                end
+            end
+        end
+        for _, cfg in pairs(doc.abilities) do
+            assert(cfg.kind ~= "summon" or not summons[cfg.summon_cfg_id],
+                "summoned monsters cannot summon")
+        end
+        local templates, count, drops = {}, 0, 0
+        -- 每个召唤者最多保留一个召唤物，尸体仍占出生实例槽位。
+        local function include(spawn)
+            local cfg = doc.monsters[spawn.cfg_id]
+            count = count + 1 + (summons[spawn.cfg_id] and 1 or 0)
+            for _, drop in ipairs(cfg.drops) do
+                if drop.chance > 0 then
+                    local stack = doc.items[drop.cfg_id].max_stack
+                    drops = drops + (drop.max_count + stack - 1) // stack
+                end
+            end
+        end
+        for _, spawn in ipairs(doc.map.enemies) do
+            assert(doc.monsters[spawn.cfg_id].rank ~= 4, "summons cannot be map spawns")
+            templates[spawn.spawn_id] = spawn
+            include(spawn)
+        end
+        if doc.encounter ~= false then
+            local cfg = doc.encounter
+            fields(cfg, "bounty_cfg_id alert_scale_bp second_wave", "encounter")
+            assert(ref(doc.items, cfg.bounty_cfg_id, "bounty item").kind == 5,
+                "bounty must be extraction loot")
+            integer_value(cfg.alert_scale_bp, 10000, 100000, "encounter.alert_scale_bp")
+            array(cfg.second_wave, 1, 63, "encounter.second_wave")
+            local seen = {}
+            for _, id in ipairs(cfg.second_wave) do
+                identity(id, seen, "second wave spawn")
+                local spawn = assert(templates[id], "unknown second wave spawn")
+                assert(doc.monsters[spawn.cfg_id].rank <= 2,
+                    "second wave excludes Boss and summons")
+                include(spawn)
+            end
+            for _, monster in pairs(doc.monsters) do
+                assert(monster.detect_range * cfg.alert_scale_bp // 10000 <= 100000,
+                    "scaled alert range exceeds limit")
+            end
+        end
+        assert(count <= 63, "two-wave and summon actor capacity exceeds 63")
+        assert(drops <= 64, "two-wave drop capacity exceeds 64")
+    end
+
     -- 校验地图记录与场景身份，几何检查在类型检查全部通过后执行。
     local function map_content(doc)
         local map = doc.map
@@ -248,12 +374,32 @@ return function(deps)
         array(doc.scenes, 0, doc.rules.max_scenes, "scenes")
         seen = {}
         for _, scene in ipairs(doc.scenes) do
-            fields(scene, "id kind x y w h penetrable", "scene")
+            fields(scene, "id kind x y w h penetrable interaction barrel", "scene")
             identity(scene.id, seen, "scene.id")
-            assert(scene.kind == "ladder" or scene.kind == "supply" or scene.kind == "cover",
+            assert(scene.kind == "ladder" or scene.kind == "supply" or scene.kind == "cover"
+                or scene.kind == "clue" or scene.kind == "barrel",
                 "invalid scene kind")
             assert(type(scene.penetrable) == "boolean"
                 and (scene.kind == "cover" or not scene.penetrable), "only cover is penetrable")
+            if scene.interaction ~= false then
+                local cfg = scene.interaction
+                fields(cfg, "mode hold_ticks", "scene.interaction")
+                assert(scene.kind == "supply" or scene.kind == "ladder" or scene.kind == "clue",
+                    "scene does not support interaction")
+                assert(cfg.mode == "instant" or cfg.mode == "channel", "invalid interaction mode")
+                integer_value(cfg.hold_ticks, 0, 36000, "interaction.hold_ticks")
+                assert((cfg.mode == "instant") == (cfg.hold_ticks == 0),
+                    "invalid interaction delay")
+            end
+            assert((scene.kind == "barrel") == (scene.barrel ~= false), "barrel config is required")
+            if scene.barrel ~= false then
+                local cfg = scene.barrel
+                fields(cfg, "hp fuse_ticks radius damage", "scene.barrel")
+                integer_value(cfg.hp, 1, 1000000, "barrel.hp")
+                integer_value(cfg.fuse_ticks, 1, 36000, "barrel.fuse_ticks")
+                integer_value(cfg.radius, 1, 100000, "barrel.radius")
+                integer_value(cfg.damage, 1, 1000000, "barrel.damage")
+            end
         end
         array(doc.extracts, 0, 32, "extracts")
         seen = {}
@@ -269,11 +415,84 @@ return function(deps)
         end
     end
 
+    -- 区域、候选首领和线索使用唯一关联；所有对象必须位于所属区域。
+    local function exploration(doc)
+        if doc.exploration == false then
+            return
+        end
+        fields(doc.exploration, "regions", "exploration")
+        array(doc.exploration.regions, 2, 16, "exploration.regions")
+        local spawns, scenes, bosses, clues, ids = {}, {}, {}, {}, {}
+        for _, spawn in ipairs(doc.map.enemies) do
+            spawns[spawn.spawn_id] = spawn
+        end
+        for _, scene in ipairs(doc.scenes) do
+            scenes[scene.id] = scene
+        end
+        for _, cfg in ipairs(doc.exploration.regions) do
+            fields(cfg, "id x y w h boss_spawns clues", "region")
+            identity(cfg.id, ids, "region.id")
+            integer_value(cfg.x, 0, doc.map.width, "region.x")
+            integer_value(cfg.y, 0, doc.map.height, "region.y")
+            integer_value(cfg.w, 1, doc.map.width - cfg.x, "region.w")
+            integer_value(cfg.h, 1, doc.map.height - cfg.y, "region.h")
+            array(cfg.boss_spawns, 1, 32, "region.boss_spawns")
+            array(cfg.clues, 1, 2, "region.clues")
+            for _, id in ipairs(cfg.boss_spawns) do
+                identity(id, bosses, "region.boss")
+                local spawn = assert(spawns[id], "unknown region Boss spawn")
+                assert(doc.monsters[spawn.cfg_id].rank == 3, "region requires Boss templates")
+                assert(spawn.x >= cfg.x and spawn.x <= cfg.x + cfg.w
+                    and spawn.y >= cfg.y and spawn.y <= cfg.y + cfg.h, "Boss outside region")
+            end
+            for _, id in ipairs(cfg.clues) do
+                identity(id, clues, "region.clue")
+                local scene = assert(scenes[id], "unknown region clue")
+                assert(scene.kind == "clue" and scene.interaction ~= false,
+                    "clue requires an explicit interaction")
+                assert(scene.x >= cfg.x and scene.x + scene.w <= cfg.x + cfg.w
+                    and scene.y >= cfg.y and scene.y + scene.h <= cfg.y + cfg.h,
+                    "clue outside region")
+            end
+        end
+        for id, spawn in pairs(spawns) do
+            assert(doc.monsters[spawn.cfg_id].rank ~= 3 or bosses[id], "unassigned Boss template")
+        end
+        for id, scene in pairs(scenes) do
+            assert(scene.kind ~= "clue" or clues[id], "unassigned clue")
+        end
+    end
+
     -- 正式源表和显式测试夹具共用完整的内容语义入口。
     function api.validate(doc)
         fields(doc, "v tick_hz map players monsters weapons items bag extracts ammo tools rules "
-            .. "scenes default_loadout", "content")
-        integer_value(doc.v, 4, 4, "content.v")
+            .. "scenes default_loadout skills abilities encounter legacy_ai career exploration",
+            "content")
+        integer_value(doc.v, 5, 5, "content.v")
+        assert(type(doc.legacy_ai) == "boolean", "invalid legacy AI flag")
+        if doc.career ~= false then
+            local cfg = doc.career
+            fields(cfg, "levels kill_xp extract_xp bounty_xp bounty_currency retire_xp", "career")
+            array(cfg.levels, 2, 100, "career.levels")
+            assert(cfg.levels[1] == 0, "career levels must start at zero")
+            local previous = -1
+            for _, xp in ipairs(cfg.levels) do
+                integer_value(xp, previous + 1, 2147483647, "career.level threshold")
+                previous = xp
+            end
+            assert(type(cfg.kill_xp) == "table", "career kill rewards must be explicit")
+            for id, xp in pairs(cfg.kill_xp) do
+                ref(doc.monsters, id, "career.kill_xp")
+                integer_value(xp, 0, 1000000, "career.kill_xp")
+            end
+            for id, monster in pairs(doc.monsters) do
+                assert(monster.rank == 4 or cfg.kill_xp[id] ~= nil, "missing monster XP reward")
+            end
+            for _, name in ipairs({"extract_xp", "bounty_xp", "bounty_currency", "retire_xp"}) do
+                integer_value(cfg[name], 0, 1000000, "career." .. name)
+            end
+        end
+        skill.validate(doc.skills)
         integer_value(doc.tick_hz, 60, 60, "content.tick_hz")
         for _, name in ipairs({"players", "monsters", "weapons", "items", "ammo", "tools"}) do
             cfg_table(doc[name], name, name == "tools")
@@ -296,6 +515,8 @@ return function(deps)
         map_content(doc)
         loadout(doc)
         monsters(doc)
+        abilities(doc)
+        exploration(doc)
         geometry.validate(doc)
         return doc
     end

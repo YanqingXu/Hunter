@@ -42,6 +42,9 @@ int main()
         auto conflict = req;
         conflict.set_slot(6);
         check(log.begin(conflict).error == "request_conflict", "changed intent rejected");
+        conflict = req;
+        conflict.set_death_seq(2);
+        check(log.begin(conflict).error == "request_conflict", "changed death identity rejected");
         hunter::wire::Envelope response;
         response.mutable_error()->set_code("paused");
         response.mutable_error()->set_req_id(req.req_id());

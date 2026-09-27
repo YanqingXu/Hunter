@@ -2,6 +2,7 @@
 #include "game/World.h"
 #include "common/Types.h"
 #include <limits>
+#include <bit>
 
 namespace hunter
 {
@@ -23,12 +24,26 @@ wire::Envelope World::snapshot(u64 observer) const
     msg.set_extract_ticks(static_cast<u32>(raid.extract_ticks));
     msg.set_extract_reason(raid.extract_reason);
     msg.set_action_seq(action_seq);
+    msg.set_wave(static_cast<u32>(wave));
+    msg.set_extract_visible(bounty_id != 0);
+    msg.set_hunter_id(hunter_id);
+    msg.set_excluded_regions(excluded_regions);
+    if (region_count > 0 && std::popcount(excluded_regions) == region_count - 1)
+    {
+        msg.set_revealed_boss_region(static_cast<u32>(boss_region));
+    }
+    msg.set_scene_interaction_id(scene_state.index == 0 ? 0
+        : scene_ids[static_cast<usize>(scene_state.index - 1)]);
+    msg.set_scene_interaction_ticks(static_cast<u32>(scene_state.ticks));
 
     for (usize index = 0; index < scene_ids.size(); ++index)
     {
         auto& value = *msg.add_scenes();
         value.set_id(scene_ids[index]);
         value.set_used(used_scenes[index]);
+        value.set_hp(static_cast<u32>(scene_state.barrels[index].hp));
+        value.set_fuse(static_cast<u32>(scene_state.barrels[index].fuse));
+        value.set_exploded(scene_state.barrels[index].exploded);
     }
 
     for (const auto& projectile : projectiles)
@@ -99,6 +114,16 @@ wire::Envelope World::snapshot(u64 observer) const
             value.set_prone(player->prone);
             value.set_running(player->running);
             value.set_stamina(static_cast<u32>(player->stamina));
+            value.set_downed(player->downed);
+            value.set_death_seq(player->death_seq);
+            value.set_quiet_ticks(static_cast<u32>(player->quiet_ticks));
+            value.set_vision(player->vision);
+            for (const auto& skill : player->skills)
+            {
+                auto& entry = *value.add_skills();
+                entry.set_cfg_id(skill.cfg_id);
+                entry.set_spent(skill.spent);
+            }
             value.set_width(static_cast<u32>(unit.width));
             value.set_height(static_cast<u32>(unit.height));
             value.set_active_weapon(static_cast<u32>(player->active_weapon));
@@ -144,7 +169,14 @@ wire::Envelope World::snapshot(u64 observer) const
             value.set_width(static_cast<u32>(unit.width));
             value.set_height(static_cast<u32>(unit.height));
             value.set_ai(std::get<Monster>(actor.value).state);
-            value.set_attack_ticks(static_cast<u32>(std::get<Monster>(actor.value).attack_ticks));
+            const auto& monster = std::get<Monster>(actor.value);
+            value.set_attack_ticks(static_cast<u32>(monster.attack_ticks));
+            value.set_ability_id(monster.active_ability);
+            value.set_ability_phase(monster.ability_phase);
+            value.set_ability_ticks(static_cast<u32>(monster.ability_ticks));
+            value.set_rage_ticks(static_cast<u32>(monster.rage_ticks));
+            value.set_owner_id(monster.owner_id);
+            value.set_wave(static_cast<u32>(monster.wave));
         }
     }
 

@@ -68,7 +68,20 @@ message Entity {
   uint32 ladder_id = 28;
   repeated uint32 health_segments = 29;
   uint32 selected_slot = 30;
+  bool downed = 31;
+  uint64 death_seq = 32;
+  uint32 quiet_ticks = 33;
+  bool vision = 34;
+  repeated SkillState skills = 35;
+  uint32 ability_id = 36;
+  string ability_phase = 37;
+  uint32 ability_ticks = 38;
+  uint32 rage_ticks = 39;
+  uint64 owner_id = 40;
+  uint32 wave = 41;
 }
+// 技能保留消费标记，客户端不得据此重复授予同一技能。
+message SkillState { uint32 cfg_id = 1; bool spent = 2; }
 message Snapshot {
   uint64 tick_id = 1;
   uint64 seq = 2;
@@ -90,6 +103,13 @@ message Snapshot {
   repeated SceneState scenes = 17;
   repeated ProjectileState projectiles = 18;
   uint64 action_seq = 19;
+  uint32 wave = 20;
+  bool extract_visible = 21;
+  uint32 excluded_regions = 22;
+  uint32 revealed_boss_region = 23;
+  uint64 hunter_id = 24;
+  uint32 scene_interaction_id = 25;
+  uint32 scene_interaction_ticks = 26;
 }
 message LoginReq {
   string req_id = 1;
@@ -107,6 +127,9 @@ message StartReq {
   string req_id = 1;
   uint64 after_match_id = 2;
   Loadout loadout = 3;
+  uint64 hunter_id = 4;
+  uint64 revision = 5;
+  bool test_mode = 6;
 }
 message StartRsp {
   Loadout loadout = 6;
@@ -115,6 +138,30 @@ message StartRsp {
   string phase = 3;
   uint64 world_id = 4;
   uint64 player_entity_id = 5;
+  uint64 hunter_id = 7;
+  bool test_mode = 8;
+}
+// 永久猎人操作只接受身份和槽位；价格、经验、奖励由服务端计算。
+message HunterReq {
+  enum Kind { PROFILE = 0; RECRUIT = 1; EQUIP = 2; BUY_SKILL = 3; REMOVE_SKILL = 4; RETIRE = 5; }
+  string req_id = 1;
+  string op_id = 2;
+  Kind kind = 3;
+  uint64 revision = 4;
+  uint64 hunter_id = 5;
+  uint32 cfg_id = 6;
+  uint32 skill_id = 7;
+  uint32 slot = 8;
+  uint64 item_uid = 9;
+}
+message HunterRsp {
+  string req_id = 1;
+  string op_id = 2;
+  uint64 revision = 3;
+  uint64 hunter_id = 4;
+  uint64 match_id = 5;
+  bool replayed = 6;
+  string result_json = 7;
 }
 // 开局接受后冻结的免费配装，全部槽位编号从一开始。
 message WeaponChoice {
@@ -127,6 +174,7 @@ message Loadout {
   repeated WeaponChoice weapons = 3;
   repeated uint32 tools = 4;
   repeated uint32 consumables = 5;
+  repeated uint32 skills = 6;
 }
 message WeaponState {
   uint32 slot = 1;
@@ -146,6 +194,9 @@ message ToolState {
 message SceneState {
   uint32 id = 1;
   bool used = 2;
+  uint32 hp = 3;
+  uint32 fuse = 4;
+  bool exploded = 5;
 }
 message ProjectileState {
   uint64 id = 1;
@@ -166,7 +217,7 @@ message Loot {
   uint64 owner_player_id = 7;
 }
 message ActionReq {
-  enum Kind { BAG = 0; PICKUP = 1; ABANDON = 2; SWITCH_WEAPON = 3; SELECT_TOOL = 4; MELEE = 5; USE = 6; INTERACT = 7; }
+  enum Kind { BAG = 0; PICKUP = 1; ABANDON = 2; SWITCH_WEAPON = 3; SELECT_TOOL = 4; MELEE = 5; USE = 6; INTERACT = 7; REVIVE = 8; VISION_ON = 9; VISION_OFF = 10; }
   string req_id = 1;
   uint64 world_id = 2;
   uint64 match_id = 3;
@@ -175,6 +226,7 @@ message ActionReq {
   uint64 action_seq = 6;
   uint32 slot = 7;
   uint32 target_id = 8;
+  uint64 death_seq = 9;
 }
 message ActionRsp {
   uint64 action_seq = 4;
@@ -218,6 +270,8 @@ message GameEvent {
   sint32 x = 7;
   sint32 y = 8;
   sint32 amount = 9;
+  uint32 skill_id = 10;
+  uint64 execution_id = 11;
 }
 message PauseState {
   bool paused = 1;
@@ -250,5 +304,7 @@ message Envelope {
     ActionRsp action_rsp = 17;
     SaveReq save_req = 18;
     SaveRsp save_rsp = 19;
+    HunterReq hunter_req = 20;
+    HunterRsp hunter_rsp = 21;
   }
 }

@@ -113,7 +113,8 @@ Str req_id(const Json& value)
 // 将完整免费配装转换为生成协议，属性和伤害由服务端配置决定。
 hunter::wire::Loadout loadout(const Json& doc)
 {
-    fields(doc, {"player_cfg_id", "health_segments", "weapons", "tools", "consumables"});
+    optional_fields(doc, {"player_cfg_id", "health_segments", "weapons", "tools", "consumables"},
+        {"skills"});
     hunter::wire::Loadout value;
     value.set_player_cfg_id(static_cast<u32>(number(doc.at("player_cfg_id"), 1, 2147483647)));
 
@@ -140,6 +141,11 @@ hunter::wire::Loadout loadout(const Json& doc)
         value.add_consumables(static_cast<u32>(number(item, 1, 2147483647)));
     }
 
+    for (const auto& item : doc.value("skills", Json::array()))
+    {
+        value.add_skills(static_cast<u32>(number(item, 1, 2147483647)));
+    }
+
     return value;
 }
 
@@ -158,7 +164,8 @@ Json loadout(const hunter::wire::Loadout& value)
             value.health_segments().end())},
         {"weapons", std::move(weapons)},
         {"tools", Vec<u32>(value.tools().begin(), value.tools().end())},
-        {"consumables", Vec<u32>(value.consumables().begin(), value.consumables().end())}};
+        {"consumables", Vec<u32>(value.consumables().begin(), value.consumables().end())},
+        {"skills", Vec<u32>(value.skills().begin(), value.skills().end())}};
 }
 
 // 将用户命令转换为生成协议对象，坐标、生命和伤害不接受客户端指定。
@@ -173,14 +180,47 @@ hunter::wire::Envelope command(const Json& doc)
     }
     else if (cmd == "start")
     {
-        optional_fields(doc, {"cmd", "req_id", "after_match_id"}, {"loadout"});
+        optional_fields(doc, {"cmd", "req_id", "after_match_id"},
+            {"loadout", "hunter_id", "revision", "test_mode"});
         auto* start = msg.mutable_start_req();
         start->set_req_id(req_id(doc.at("req_id")));
         start->set_after_match_id(id(doc.at("after_match_id"), false));
+        const auto hunter_id = doc.contains("hunter_id") ? id(doc.at("hunter_id"), false) : 0;
+        start->set_hunter_id(hunter_id);
+        start->set_revision(doc.contains("revision") ? id(doc.at("revision"), false) : 0);
+        start->set_test_mode(doc.value("test_mode", hunter_id == 0));
 
         if (doc.contains("loadout"))
         {
             *start->mutable_loadout() = loadout(doc.at("loadout"));
+        }
+    }
+    else if (cmd == "hunters" || cmd == "recruit" || cmd == "equip"
+        || cmd == "buy_skill" || cmd == "remove_skill" || cmd == "retire")
+    {
+        auto* req = msg.mutable_hunter_req();
+        req->set_req_id(req_id(doc.at("req_id")));
+        if (cmd == "hunters")
+        {
+            fields(doc, {"cmd", "req_id"});
+            req->set_kind(hunter::wire::HunterReq::PROFILE);
+        }
+        else
+        {
+            optional_fields(doc, {"cmd", "req_id", "op_id", "revision"},
+                {"hunter_id", "cfg_id", "skill_id", "slot", "item_uid"});
+            req->set_op_id(req_id(doc.at("op_id")));
+            req->set_revision(id(doc.at("revision"), true));
+            req->set_hunter_id(doc.contains("hunter_id") ? id(doc.at("hunter_id"), false) : 0);
+            req->set_cfg_id(static_cast<u32>(number(doc.value("cfg_id", Json(0)), 0, 2147483647)));
+            req->set_skill_id(static_cast<u32>(number(doc.value("skill_id", Json(0)), 0, 2147483647)));
+            req->set_slot(static_cast<u32>(number(doc.value("slot", Json(0)), 0, 16)));
+            req->set_item_uid(doc.contains("item_uid") ? id(doc.at("item_uid"), false) : 0);
+            req->set_kind(cmd == "recruit" ? hunter::wire::HunterReq::RECRUIT
+                : cmd == "equip" ? hunter::wire::HunterReq::EQUIP
+                : cmd == "buy_skill" ? hunter::wire::HunterReq::BUY_SKILL
+                : cmd == "remove_skill" ? hunter::wire::HunterReq::REMOVE_SKILL
+                : hunter::wire::HunterReq::RETIRE);
         }
     }
     else if (cmd == "input")
@@ -203,7 +243,8 @@ hunter::wire::Envelope command(const Json& doc)
 
     }
     else if (cmd == "bag" || cmd == "pickup" || cmd == "abandon" || cmd == "switch_weapon"
-        || cmd == "select_tool" || cmd == "melee" || cmd == "use" || cmd == "interact")
+        || cmd == "select_tool" || cmd == "melee" || cmd == "use" || cmd == "interact"
+        || cmd == "revive" || cmd == "vision_on" || cmd == "vision_off")
     {
         if (cmd == "pickup")
         {
@@ -212,7 +253,7 @@ hunter::wire::Envelope command(const Json& doc)
         else
         {
             optional_fields(doc, {"cmd", "req_id", "world_id", "match_id", "action_seq"},
-                {"slot", "target_id"});
+                {"slot", "target_id", "death_seq"});
         }
 
         auto& req = *msg.mutable_action_req();
@@ -226,10 +267,14 @@ hunter::wire::Envelope command(const Json& doc)
             {"switch_weapon", hunter::wire::ActionReq::SWITCH_WEAPON},
             {"select_tool", hunter::wire::ActionReq::SELECT_TOOL},
             {"melee", hunter::wire::ActionReq::MELEE}, {"use", hunter::wire::ActionReq::USE},
-            {"interact", hunter::wire::ActionReq::INTERACT}};
+            {"interact", hunter::wire::ActionReq::INTERACT},
+            {"revive", hunter::wire::ActionReq::REVIVE},
+            {"vision_on", hunter::wire::ActionReq::VISION_ON},
+            {"vision_off", hunter::wire::ActionReq::VISION_OFF}};
         req.set_kind(kinds.at(cmd));
         req.set_slot(static_cast<u32>(number(doc.value("slot", Json(0)), 0, 8)));
         req.set_target_id(static_cast<u32>(number(doc.value("target_id", Json(0)), 0, 2147483647)));
+        req.set_death_seq(doc.contains("death_seq") ? id(doc.at("death_seq"), true) : 0);
 
         if (cmd == "pickup")
         {
@@ -275,6 +320,7 @@ Json entity(const hunter::wire::Entity& value)
 {
     auto weapons = Json::array();
     auto tools = Json::array();
+    auto skills = Json::array();
 
     for (const auto& gun : value.weapons())
     {
@@ -289,6 +335,10 @@ Json entity(const hunter::wire::Entity& value)
         tools.push_back({{"slot", tool.slot()}, {"cfg_id", tool.cfg_id()},
             {"count", tool.count()}, {"instance", std::to_string(tool.instance())}});
     }
+    for (const auto& skill : value.skills())
+    {
+        skills.push_back({{"cfg_id", skill.cfg_id()}, {"spent", skill.spent()}});
+    }
 
     return {{"id", std::to_string(value.id())}, {"kind", value.kind()}, {"x", value.x()},
         {"y", value.y()}, {"vx", value.vx()}, {"vy", value.vy()}, {"hp", value.hp()},
@@ -302,6 +352,12 @@ Json entity(const hunter::wire::Entity& value)
         {"tools", std::move(tools)}, {"use_slot", value.use_slot()},
         {"use_ticks", value.use_ticks()}, {"ladder_id", value.ladder_id()},
         {"selected_slot", value.selected_slot()},
+        {"downed", value.downed()}, {"death_seq", std::to_string(value.death_seq())},
+        {"quiet_ticks", value.quiet_ticks()}, {"vision", value.vision()},
+        {"skills", std::move(skills)}, {"ability_id", value.ability_id()},
+        {"ability_phase", value.ability_phase()}, {"ability_ticks", value.ability_ticks()},
+        {"rage_ticks", value.rage_ticks()}, {"owner_id", std::to_string(value.owner_id())},
+        {"wave", value.wave()},
         {"health_segments", Vec<u32>(value.health_segments().begin(),
             value.health_segments().end())}};
 }
@@ -334,6 +390,7 @@ Json response(const hunter::wire::Envelope& msg)
             {"world_id", std::to_string(value.world_id())},
             {"player_entity_id", std::to_string(value.player_entity_id())},
             {"match_id", std::to_string(value.match_id())}, {"phase", value.phase()},
+            {"hunter_id", std::to_string(value.hunter_id())}, {"test_mode", value.test_mode()},
             {"loadout", loadout(value.loadout())}};
     }
 
@@ -355,7 +412,8 @@ Json response(const hunter::wire::Envelope& msg)
 
         for (const auto& item : value.scenes())
         {
-            scenes.push_back({{"id", item.id()}, {"used", item.used()}});
+            scenes.push_back({{"id", item.id()}, {"used", item.used()},
+                {"hp", item.hp()}, {"fuse", item.fuse()}, {"exploded", item.exploded()}});
         }
 
         for (const auto& item : value.projectiles())
@@ -387,6 +445,12 @@ Json response(const hunter::wire::Envelope& msg)
             {"extract_ticks", value.extract_ticks()}, {"extract_reason", value.extract_reason()},
             {"extract_remaining_ticks", value.extract_remaining_ticks()},
             {"extract_unlocked", value.extract_unlocked()},
+            {"wave", value.wave()}, {"extract_visible", value.extract_visible()},
+            {"excluded_regions", value.excluded_regions()},
+            {"revealed_boss_region", value.revealed_boss_region()},
+            {"hunter_id", std::to_string(value.hunter_id())},
+            {"scene_interaction_id", value.scene_interaction_id()},
+            {"scene_interaction_ticks", value.scene_interaction_ticks()},
             {"action_seq", std::to_string(value.action_seq())},
             {"scenes", std::move(scenes)}, {"projectiles", std::move(projectiles)},
             {"phase", value.phase()}, {"entities", std::move(entities)}};
@@ -400,7 +464,8 @@ Json response(const hunter::wire::Envelope& msg)
             {"tick_id", std::to_string(value.tick_id())}, {"kind", value.kind()},
             {"actor_id", std::to_string(value.actor_id())},
             {"target_id", std::to_string(value.target_id())}, {"x", value.x()},
-            {"y", value.y()}, {"amount", value.amount()}};
+            {"y", value.y()}, {"amount", value.amount()}, {"skill_id", value.skill_id()},
+            {"execution_id", std::to_string(value.execution_id())}};
     }
 
     if (msg.has_pause())
@@ -445,6 +510,16 @@ Json response(const hunter::wire::Envelope& msg)
             {"revision", std::to_string(value.revision())}, {"error_code", value.error_code()},
             {"last_match_id", std::to_string(value.last_match_id())}, {"items", std::move(items)},
             {"next_cursor", std::to_string(value.next_cursor())}};
+    }
+
+    if (msg.has_hunter_rsp())
+    {
+        const auto& value = msg.hunter_rsp();
+        return {{"type", "hunter_rsp"}, {"req_id", value.req_id()}, {"op_id", value.op_id()},
+            {"revision", std::to_string(value.revision())},
+            {"hunter_id", std::to_string(value.hunter_id())},
+            {"match_id", std::to_string(value.match_id())}, {"replayed", value.replayed()},
+            {"result_json", value.result_json()}};
     }
 
     throw std::runtime_error("unexpected_server_message");
@@ -765,7 +840,7 @@ void Client::commands()
 void Client::connect(const Json& ready)
 {
     if (!ready.is_object() || ready.at("type") != "Ready"
-        || number(ready.at("protocol_version"), 5, 5) != 5
+        || number(ready.at("protocol_version"), 6, 6) != 6
         || ready.at("content_version").get<Str>() != hunter::content::version)
     {
         throw std::runtime_error("ready_identity_mismatch");
@@ -781,7 +856,7 @@ void Client::connect(const Json& ready)
 
     hunter::wire::Envelope msg;
     auto* hello = msg.mutable_hello();
-    hello->set_protocol_version(5);
+    hello->set_protocol_version(6);
     hello->set_content_version(Str(hunter::content::version));
     hello->set_instance(instance_);
     hello->set_token(token);
@@ -904,7 +979,7 @@ void Client::read_body(usize size)
 
         if (!authed_)
         {
-            if (!msg->has_hello_ack() || msg->hello_ack().protocol_version() != 5
+            if (!msg->has_hello_ack() || msg->hello_ack().protocol_version() != 6
                 || msg->hello_ack().content_version() != hunter::content::version
                 || msg->hello_ack().instance() != instance_)
             {

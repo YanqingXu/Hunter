@@ -9,7 +9,10 @@ SRV-007 提供 SQLite 底座；SRV-011 接通 Runtime 读档、持久局号、�
 SRV-012 增加免费配装、姿态恢复、三枪四工具和场景交互；历史增量状态见
 [V1_GAMEPLAY_TASKS.md](V1_GAMEPLAY_TASKS.md)。生产内容从根工作簿与 `design/demo_sources.json`
 生成，旧首版工作簿仅作回归夹具。SRV-013 的 Windows 双 Runtime 实现与验证已完成，见
-[Lua 配置任务表](V1_LUA_CFG_TASKS.md)；协议 v5、内容 v4、Host／状态 v7，SQLite 仍为 V1。
+[Lua 配置任务表](V1_LUA_CFG_TASKS.md)，其中旧版本号保留为历史。
+SRV-014 接入怪物能力、玩家天赋与复活、地图探索及永久猎人，当前协议 v6、内容 v5、
+Host／状态 v8、SQLite V2，进度见 [新策划任务表](V1_HUNT_TASKS.md)。缺失策划值保留草稿；
+生产选表与独立机制夹具分开，不能将测试数值自动补入正式工作簿。
 
 - `.gitkeep` 仅用于保留空目录。
 - `src/game/` 持有唯一权威状态，`lua/main.lua` 组装玩法规则；高频输入和网络投影由 C++ 实现。

@@ -159,8 +159,9 @@ PlayerSave read_player(Db& db, u64 player_id, usize limit)
     }
 
     result.last_match_id = static_cast<u64>(last);
-    Stmt items(db, "SELECT item_uid,cfg_id,count,acquired_match_id FROM player_item "
-        "WHERE player_id=? ORDER BY item_uid");
+    Stmt items(db, "SELECT item_uid,cfg_id,count,acquired_match_id FROM player_item i "
+        "WHERE player_id=? AND NOT EXISTS(SELECT 1 FROM hunter_equip e "
+        "WHERE e.item_uid=i.item_uid) ORDER BY item_uid");
     items.bind(1, static_cast<i64>(player_id));
     const usize max_items = (limit - sizeof(Rsp) - sizeof(PlayerSave)) / sizeof(ItemSave);
 
@@ -256,6 +257,17 @@ MatchResult write_match(Db& db, const CommitMatch& req, const Str& json, usize l
     if (next <= 0 || req.match_id >= static_cast<u64>(next))
     {
         fail(Code::Invalid, "match_id_not_allocated");
+    }
+
+    {
+        Stmt deployed(db, "SELECT 1 FROM hunter_raid WHERE match_id=? "
+            "OR (player_id=? AND state='active')");
+        deployed.bind(1, static_cast<i64>(req.match_id));
+        deployed.bind(2, static_cast<i64>(req.player_id));
+        if (deployed.step())
+        {
+            fail(Code::Conflict, "hunter_raid_requires_atomic_result");
+        }
     }
 
     {

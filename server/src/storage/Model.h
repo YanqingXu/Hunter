@@ -76,6 +76,28 @@ struct MatchResult
     Str result_json;
 };
 
+// 低频猎人命令拥有全部参数；价额和成长结果由玩法校验，存储只检查事务约束。
+struct HunterReq
+{
+    u64 player_id = 1;
+    u64 expected_revision = 0;
+    u64 hunter_id = 0;
+    Str op_id;
+    Str kind;
+    Str payload_json;
+    Str intent_json;
+};
+
+// 只有事务提交或读取既有操作后返回；查询与操作结果均使用有界 JSON。
+struct HunterResult
+{
+    u64 revision = 0;
+    u64 hunter_id = 0;
+    u64 match_id = 0;
+    bool replayed = false;
+    Str result_json;
+};
+
 struct Opened {};
 struct Closed {};
 struct MatchId
@@ -83,7 +105,7 @@ struct MatchId
     u64 value = 0;
 };
 
-using Value = std::variant<Opened, Closed, PlayerSave, MatchId, MatchResult>;
+using Value = std::variant<Opened, Closed, PlayerSave, MatchId, MatchResult, HunterResult>;
 
 struct Rsp
 {
@@ -97,6 +119,7 @@ struct StorageCfg
     usize max_req_bytes = 1024 * 1024;
     usize max_done_bytes = 4 * 1024 * 1024;
     usize max_result_bytes = 1024 * 1024;
+    usize max_hunter_bytes = 1024 * 1024;
 };
 
 }

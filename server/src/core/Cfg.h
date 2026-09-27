@@ -31,7 +31,7 @@ struct Cfg
     u32 stop_timeout_ms = 5000;
     u64 instruction_budget = 1000000;
     u64 native_work_budget = 1000000;
-    u64 script_memory_bytes = 16 * 1024 * 1024;
+    u64 script_memory_bytes = 32 * 1024 * 1024;
     u32 script_deadline_ms = 50;
 };
 }

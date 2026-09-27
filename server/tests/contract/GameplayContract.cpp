@@ -47,6 +47,11 @@ Json content()
         monster["attack_range"] = 1;
     }
 
+    for (auto& point : value["extracts"])
+    {
+        point["hold_ticks"] = 36000;
+    }
+
     return value;
 }
 
@@ -62,11 +67,11 @@ struct Game
         const hunter::wire::Loadout& loadout = {})
     {
         take(script.open(hunter::test_cfg(cfg, data),
-            Json{{"v", 7}, {"snapshot_every", 3}}.dump()));
-        take(script.event(2, R"({"v":7,"req_id":"login","player_id":"1"})"));
+            Json{{"v", 8}, {"snapshot_every", 3}}.dump()));
+        take(script.event(2, R"({"v":8,"req_id":"login","player_id":"1"})"));
         const auto accepted = take(script.check_loadout(loadout));
         take(script.change([&](hunter::World& world) { world.prepare_loadout(accepted); }));
-        take(script.event(3, R"({"v":7,"req_id":"start","after_match_id":"0",
+        take(script.event(3, R"({"v":8,"req_id":"start","after_match_id":"0",
             "match_id":"1","world_id":"1"})"));
     }
 
@@ -121,9 +126,9 @@ struct Game
     // 调用与 Runtime 相同的动作桥接并返回明确业务拒绝。
     Str action(const Str& kind, i32 slot = 0, u32 target = 0)
     {
-        const auto result = take(script.event(5, Json{{"v", 7}, {"req_id", "action"},
+        const auto result = take(script.event(5, Json{{"v", 8}, {"req_id", "action"},
             {"kind", kind}, {"slot", slot}, {"target_id", std::to_string(target)},
-            {"action_seq", std::to_string(++action_seq)}}.dump()));
+            {"death_seq", "0"}, {"action_seq", std::to_string(++action_seq)}}.dump()));
 
         for (const auto& out : result)
         {
@@ -217,11 +222,11 @@ void vitals(const hunter::Cfg& cfg)
     check(game.player().hp == 100, "mixed segment recovery stops at 100");
     game.steps(120);
     check(game.player().hp == 100, "exact boundary cannot enter next segment");
-    take(game.script.event(4, R"({"v":7,"paused":true})"));
+    take(game.script.event(4, R"({"v":8,"paused":true})"));
     const auto before = game.player().stamina;
     game.steps(120);
     check(game.player().stamina == before, "pause freezes recovery");
-    take(game.script.event(4, R"({"v":7,"paused":false})"));
+    take(game.script.event(4, R"({"v":8,"paused":false})"));
     game.roundtrip();
 
     auto tunnel = content();
@@ -445,7 +450,7 @@ void state_semantics(const hunter::Cfg& cfg)
 
     Game projection(cfg);
     invalid = Json::parse(take(projection.script.export_state()));
-    invalid["raid"]["extract_unlocked"] = true;
+    invalid["raid"]["extract_unlocked"] = false;
     check(!projection.script.import_state(invalid.dump()), "forged extraction view is rejected");
 }
 

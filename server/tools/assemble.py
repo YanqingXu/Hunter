@@ -12,6 +12,7 @@ NAME = re.compile(r"[a-z_][a-z0-9_]*(?:\.[a-z_][a-z0-9_]*)*\Z")
 ENTRIES = {
     "init": "ctx_json",
     "check_loadout": "request_json",
+    "check_hunter": "request_json",
     "on_event": "event_id, payload_json",
     "tick": "tick_id, dt_seconds",
     "export_state": "",

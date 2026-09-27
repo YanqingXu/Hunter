@@ -16,6 +16,8 @@ import assemble
 
 TABLES = set("Player Weapon Ammunition Item Equip Tool Monster Attack Drop DropEntry "
              "Map MapSolid PlayerSpawn MonsterSpawn ExtractPoint Bag Rules Loadout Scene".split())
+OPTIONAL_TABLES = set("Skill SkillEffect Ability MonsterAi MonsterAbility Encounter "
+                      "SceneAction Barrel Region Career CareerLevel KillXp".split())
 
 
 MAX_BYTES = 60 * 1024
@@ -95,8 +97,8 @@ def read_tables(source):
         if table.name in tables:
             raise ValueError(f"duplicate production table: {table.name}")
         tables[table.name] = table
-    if set(tables) != TABLES:
-        raise ValueError(f"manifest: expected tables {sorted(TABLES)}")
+    if not TABLES <= set(tables) or not set(tables) <= TABLES | OPTIONAL_TABLES:
+        raise ValueError(f"manifest: required {sorted(TABLES)}, optional {sorted(OPTIONAL_TABLES)}")
     return tables
 
 
@@ -140,7 +142,7 @@ def config_files(tables=None, fixture=None):
                                 + literal(fixture) + "\n").encode("utf-8")
         names = ["Fixture"]
     else:
-        if set(tables) != TABLES:
+        if not TABLES <= set(tables) or not set(tables) <= TABLES | OPTIONAL_TABLES:
             raise ValueError("production requires the selected source table set")
         for name, table in sorted(tables.items()):
             files[name + ".lua"] = sheets.render_lua(table)
@@ -204,7 +206,7 @@ def content_bytes(value):
     data = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
     if len(data) > MAX_BYTES:
         raise ValueError("gameplay content exceeds 60 KiB")
-    version = "gameplay-v4:" + hashlib.sha256(data).hexdigest()
+    version = "gameplay-v5:" + hashlib.sha256(data).hexdigest()
     header = ('// 从 Lua 配置派生的内容身份，禁止手工修改。\n#pragma once\n'
               '#include <string_view>\nnamespace hunter::content\n{\n'
               f'inline constexpr std::string_view version = "{version}";\n}}\n')

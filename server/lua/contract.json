@@ -1,5 +1,5 @@
 {
-  "version": 7,
+  "version": 8,
   "host_api": {
     "net.emit": {
       "args": [
@@ -41,11 +41,14 @@
       ],
       "check_loadout": [
         "string request_json"
+      ],
+      "check_hunter": [
+        "string request_json"
       ]
     },
-    "entry_returns": "boolean true；export_state 和 check_loadout 返回 string JSON",
+    "entry_returns": "boolean true；export_state 和 check_loadout 返回 string JSON；check_hunter 返回 string JSON",
     "ctx": {
-      "v": 7,
+      "v": 8,
       "snapshot_every": "integer [1,3600]"
     },
     "net.event": {
@@ -183,7 +186,19 @@
           "get_weapon_shot_ticks": "i64 get_weapon_shot_ticks(i64 slot) const",
           "set_weapon_shot_ticks": "void set_weapon_shot_ticks(i64 slot, i64 value)",
           "get_weapon_reload_ticks": "i64 get_weapon_reload_ticks(i64 slot) const",
-          "set_weapon_reload_ticks": "void set_weapon_reload_ticks(i64 slot, i64 value)"
+          "set_weapon_reload_ticks": "void set_weapon_reload_ticks(i64 slot, i64 value)",
+          "get_skill_count": "i64 get_skill_count() const",
+          "get_skill_id": "Str get_skill_id(i64 slot) const",
+          "get_skill_spent": "bool get_skill_spent(i64 slot) const",
+          "add_skill": "bool add_skill(Str cfg)",
+          "get_downed": "bool get_downed() const",
+          "enter_downed": "void enter_downed()",
+          "get_death_seq": "Str get_death_seq() const",
+          "revive": "bool revive(Str seq, i64 health, i64 energy, Str skill, Str removed)",
+          "get_quiet_ticks": "i64 get_quiet_ticks() const",
+          "set_quiet_ticks": "void set_quiet_ticks(i64 ticks)",
+          "get_vision": "bool get_vision() const",
+          "set_vision": "void set_vision(bool enabled)"
         },
         "ownership": "World",
         "handle": "type + slot + generation + owner + module epoch + capability",
@@ -199,7 +214,28 @@
           "get_state": "Str get_state() const",
           "set_state": "void set_state(Str value)",
           "get_attack_ticks": "i64 get_attack_ticks() const",
-          "set_attack_ticks": "void set_attack_ticks(i64 value)"
+          "set_attack_ticks": "void set_attack_ticks(i64 value)",
+          "get_aware": "bool get_aware() const",
+          "set_aware": "void set_aware(bool value)",
+          "get_alert_ticks": "i64 get_alert_ticks() const",
+          "set_alert_ticks": "void set_alert_ticks(i64 value)",
+          "get_rage_ticks": "i64 get_rage_ticks() const",
+          "set_rage_ticks": "void set_rage_ticks(i64 value)",
+          "get_rage_mask": "i64 get_rage_mask() const",
+          "set_rage_mask": "void set_rage_mask(i64 value)",
+          "get_last_hp": "i64 get_last_hp() const",
+          "set_last_hp": "void set_last_hp(i64 value)",
+          "get_active_ability": "Str get_active_ability() const",
+          "get_ability_phase": "Str get_ability_phase() const",
+          "get_ability_ticks": "i64 get_ability_ticks() const",
+          "write_ability": "void write_ability(Str ability_cfg, Str phase, i64 ticks)",
+          "get_ability_cd": "i64 get_ability_cd(i64 slot) const",
+          "set_ability_cd": "void set_ability_cd(i64 slot, i64 ticks)",
+          "get_owner_id": "Str get_owner_id() const",
+          "get_owner_ability": "i64 get_owner_ability() const",
+          "get_outside_ticks": "i64 get_outside_ticks() const",
+          "set_outside_ticks": "void set_outside_ticks(i64 value)",
+          "get_wave": "i64 get_wave() const"
         },
         "ownership": "World",
         "handle": "type + slot + generation + owner + module epoch + capability",
@@ -297,7 +333,28 @@
           "commit": "Str commit(const Str& batch)",
           "loadout": "Str loadout() const",
           "accept_loadout": "void accept_loadout(const Str& text)",
-          "set_extract_view": "void set_extract_view(bool unlocked, i64 remaining)"
+          "set_extract_view": "void set_extract_view(bool unlocked, i64 remaining)",
+          "get_wave": "i64 get_wave() const",
+          "get_bounty_id": "Str get_bounty_id() const",
+          "commit_wave": "Str commit_wave(Str batch, Str specs, Str bounty)",
+          "spawn_summon": "Str spawn_summon(Str owner, i64 slot, Str spec)",
+          "get_hunter_id": "Str get_hunter_id() const",
+          "scene_begin": "bool scene_begin(i64 index, i64 ticks)",
+          "scene_cancel": "void scene_cancel()",
+          "scene_index": "i64 scene_index() const",
+          "scene_ticks": "i64 scene_ticks() const",
+          "scene_set_ticks": "void scene_set_ticks(i64 ticks)",
+          "barrel_hp": "i64 barrel_hp(i64 index) const",
+          "barrel_fuse": "i64 barrel_fuse(i64 index) const",
+          "barrel_exploded": "bool barrel_exploded(i64 index) const",
+          "barrel_write": "bool barrel_write(i64 index, i64 hp, i64 fuse, bool exploded)",
+          "set_exploration": "void set_exploration(i64 region, const Str& spawn, i64 count)",
+          "get_boss_region": "i64 get_boss_region() const",
+          "get_boss_spawn": "Str get_boss_spawn() const",
+          "get_excluded_regions": "i64 get_excluded_regions() const",
+          "reveal_region": "i64 reveal_region(i64 scene_index, const Str& candidates)",
+          "commit_skill": "Str commit_skill(const Str& batch, const Str& skill)",
+          "can_load": "bool can_load(const Str& text) const"
         },
         "ownership": "World",
         "handle": "type + slot + generation + owner + module epoch + capability",
@@ -319,7 +376,8 @@
     "entry_readonly": [
       "check_loadout",
       "export_state",
-      "validate_state"
+      "validate_state",
+      "check_hunter"
     ],
     "payloads": {
       "bounds": {
@@ -338,7 +396,8 @@
           "health_segments": "array [1,6] of 25|50，总和等于角色配置hp",
           "weapons": "array [1,2] of {cfg_id,ammo_cfg_id}；均为配置身份字符串",
           "tools": "array <=4 of 配置身份字符串",
-          "consumables": "array <=4 of 配置身份字符串"
+          "consumables": "array <=4 of 配置身份字符串",
+          "skills": "唯一配置ID字符串数组<=32，已持有永久技能不重新计初始预算"
         },
         "extra_fields": false,
         "validation": "Lua 校验关联、种类、负重和默认值；原生仅校验整数与固定槽位边界"
@@ -399,7 +458,26 @@
       "state_import": {
         "max_bytes": 1048576,
         "ordering": "Lua 先验证配置语义；World.load 在独立候选验证结构，通过后替换；失败不得推进revision或generation"
+      },
+      "check_hunter": {
+        "request": "宿主持久投影 profile、kind、hunter_id 与参数；v=8",
+        "success": "{ok:true,payload:存储候选事务}",
+        "failure": "{ok:false,error:业务错误码}"
       }
+    },
+    "net.skill_event": {
+      "args": [
+        "string kind",
+        "string actor_id",
+        "string target_id",
+        "integer x",
+        "integer y",
+        "integer amount",
+        "string skill_id",
+        "string execution_id"
+      ],
+      "returns": "boolean",
+      "usage": "技能执行事件；execution_id与actor_id一起标识执行实例"
     }
   },
   "capability": {
@@ -423,7 +501,7 @@
     ]
   },
   "state": {
-    "v": 7,
+    "v": 8,
     "tick_id": "canonical decimal string [0,9223372036854775807]",
     "seq": "canonical decimal string [0,18446744073709551615]",
     "match_id": "canonical decimal string [0,18446744073709551615]",
@@ -443,7 +521,7 @@
     "event_id": "canonical decimal string [0,18446744073709551615]",
     "phase": "Unauthenticated|Lobby|Preparing|Playing|Settling|Finished|Aborted; Dead/Cleared only in combat regression fixture",
     "paused": "boolean",
-    "content_key": "gameplay-v4: 加规范内容 SHA-256 十六进制摘要；导入必须完全相同",
+    "content_key": "gameplay-v5: 加规范内容 SHA-256 十六进制摘要；导入必须完全相同",
     "entities": {
       "max": 64,
       "key": "positive canonical uint64 string, exactly matches instance id",
@@ -490,7 +568,7 @@
           "shot_ticks": "integer [0,cfg.fire_ticks]",
           "reload_ticks": "integer [0,cfg.reload_ticks]"
         },
-        "demo": "typed native posture, stamina/recovery remainders, immutable health segments, stable two weapon slots, eight tool slots with instance identity, selected/use slot/ticks and reserved projectile slot"
+        "demo": "typed native posture, stamina/recovery remainders, immutable health segments, stable two weapon slots, eight tool slots with instance identity, selected/use slot/ticks and reserved projectile slot; skills <=32 unique cfg_id/spent; downed, vision, death_seq, quiet_ticks [0,180]"
       },
       "monster": {
         "spawn_id": "positive canonical cfg-range string; resolves to map.enemies spawn_id and matching cfg_id",
@@ -546,10 +624,21 @@
     "projectiles": "fixed 16 slots with unique id/cfg_id/x/y/vx/vy/remaining/active/reserved; reservations belong to an active bomb use",
     "last_projectile_id": "canonical uint64 high-water, never reused within a match",
     "action_seq": "canonical uint64 accepted action high-water; responses retained in Runtime bounded cache",
-    "validation": "原生执行类型、范围、容量、所有权、实例及状态结构校验；Lua 执行所有配置关联、体型碰撞、枪械工具、叠堆与场景语义校验"
+    "validation": "原生执行类型、范围、容量、所有权、实例及状态结构校验；Lua 执行所有配置关联、体型碰撞、枪械工具、叠堆与场景语义校验",
+    "wave": "integer [0,2]",
+    "bounty_id": "canonical uint64; nonzero iff wave=2",
+    "hunter_id": "永久猎人身份uint64字符串；测试模式为0",
+    "boss_region": "integer [0,2147483647]；隐藏Boss区域ID",
+    "boss_spawn": "integer [0,2147483647]；抽中的Boss出生模板",
+    "excluded_regions": "integer [0,65535]；按配置区域顺序位图",
+    "scenes_state": {
+      "barrels": "与scene_ids等长，最多32；{hp:[0,1000000],fuse:[0,36000],exploded:bool}",
+      "interaction": "{index:[0,32],ticks:[0,36000]}；同时为0表示未读条"
+    },
+    "region_count": "integer [0,16]，配置区域数，仅用于有界布局及最终标记"
   },
   "effect": {
-    "v": 5,
+    "v": 6,
     "events": {
       "input": 1,
       "login": 2,
@@ -558,7 +647,7 @@
       "action": 5
     },
     "input": {
-      "v": 5,
+      "v": 6,
       "seq": "positive uint64 decimal string",
       "match_id": "positive uint64 decimal string",
       "applied_tick": "nonnegative i64 decimal string",
@@ -588,8 +677,8 @@
         "fields": {
           "v": {
             "type": "int",
-            "min": 5,
-            "max": 5
+            "min": 6,
+            "max": 6
           },
           "seq": {
             "type": "id",
@@ -613,8 +702,8 @@
         "fields": {
           "v": {
             "type": "int",
-            "min": 5,
-            "max": 5
+            "min": 6,
+            "max": 6
           },
           "tick_id": {
             "type": "id",
@@ -757,8 +846,8 @@
         "fields": {
           "v": {
             "type": "int",
-            "min": 5,
-            "max": 5
+            "min": 6,
+            "max": 6
           },
           "req_id": {
             "type": "string",
@@ -798,8 +887,8 @@
         "fields": {
           "v": {
             "type": "int",
-            "min": 5,
-            "max": 5
+            "min": 6,
+            "max": 6
           },
           "req_id": {
             "type": "string",
@@ -834,8 +923,8 @@
         "fields": {
           "v": {
             "type": "int",
-            "min": 5,
-            "max": 5
+            "min": 6,
+            "max": 6
           },
           "match_id": {
             "type": "id",
@@ -865,7 +954,13 @@
               "melee",
               "heal",
               "tool",
-              "explosion"
+              "explosion",
+              "downed",
+              "revive",
+              "ability",
+              "summon",
+              "rage",
+              "summon_end"
             ]
           },
           "actor_id": {
@@ -900,8 +995,8 @@
         "fields": {
           "v": {
             "type": "int",
-            "min": 5,
-            "max": 5
+            "min": 6,
+            "max": 6
           },
           "code": {
             "type": "string",
@@ -935,8 +1030,8 @@
         "fields": {
           "v": {
             "type": "int",
-            "min": 5,
-            "max": 5
+            "min": 6,
+            "max": 6
           },
           "req_id": {
             "type": "string",

@@ -248,7 +248,7 @@ void transaction_contract(const Temp& tmp)
 void schema_contract(const Temp& tmp)
 {
     const Vec<std::pair<Str, Str>> cases = {
-        {"future.db", "PRAGMA user_version=2"},
+        {"future.db", "PRAGMA user_version=3"},
         {"foreign.db", "CREATE TABLE unrelated(x INTEGER)"},
         {"wrong.db", "PRAGMA user_version=1; CREATE TABLE player_save(x TEXT)"}
     };
@@ -315,7 +315,7 @@ void schema_contract(const Temp& tmp)
         check(valid.scalar("PRAGMA foreign_keys") == 1 &&
             valid.scalar("PRAGMA synchronous") == 2 &&
             valid.scalar("PRAGMA busy_timeout") == 2000 &&
-            valid.scalar("PRAGMA user_version") == 1, "required sqlite settings");
+            valid.scalar("PRAGMA user_version") == 2, "required sqlite settings");
         Stmt mode(valid, "PRAGMA journal_mode");
         check(mode.step() && mode.text(0, 32) == "wal", "wal enabled");
         check(!mode.step(), "journal mode consumed");

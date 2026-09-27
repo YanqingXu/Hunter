@@ -48,9 +48,9 @@ int main(int argc, char** argv)
         cfg.source_path = argv[1];
 #endif
         hunter::Script game;
-        take(game.open(cfg, nlohmann::json{{"v", 7}, {"snapshot_every", 3}}.dump()));
-        take(game.event(2, R"({"v":7,"req_id":"login","player_id":"73"})"));
-        take(game.event(3, R"({"v":7,"req_id":"start","after_match_id":"0",
+        take(game.open(cfg, nlohmann::json{{"v", 8}, {"snapshot_every", 3}}.dump()));
+        take(game.event(2, R"({"v":8,"req_id":"login","player_id":"73"})"));
+        take(game.event(3, R"({"v":8,"req_id":"start","after_match_id":"0",
             "match_id":"101","world_id":"9"})"));
         u64 tick = 0;
         const auto step = [&] { take(game.tick(++tick, 1.0 / 60)); };
@@ -91,10 +91,10 @@ int main(int argc, char** argv)
             {
                 if (actor && actor->unit().kind == "monster")
                 {
-                    actor->unit().hp = 0;
-                    actor->unit().alive = false;
-                    std::get<hunter::Monster>(actor->value).state = "dead";
-                    std::get<hunter::Monster>(actor->value).attack_ticks = 0;
+                    auto& monster = std::get<hunter::Monster>(actor->value);
+                    monster.set_hp(0);
+                    monster.set_alive(false);
+                    monster.set_state("dead");
                 }
             }
         });
@@ -108,10 +108,10 @@ int main(int argc, char** argv)
         setup([](hunter::World& w) { w.actors[0]->unit().x = 2000; });
         step();
         check(game.world().raid.extract_ticks == 1, "automatic extraction begins");
-        take(game.event(4, R"({"v":7,"paused":true})"));
+        take(game.event(4, R"({"v":8,"paused":true})"));
         step();
         check(game.world().raid.extract_ticks == 1, "pause freezes extraction");
-        take(game.event(4, R"({"v":7,"paused":false})"));
+        take(game.event(4, R"({"v":8,"paused":false})"));
         setup([&](hunter::World& w) { w.raid.damage_tick = tick + 1; });
         step();
         check(game.world().raid.extract_ticks == 0 && game.world().raid.extract_reason == "hurt",

@@ -55,6 +55,9 @@ public:
     // 只读调用 Lua 展开并验证配装，业务拒绝不分配局号、不修改世界。
     Expect<wire::Loadout, Str> check_loadout(const wire::Loadout& input);
 
+    // 只读计算永久猎人交易，输入账号投影只可来自持久层。
+    Expect<Str, Str> check_hunter(const Str& request_json);
+
     // 在 Tick 边界原生处理输入及确认，不执行 Lua 或 JSON 编解码。
     Expect<Vec<ScriptOut>, Str> input(const wire::FrameInput& input, u64 applied_tick);
 
@@ -64,7 +67,7 @@ public:
     // 在禁止输出的能力下导出带版本的状态 JSON。
     Expect<Str, Str> export_state();
 
-    // 在禁止输出的能力下导入状态，失败后禁止继续执行本局。
+    // 在禁止输出的能力下导入状态，非法候选保留活动世界及会话。
     Expect<void, Str> import_state(const Str& snapshot_json);
 
     // 在禁止输出的能力下检查当前状态。

@@ -200,7 +200,9 @@ bool valid_demo_snapshot(const wire::Envelope& output)
 
     const auto& snapshot = output.snapshot();
 
-    if (snapshot.scenes_size() > 32 || snapshot.projectiles_size() > 16)
+    if (snapshot.scenes_size() > 32 || snapshot.projectiles_size() > 16
+        || snapshot.wave() > 2 || snapshot.excluded_regions() > 65535
+        || snapshot.scene_interaction_ticks() > 36000)
     {
         return false;
     }
@@ -209,7 +211,10 @@ bool valid_demo_snapshot(const wire::Envelope& output)
 
     for (const auto& scene : snapshot.scenes())
     {
-        if (scene.id() == 0 || !scenes.insert(scene.id()).second)
+        if (scene.id() == 0 || !scenes.insert(scene.id()).second
+            || scene.hp() > 1000000 || scene.fuse() > 36000
+            || (scene.hp() > 0 && scene.fuse() > 0)
+            || (scene.exploded() && (scene.hp() != 0 || scene.fuse() != 0)))
         {
             return false;
         }
@@ -241,6 +246,24 @@ bool valid_demo_snapshot(const wire::Envelope& output)
             || entity.use_ticks() > 36000 || entity.ladder_id() > 2147483647)
         {
             return false;
+        }
+
+        if (entity.skills_size() > 32 || entity.quiet_ticks() > 180
+            || entity.ability_id() > 2147483647 || entity.ability_ticks() > 36000
+            || entity.rage_ticks() > 36000 || entity.wave() > 2
+            || (entity.downed() && (entity.alive() || entity.death_seq() == 0))
+            || (entity.vision() && !entity.alive()))
+        {
+            return false;
+        }
+        Set<u32> skills;
+        for (const auto& skill : entity.skills())
+        {
+            if (skill.cfg_id() == 0 || skill.cfg_id() > 2147483647
+                || !skills.insert(skill.cfg_id()).second)
+            {
+                return false;
+            }
         }
 
         Set<u32> weapons;
@@ -445,12 +468,17 @@ Expect<void, Str> validate_output(const ScriptOut& out, usize max_bytes)
         return Unexpect("output_schema");
     }
 
+    if (out.message.has_event() && out.message.event().skill_id() > 2147483647)
+    {
+        return Unexpect("output_schema");
+    }
+
     return {};
 }
 
 nlohmann::json output_json(const ScriptOut& out)
 {
-    nlohmann::json result = {{"v", 5}};
+    nlohmann::json result = {{"v", 6}};
 
     if (out.message.has_ack())
     {
@@ -530,6 +558,11 @@ nlohmann::json output_json(const ScriptOut& out)
         result["x"] = msg.x();
         result["y"] = msg.y();
         result["amount"] = msg.amount();
+        if (msg.skill_id() != 0 || msg.execution_id() != 0)
+        {
+            result["skill_id"] = std::to_string(msg.skill_id());
+            result["execution_id"] = std::to_string(msg.execution_id());
+        }
     }
 
     if (out.message.has_error())

@@ -60,7 +60,7 @@ Json loadout_doc(const wire::Loadout& loadout)
 {
     Json result = {{"player_cfg_id", std::to_string(loadout.player_cfg_id())},
         {"health_segments", Json::array()}, {"weapons", Json::array()},
-        {"tools", Json::array()}, {"consumables", Json::array()}};
+        {"tools", Json::array()}, {"consumables", Json::array()}, {"skills", Json::array()}};
 
     for (const auto value : loadout.health_segments())
     {
@@ -83,13 +83,17 @@ Json loadout_doc(const wire::Loadout& loadout)
         result["consumables"].push_back(std::to_string(value));
     }
 
+    for (const auto value : loadout.skills())
+    {
+        result["skills"].push_back(std::to_string(value));
+    }
     return result;
 }
 
 // 严格读取冷路径配装，活动对局另行执行完整内容校验。
 wire::Loadout read_loadout(const Json& value)
 {
-    fields(value, {"player_cfg_id", "health_segments", "weapons", "tools", "consumables"});
+    fields(value, {"player_cfg_id", "health_segments", "weapons", "tools", "consumables", "skills"});
     wire::Loadout loadout;
     const auto player = identity(value.at("player_cfg_id"));
     require(player <= 2147483647, "invalid_loadout_cfg");
@@ -123,6 +127,15 @@ wire::Loadout read_loadout(const Json& value)
         loadout.add_consumables(cfg_id(id));
     }
 
+    require(value.at("skills").is_array() && value.at("skills").size() <= 32,
+        "invalid_skill_capacity");
+    Set<u32> skill_ids;
+    for (const auto& entry : value.at("skills"))
+    {
+        const auto id = cfg_id(entry);
+        require(skill_ids.insert(id).second, "duplicate_skill");
+        loadout.add_skills(id);
+    }
     return loadout;
 }
 
@@ -168,8 +181,15 @@ Json demo_doc(const Player& player)
         {"other_weapon", weapon_doc(player.other_weapon)},
         {"other_reserve", player.other_reserve},
         {"ammo_cfg_ids", player.ammo_cfg_ids}, {"health_segments", player.health_segments},
-        {"tools", Json::array()}};
+        {"tools", Json::array()}, {"skills", Json::array()},
+        {"downed", player.downed}, {"vision", player.vision},
+        {"death_seq", std::to_string(player.death_seq)}, {"quiet_ticks", player.quiet_ticks}};
 
+    for (const auto& skill : player.skills)
+    {
+        result["skills"].push_back({{"cfg_id", std::to_string(skill.cfg_id)},
+            {"spent", skill.spent}});
+    }
     for (const auto& tool : player.tools)
     {
         result["tools"].push_back({{"cfg_id", std::to_string(tool.cfg_id)},
@@ -186,7 +206,24 @@ void read_demo(Player& player, const Json& value)
         "stamina_delay", "stamina_rem", "health_delay", "health_rem", "melee_ticks",
         "melee", "ladder_id", "selected_slot", "use_slot", "use_ticks", "use_instance",
         "last_tool_instance", "reserved_projectile", "weapon_count", "active_weapon",
-        "other_weapon", "other_reserve", "ammo_cfg_ids", "health_segments", "tools"});
+        "other_weapon", "other_reserve", "ammo_cfg_ids", "health_segments", "tools",
+        "skills", "downed", "vision", "death_seq", "quiet_ticks"});
+    player.downed = boolean(value.at("downed"));
+    player.vision = boolean(value.at("vision"));
+    player.death_seq = identity(value.at("death_seq"));
+    player.quiet_ticks = integer(value.at("quiet_ticks"), 0, 180);
+    require(!player.downed || (!player.alive && player.death_seq > 0), "invalid_downed");
+    require(!player.vision || player.alive, "invalid_vision");
+    require(value.at("skills").is_array() && value.at("skills").size() <= 32,
+        "invalid_skill_capacity");
+    Set<u32> skills;
+    for (const auto& entry : value.at("skills"))
+    {
+        fields(entry, {"cfg_id", "spent"});
+        const auto id = cfg_id(entry.at("cfg_id"));
+        require(skills.insert(id).second, "duplicate_skill");
+        player.skills.push_back({id, boolean(entry.at("spent"))});
+    }
     player.move_y = integer(value.at("move_y"), -1, 1);
     player.run = boolean(value.at("run"));
     player.want_prone = boolean(value.at("want_prone"));
@@ -335,8 +372,35 @@ void read_monster(Monster& monster, const Json& obj)
 {
     fields(obj, {"id", "kind", "cfg_id", "pose", "pending_remove", "motion", "health", "body",
         "spawn_id", "ai"});
-    monster.spawn_id = cfg_id(obj["spawn_id"]);
-    fields(obj["ai"], {"state", "attack_ticks"});
+    monster.spawn_id = static_cast<u32>(integer(Json(identity(obj["spawn_id"])),
+        0, 2147483647));
+    fields(obj["ai"], {"state", "attack_ticks",
+        "aware", "alert_ticks", "rage_ticks", "rage_mask", "last_hp", "active_ability",
+        "ability_phase", "ability_ticks", "ability_cds", "owner_id", "owner_ability",
+        "outside_ticks", "wave"});
+    monster.aware = boolean(obj["ai"].at("aware"));
+    monster.alert_ticks = integer(obj["ai"].at("alert_ticks"), 0, 36000);
+    monster.rage_ticks = integer(obj["ai"].at("rage_ticks"), 0, 36000);
+    monster.rage_mask = integer(obj["ai"].at("rage_mask"), 0, 65535);
+    monster.last_hp = integer(obj["ai"].at("last_hp"), 0, 1000000);
+    monster.active_ability = integer(obj["ai"].at("active_ability"), 0, 2147483647);
+    monster.ability_phase = obj["ai"].at("ability_phase").get<Str>();
+    monster.ability_ticks = integer(obj["ai"].at("ability_ticks"), 0, 36000);
+    require(obj["ai"].at("ability_cds").is_array()
+        && obj["ai"].at("ability_cds").size() == 8, "invalid_cds");
+    for (usize index = 0; index < 8; ++index)
+    {
+        monster.ability_cds[index] = integer(obj["ai"].at("ability_cds")[index], 0, 36000);
+    }
+    monster.owner_id = identity(obj["ai"].at("owner_id"));
+    monster.owner_ability = integer(obj["ai"].at("owner_ability"), 0, 8);
+    monster.outside_ticks = integer(obj["ai"].at("outside_ticks"), 0, 36000);
+    monster.wave = integer(obj["ai"].at("wave"), 1, 2);
+    require(monster.ability_phase == "idle" || monster.ability_phase == "windup"
+        || monster.ability_phase == "recover", "invalid_ability_phase");
+    require((monster.ability_phase == "idle") == (monster.active_ability == 0)
+        && (monster.active_ability != 0 || monster.ability_ticks == 0), "invalid_ability");
+    require((monster.owner_id == 0) == (monster.owner_ability == 0), "invalid_summon_owner");
     monster.state = obj["ai"]["state"].get<Str>();
     monster.attack_ticks = integer(obj["ai"]["attack_ticks"], 0, 3600);
     require(monster.alive ? (monster.state == "spawn"
@@ -355,8 +419,43 @@ void read_world(World& world, const Json& doc)
     fields(doc, {"v", "tick_id", "seq", "match_id", "player_id", "event_id", "phase",
         "paused", "content_key", "entities", "entity_ids", "player_entity_id",
         "last_entity_id", "last_start", "items", "last_item_id", "world_id", "raid",
-        "loadout", "scene_used", "projectiles", "last_projectile_id", "action_seq"});
-    integer(doc["v"], 7, 7);
+        "loadout", "scene_used", "projectiles", "last_projectile_id", "action_seq",
+        "wave", "bounty_id", "hunter_id", "scenes_state",
+        "boss_region", "boss_spawn", "excluded_regions", "region_count"});
+    world.wave = integer(doc.at("wave"), 0, 2);
+    world.boss_region = integer(doc.at("boss_region"), 0, 2147483647);
+    world.boss_spawn = integer(doc.at("boss_spawn"), 0, 2147483647);
+    world.excluded_regions = integer(doc.at("excluded_regions"), 0, 65535);
+    world.region_count = integer(doc.at("region_count"), 0, 16);
+    require((world.boss_region == 0) == (world.boss_spawn == 0), "invalid_exploration");
+    require((world.boss_region == 0) == (world.region_count == 0)
+        && (world.region_count == 0 ? world.excluded_regions == 0
+            : world.excluded_regions < (1u << world.region_count)), "invalid_region_count");
+    world.hunter_id = identity(doc.at("hunter_id"));
+    const auto& scenes = doc.at("scenes_state");
+    fields(scenes, {"barrels", "interaction"});
+    fields(scenes.at("interaction"), {"index", "ticks"});
+    world.scene_state.index = integer(scenes.at("interaction").at("index"),
+        0, static_cast<i32>(world.scene_ids.size()));
+    world.scene_state.ticks = integer(scenes.at("interaction").at("ticks"), 0, 36000);
+    require((world.scene_state.index == 0) == (world.scene_state.ticks == 0),
+        "invalid_scene_interaction");
+    const auto& barrels = scenes.at("barrels");
+    require(barrels.is_array() && barrels.size() == world.scene_ids.size(), "invalid_barrels");
+    for (usize index = 0; index < barrels.size(); ++index)
+    {
+        const auto& value = barrels[index];
+        fields(value, {"hp", "fuse", "exploded"});
+        auto& barrel = world.scene_state.barrels[index];
+        barrel.hp = integer(value.at("hp"), 0, 1000000);
+        barrel.fuse = integer(value.at("fuse"), 0, 36000);
+        barrel.exploded = boolean(value.at("exploded"));
+        require(!(barrel.hp > 0 && barrel.fuse > 0)
+            && (!barrel.exploded || (barrel.hp == 0 && barrel.fuse == 0)), "invalid_barrel");
+    }
+    world.bounty_id = identity(doc.at("bounty_id"));
+    require((world.wave == 2) == (world.bounty_id != 0), "invalid_wave");
+    integer(doc["v"], 8, 8);
     require(doc["content_key"] == world.content_key, "content_identity_mismatch");
     world.tick_id = identity(doc["tick_id"]);
     require(world.tick_id <= static_cast<u64>(std::numeric_limits<i64>::max()), "invalid_tick");
@@ -620,10 +719,11 @@ void read_world(World& world, const Json& doc)
 
     require((world.phase == "Dead" && !player->alive)
         || (world.phase == "Cleared" && player->alive && alive == 0)
-        || (world.phase == "Playing" && player->alive)
+        || (world.phase == "Playing" && (player->alive || player->downed))
         || ((world.phase == "Settling" || world.phase == "Finished" || world.phase == "Preparing")
             && world.raid.player_state != "Alive"
-            && (player->alive == (world.raid.player_state != "Dead"))), "invalid_phase_state");
+            && (world.raid.player_state == "Abandoned"
+                || player->alive == (world.raid.player_state != "Dead"))), "invalid_phase_state");
 }
 }
 
@@ -644,7 +744,7 @@ void World::accept_loadout(const Str& text)
 nlohmann::json World::document() const
 {
     access.read();
-    Json doc = {{"v", 7}, {"tick_id", get_tick_id()}, {"seq", get_seq()},
+    Json doc = {{"v", 8}, {"tick_id", get_tick_id()}, {"seq", get_seq()},
         {"match_id", get_match_id()}, {"player_id", get_player_id()},
         {"world_id", std::to_string(world_id)},
         {"event_id", std::to_string(event_id)}, {"phase", phase}, {"paused", paused},
@@ -653,6 +753,21 @@ nlohmann::json World::document() const
         {"last_start", {{"req_id", last_req}, {"after_match_id", get_last_after()},
             {"match_id", std::to_string(last_match)}}}, {"entities", Json::object()},
         {"entity_ids", Json::array()}, {"items", Json::object()}};
+    doc["wave"] = wave;
+    doc["bounty_id"] = std::to_string(bounty_id);
+    doc["hunter_id"] = std::to_string(hunter_id);
+    doc["boss_region"] = boss_region;
+    doc["boss_spawn"] = boss_spawn;
+    doc["excluded_regions"] = excluded_regions;
+    doc["region_count"] = region_count;
+    doc["scenes_state"] = {{"barrels", Json::array()},
+        {"interaction", {{"index", scene_state.index}, {"ticks", scene_state.ticks}}}};
+    for (usize index = 0; index < scene_ids.size(); ++index)
+    {
+        const auto& value = scene_state.barrels[index];
+        doc["scenes_state"]["barrels"].push_back({{"hp", value.hp}, {"fuse", value.fuse},
+            {"exploded", value.exploded}});
+    }
     doc["loadout"] = loadout_doc(active_loadout);
     doc["scene_used"] = Json::array();
 
@@ -711,7 +826,20 @@ nlohmann::json World::document() const
         {
             const auto& m = std::get<Monster>(actor.value);
             obj["spawn_id"] = m.get_spawn_id();
-            obj["ai"] = {{"state", m.state}, {"attack_ticks", m.attack_ticks}};
+            obj["ai"] = {{"state", m.state}, {"attack_ticks", m.attack_ticks},
+                {"aware", m.aware},
+                {"alert_ticks", m.alert_ticks},
+                {"rage_ticks", m.rage_ticks},
+                {"rage_mask", m.rage_mask},
+                {"last_hp", m.last_hp},
+                {"active_ability", m.active_ability},
+                {"ability_phase", m.ability_phase},
+                {"ability_ticks", m.ability_ticks},
+                {"ability_cds", m.ability_cds},
+                {"owner_id", std::to_string(m.owner_id)},
+                {"owner_ability", m.owner_ability},
+                {"outside_ticks", m.outside_ticks},
+                {"wave", m.wave}};
         }
 
         doc["entity_ids"].push_back(e.get_id());
@@ -755,6 +883,26 @@ Str World::save() const
 {
     require(valid(), "invalid_world_state");
     return document().dump();
+}
+
+bool World::can_load(const Str& text) const
+{
+    access.read();
+    try
+    {
+        require(text.size() <= 1048576, "state_too_large");
+        World candidate;
+        candidate.configure({{"map_width", map_width}, {"map_height", map_height},
+            {"bag_slots", bag_slots}, {"scene_ids", Json::array()}}, content_key);
+        candidate.scene_ids = scene_ids;
+        read_world(candidate, Json::parse(text));
+        require(revision < std::numeric_limits<u32>::max(), "revision_exhausted");
+        return true;
+    }
+    catch (const std::exception&)
+    {
+        return false;
+    }
 }
 
 void World::load(const Str& text)

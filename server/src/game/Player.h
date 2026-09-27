@@ -20,10 +20,48 @@ struct ToolSlot
     u64 instance = 0;
 };
 
+// 保留本局曾获得的技能及消费标记，避免一次性技能消费后再次拾取。
+struct SkillSlot
+{
+    u32 cfg_id = 0;
+    bool spent = false;
+};
+
 class Player : public Unit
 {
 public:
     World* world = nullptr;
+    Vec<SkillSlot> skills;
+    bool downed = false;
+    bool vision = false;
+    u64 death_seq = 0;
+    i32 quiet_ticks = 0;
+
+    // 返回本局获得过的技能数，含已消费记录。
+    i64 get_skill_count() const;
+    // 返回一基技能槽的配置身份。
+    Str get_skill_id(i64 slot) const;
+    // 返回一基技能槽是否已消费。
+    bool get_skill_spent(i64 slot) const;
+    // 原子添加新技能，重复或容量不足时不修改。
+    bool add_skill(const Str& cfg);
+    // 返回是否正在等待玩家选择复活。
+    bool get_downed() const;
+    // 对已经致死的玩家建立一次复活选择，重复调用不增加序号。
+    void enter_downed();
+    // 返回当前死亡序号，供复活请求关联。
+    Str get_death_seq() const;
+    // 原子复活并消费指定技能和死亡型技能，失败保持原状态。
+    bool revive(const Str& seq, i64 health, i64 energy, const Str& skill,
+        const Str& removed);
+    // 返回复活后目标获取抑制的剩余 Tick。
+    i64 get_quiet_ticks() const;
+    // 写入有界的目标获取抑制计时。
+    void set_quiet_ticks(i64 ticks);
+    // 返回特殊视角状态。
+    bool get_vision() const;
+    // 切换特殊视角并清理禁止的输入和未完成动作。
+    void set_vision(bool enabled);
     Weapon weapon;
     Weapon other_weapon;
     i32 other_reserve = 0;

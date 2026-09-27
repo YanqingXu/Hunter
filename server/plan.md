@@ -1,5 +1,11 @@
 # Hunter Server 首版规划
 
+2026-09-27 增量：按用户确认的 [SRV-014](intents/usecases/hunt.intent.md) 实现配置契约、
+怪物能力和手动复活，再接完整撤离循环与 SQLite V2 永久猎人。代码与内容门禁分开：
+缺失策划数值继续保留草稿，独立测试配置覆盖机制；生产不猜数值。协议 v6、内容 v5、
+Host／内部状态 v8，永久操作使用账号 revision 和持久操作 ID。实际阶段状态见
+[新策划任务表](V1_HUNT_TASKS.md)。下列旧版本为历史记录，以本轮契约及验证记录为准。
+
 2026-09-26 后续增量：按 [SRV-013](intents/modules/cfg.intent.md) 迁移 Lua 配置与玩法规则，
 进度见 [Lua 配置任务表](V1_LUA_CFG_TASKS.md)。生产表导出独立 Lua 文件，解析与玩法由 Lua
 负责，C++ 保留权威状态及通用边界；Host／内部状态升级 v7。本轮 Windows 实现与验证已完成，

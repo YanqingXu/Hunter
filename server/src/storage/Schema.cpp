@@ -1,6 +1,7 @@
-// 冻结 V1 表、约束和初始化事务，已有异常文件只诊断不重置。
+// 保留 V1 表与历史结果，事务升级 V2 猎人资产表；已有异常文件只诊断不重置。
 #include "common/Types.h"
 #include "storage/Schema.h"
+#include "storage/HunterStore.h"
 
 #include <chrono>
 
@@ -46,8 +47,13 @@ const Map<Str, Str> tables = {
 };
 
 // 校验完整 DDL，避免同列名但缺少约束或额外触发器的库被当作 V1。
-void check_schema(Db& db)
+void check_schema(Db& db, i64 version)
 {
+    auto expected = tables;
+    if (version == 2)
+    {
+        expected.insert(hunter_tables().begin(), hunter_tables().end());
+    }
     Stmt schema(db, "SELECT name, sql FROM sqlite_schema "
         "WHERE name NOT GLOB 'sqlite_*' ORDER BY name");
     usize count = 0;
@@ -55,18 +61,18 @@ void check_schema(Db& db)
     while (schema.step())
     {
         const auto name = schema.text(0, 128);
-        const auto found = tables.find(name);
-        if (found == tables.end() || schema.text(1, 8192) != found->second)
+        const auto found = expected.find(name);
+        if (found == expected.end() || schema.text(1, 8192) != found->second)
         {
-            fail(Code::Corrupt, "schema_v1_mismatch");
+            fail(Code::Corrupt, "save_schema_mismatch");
         }
 
         ++count;
     }
 
-    if (count != tables.size())
+    if (count != expected.size())
     {
-        fail(Code::Corrupt, "schema_v1_incomplete");
+        fail(Code::Corrupt, "save_schema_incomplete");
     }
 
     Stmt foreign(db, "PRAGMA foreign_key_check");
@@ -77,6 +83,7 @@ void check_schema(Db& db)
 
     const auto next = db.scalar("SELECT int_value FROM save_meta WHERE key='next_match_id'");
     if (next <= 0 || next <= db.scalar("SELECT coalesce(max(match_id),0) FROM match_result") ||
+        (version == 2 && next <= db.scalar("SELECT coalesce(max(match_id),0) FROM hunter_raid")) ||
         db.scalar("SELECT count(*) FROM player_save WHERE player_id=1") != 1)
     {
         fail(Code::Corrupt, "invalid_save_metadata");
@@ -108,7 +115,7 @@ void create_schema(Db& db)
 void inspect(Db& db)
 {
     const auto version = db.scalar("PRAGMA user_version");
-    if (version != 0 && version != 1)
+    if (version != 0 && version != 1 && version != 2)
     {
         fail(Code::Version, "unsupported_save_version");
     }
@@ -128,7 +135,7 @@ void inspect(Db& db)
     }
     else
     {
-        check_schema(db);
+        check_schema(db, version);
     }
 }
 
@@ -167,7 +174,16 @@ void open_schema(Db& db)
         create_schema(db);
     }
 
-    check_schema(db);
+    if (db.scalar("PRAGMA user_version") == 1)
+    {
+        for (const auto& [name, sql] : hunter_tables())
+        {
+            db.exec(sql.c_str());
+        }
+        db.exec("INSERT INTO account_progress SELECT player_id,0,0 FROM player_save");
+        db.exec("PRAGMA user_version=2");
+    }
+    check_schema(db, 2);
     txn.commit();
 }
 

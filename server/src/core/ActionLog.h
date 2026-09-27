@@ -65,6 +65,7 @@ public:
         copy.set_item_id(req.item_id());
         copy.set_slot(req.slot());
         copy.set_target_id(req.target_id());
+        copy.set_death_seq(req.death_seq());
         entries_.push_back({std::move(copy), {}});
         return {Kind::Accepted, "", {}};
     }
@@ -101,7 +102,7 @@ private:
         return left.req_id() == right.req_id() && left.world_id() == right.world_id()
             && left.match_id() == right.match_id() && left.kind() == right.kind()
             && left.item_id() == right.item_id() && left.slot() == right.slot()
-            && left.target_id() == right.target_id();
+            && left.target_id() == right.target_id() && left.death_seq() == right.death_seq();
     }
 
     u64 high_ = 0;

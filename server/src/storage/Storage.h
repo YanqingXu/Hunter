@@ -41,6 +41,15 @@ public:
     // 查询已提交结果；不存在返回 NotFound，不恢复未完成对局。
     Expect<Accepted, Error> find_match(u64 match_id, Done done);
 
+    // 读取完整猎人档案与可用仓库，结果受统一完成容量限制。
+    Expect<Accepted, Error> load_hunters(u64 player_id, Done done);
+
+    // 提交带永久操作身份的猎人命令，成功回调才代表持久提交。
+    Expect<Accepted, Error> apply_hunter(HunterReq req, Done done);
+
+    // 使用原始身份意图查询永久操作；NotFound 才允许重新进行玩法规则校验。
+    Expect<Accepted, Error> find_hunter_op(u64 player_id, Str op_id, Str intent_json, Done done);
+
     // 独立关闭槽不受容量饱和影响；拒绝新任务，完成全部回调后关闭并通知。
     // 重复 stop 返回 Closed 错误；已接受写入不取消，调用方继续驱动 io。
     Expect<Accepted, Error> stop(Done done);

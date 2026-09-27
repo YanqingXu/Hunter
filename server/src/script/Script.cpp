@@ -325,6 +325,37 @@ struct Script::Impl
                     return Unexpect(host_error(host_fault));
                 }
             })));
+        net.add(luax::HostNamespaceEntry::function("skill_event", luax::HostFunction(
+            [this](luax::HostCallContext& ctx,
+                Span<const luax::ValueView> args) -> luax::Result<luax::HostStep>
+            {
+                if (args.size() != 8 || !args[0].stringIf() || !args[1].stringIf()
+                    || !args[2].stringIf() || !args[3].integerIf() || !args[4].integerIf()
+                    || !args[5].integerIf() || !args[6].stringIf() || !args[7].stringIf()
+                    || !allow_output)
+                {
+                    host_fault = "invalid_skill_event_arguments";
+                    return Unexpect(host_error(host_fault));
+                }
+
+                try
+                {
+                    const auto skill = read_id(Str(*args[6].stringIf()));
+                    const auto execution = read_id(Str(*args[7].stringIf()));
+                    require(skill <= 2147483647, "invalid_skill_id");
+                    auto out = world.event(Str(*args[0].stringIf()),
+                        Str(*args[1].stringIf()), Str(*args[2].stringIf()), *args[3].integerIf(),
+                        *args[4].integerIf(), *args[5].integerIf());
+                    out.mutable_event()->set_skill_id(static_cast<u32>(skill));
+                    out.mutable_event()->set_execution_id(execution);
+                    return stage(ctx, ScriptOut(std::move(out)));
+                }
+                catch (const std::exception&)
+                {
+                    host_fault = "invalid_skill_event_value";
+                    return Unexpect(host_error(host_fault));
+                }
+            })));
         net.add(luax::HostNamespaceEntry::function("snapshot", luax::HostFunction(
             [this](luax::HostCallContext& ctx,
                 Span<const luax::ValueView> args) -> luax::Result<luax::HostStep>
@@ -359,8 +390,8 @@ struct Script::Impl
                     require(json_object(content_json, cfg.max_json_bytes)
                         && json_object(bounds_json, cfg.max_json_bytes), "invalid_configuration");
                     const auto content = nlohmann::json::parse(content_json);
-                    require(content.at("v") == 4, "invalid_content_version");
-                    const Str key = "gameplay-v4:" + digest(content.dump());
+                    require(content.at("v") == 5, "invalid_content_version");
+                    const Str key = "gameplay-v5:" + digest(content.dump());
                     world.configure(nlohmann::json::parse(bounds_json), key);
                     return true;
                 }
@@ -403,13 +434,18 @@ struct Script::Impl
             return Unexpect(guard.error());
         }
 
+        const auto entry = funcs.find(name);
+        if (entry == funcs.end())
+        {
+            return Unexpect("missing_script_entry: " + name);
+        }
         busy = true;
         allow_output = output;
         world.access.writable = output || name == "import_state" || name == "shutdown";
         pending.clear();
         output_bytes = 0;
         host_fault.clear();
-        const auto result = luax::bind::callAs<Result>(isolate, funcs.at(name), options(),
+        const auto result = luax::bind::callAs<Result>(isolate, entry->second, options(),
             std::forward<Args>(args)...);
         busy = false;
         allow_output = false;
@@ -504,7 +540,7 @@ Expect<Vec<ScriptOut>, Str> Script::open(const Cfg& cfg, const Str& ctx_json)
 
         if (ctx.contains("v"))
         {
-            require(ctx.at("v") == 7 && ctx.size() == 2, "invalid_context_version");
+            require(ctx.at("v") == 8 && ctx.size() == 2, "invalid_context_version");
             self.snapshot_every = ctx.at("snapshot_every").get<u64>();
             require(self.snapshot_every >= 1 && self.snapshot_every <= 3600,
                 "invalid_snapshot_frequency");
@@ -626,12 +662,18 @@ Expect<Vec<ScriptOut>, Str> Script::open(const Cfg& cfg, const Str& ctx_json)
         self.funcs.emplace("check_loadout", *query);
     }
 
+    const auto hunter_query = self.isolate.findFunction(self.module, "check_hunter");
+    if (hunter_query)
+    {
+        self.funcs.emplace("check_hunter", *hunter_query);
+    }
+
     self.installing = nlohmann::json::parse(ctx_json).contains("v");
     auto opened = self.commit(self.invoke<bool>("init", true, ctx_json));
     self.installing = false;
 
     if (opened && nlohmann::json::parse(ctx_json).contains("v")
-        && (self.world.content_key.empty() || !query))
+        && (self.world.content_key.empty() || !query || !hunter_query))
     {
         return Unexpect(self.fail("configuration_missing"));
     }
@@ -655,12 +697,22 @@ Expect<Vec<ScriptOut>, Str> Script::event(i64 event_id, const Str& payload_json)
     return impl_->commit(impl_->invoke<bool>("on_event", true, event_id, payload_json));
 }
 
+Expect<Str, Str> Script::check_hunter(const Str& request_json)
+{
+    if (!json_object(request_json, impl_->cfg.max_json_bytes))
+    {
+        return Unexpect("invalid_hunter_request");
+    }
+
+    return impl_->invoke<Str>("check_hunter", false, request_json);
+}
+
 Expect<wire::Loadout, Str> Script::check_loadout(const wire::Loadout& input)
 {
     using Json = nlohmann::json;
     Json request = {{"player_cfg_id", std::to_string(input.player_cfg_id())},
         {"health_segments", Json::array()}, {"weapons", Json::array()},
-        {"tools", Json::array()}, {"consumables", Json::array()}};
+        {"tools", Json::array()}, {"consumables", Json::array()}, {"skills", Json::array()}};
 
     for (const auto value : input.health_segments())
     {
@@ -683,6 +735,10 @@ Expect<wire::Loadout, Str> Script::check_loadout(const wire::Loadout& input)
         request["consumables"].push_back(std::to_string(id));
     }
 
+    for (const auto id : input.skills())
+    {
+        request["skills"].push_back(std::to_string(id));
+    }
     auto& self = *impl_;
     const auto result = self.invoke<Str>("check_loadout", false, request.dump());
     if (!result)
@@ -707,7 +763,7 @@ Expect<wire::Loadout, Str> Script::check_loadout(const wire::Loadout& input)
         read_fields(response, {"ok", "loadout"});
         const auto& accepted = response.at("loadout");
         read_fields(accepted, {"player_cfg_id", "health_segments", "weapons",
-            "tools", "consumables"});
+            "tools", "consumables", "skills"});
         wire::Loadout output;
         const auto cfg_id = [](const Json& value) -> u32
         {
@@ -717,8 +773,8 @@ Expect<wire::Loadout, Str> Script::check_loadout(const wire::Loadout& input)
         };
         output.set_player_cfg_id(cfg_id(accepted.at("player_cfg_id")));
 
-        for (const auto& [key, maximum] : Arr<std::pair<const char*, usize>, 4>{
-            {{"health_segments", 6}, {"weapons", 2}, {"tools", 4}, {"consumables", 4}}})
+        for (const auto& [key, maximum] : Arr<std::pair<const char*, usize>, 5>{
+            {{"health_segments", 6}, {"weapons", 2}, {"tools", 4}, {"consumables", 4}, {"skills", 32}}})
         {
             require(accepted.at(key).is_array() && accepted.at(key).size() <= maximum,
                 "invalid_loadout_capacity");
@@ -747,6 +803,10 @@ Expect<wire::Loadout, Str> Script::check_loadout(const wire::Loadout& input)
             output.add_consumables(cfg_id(value));
         }
 
+        for (const auto& value : accepted.at("skills"))
+        {
+            output.add_skills(cfg_id(value));
+        }
         return output;
     }
     catch (const std::exception& error)
@@ -853,13 +913,18 @@ Expect<void, Str> Script::import_state(const Str& snapshot_json)
 
     if (!json_object(snapshot_json, impl_->cfg.max_json_bytes))
     {
-        return Unexpect(impl_->fail("invalid_state_json"));
+        return Unexpect("invalid_state_json");
     }
 
-    auto result = impl_->commit(impl_->invoke<bool>("import_state", false, snapshot_json));
+    auto result = impl_->invoke<bool>("import_state", false, snapshot_json);
     if (!result)
     {
         return Unexpect(result.error());
+    }
+
+    if (!*result)
+    {
+        return Unexpect("invalid_state");
     }
 
     return {};

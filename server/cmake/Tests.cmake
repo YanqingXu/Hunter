@@ -38,6 +38,20 @@ add_executable(hunter_gameplay_edges_contract tests/contract/GameplayEdges.cpp)
 hunter_target(hunter_gameplay_edges_contract)
 target_link_libraries(hunter_gameplay_edges_contract PRIVATE hunter_script)
 add_dependencies(hunter_gameplay_edges_contract hunter_scripts)
+add_executable(hunter_hunt_contract tests/contract/HuntContract.cpp)
+hunter_target(hunter_hunt_contract)
+target_link_libraries(hunter_hunt_contract PRIVATE hunter_script)
+add_dependencies(hunter_hunt_contract hunter_scripts)
+
+add_executable(hunter_scene_contract tests/contract/SceneContract.cpp)
+hunter_target(hunter_scene_contract)
+target_link_libraries(hunter_scene_contract PRIVATE hunter_script)
+add_dependencies(hunter_scene_contract hunter_scripts)
+
+add_executable(hunter_monster_contract tests/contract/MonsterContract.cpp)
+hunter_target(hunter_monster_contract)
+target_link_libraries(hunter_monster_contract PRIVATE hunter_script)
+add_dependencies(hunter_monster_contract hunter_scripts)
 add_executable(hunter_action_contract tests/contract/ActionContract.cpp)
 hunter_target(hunter_action_contract)
 target_link_libraries(hunter_action_contract PRIVATE hunter_protocol)
@@ -130,6 +144,12 @@ if(HUNTER_PRODUCTION)
     set(fixture_process_args --bundle "${HUNTER_TEST_FIXTURE_BUNDLE}" --policy "${HUNTER_TEST_POLICY}")
     add_test(NAME hunter_pve_contract COMMAND hunter_pve_contract
         "${HUNTER_TEST_BUNDLE}" "${HUNTER_TEST_POLICY}")
+    add_test(NAME hunter_hunt_contract COMMAND hunter_hunt_contract
+        "${HUNTER_TEST_BUNDLE}" "${HUNTER_TEST_POLICY}")
+    add_test(NAME hunter_scene_contract COMMAND hunter_scene_contract
+        "${HUNTER_TEST_BUNDLE}" "${HUNTER_TEST_POLICY}")
+    add_test(NAME hunter_monster_contract COMMAND hunter_monster_contract
+        "${HUNTER_TEST_BUNDLE}" "${HUNTER_TEST_POLICY}")
     add_test(NAME hunter_gameplay_contract COMMAND hunter_gameplay_contract
         "${HUNTER_TEST_BUNDLE}" "${HUNTER_TEST_POLICY}")
     add_test(NAME hunter_gameplay_edges_contract COMMAND hunter_gameplay_edges_contract
@@ -149,6 +169,9 @@ else()
     set(process_args --source "${HUNTER_GEN}/game.lua")
     set(fixture_process_args --source "${HUNTER_FIXTURE}/game.lua")
     add_test(NAME hunter_pve_contract COMMAND hunter_pve_contract "${HUNTER_GEN}/game.lua")
+    add_test(NAME hunter_hunt_contract COMMAND hunter_hunt_contract "${HUNTER_GEN}/game.lua")
+    add_test(NAME hunter_scene_contract COMMAND hunter_scene_contract "${HUNTER_GEN}/game.lua")
+    add_test(NAME hunter_monster_contract COMMAND hunter_monster_contract "${HUNTER_GEN}/game.lua")
     add_test(NAME hunter_gameplay_contract COMMAND hunter_gameplay_contract "${HUNTER_GEN}/game.lua")
     add_test(NAME hunter_gameplay_edges_contract COMMAND hunter_gameplay_edges_contract
         "${HUNTER_GEN}/game.lua")
@@ -172,6 +195,10 @@ if(TARGET hunter_server_desktop)
     add_test(NAME hunter_lua_cfg_integration COMMAND ${Python3_EXECUTABLE}
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/lua_cfg_test.py" ${lua_cfg_args})
     set_tests_properties(hunter_lua_cfg_integration PROPERTIES TIMEOUT 60)
+    add_test(NAME hunter_hunter_integration COMMAND ${Python3_EXECUTABLE}
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/hunter_test.py" ${lua_cfg_args}
+        --content "${HUNTER_GEN}/content.json")
+    set_tests_properties(hunter_hunter_integration PROPERTIES TIMEOUT 180)
     add_library(hunter_fault_core STATIC src/core/Runtime.cpp src/core/TickClock.cpp
         src/net/Protocol.cpp src/net/Transport.cpp)
     hunter_target(hunter_fault_core)
@@ -234,6 +261,10 @@ add_test(NAME hunter_demo_content_contract COMMAND ${Python3_EXECUTABLE}
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/scripts/test_demo.py")
 add_test(NAME hunter_gameplay_content_contract COMMAND ${Python3_EXECUTABLE}
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/scripts/test_gameplay_content.py")
+add_test(NAME hunter_skill_contract COMMAND ${Python3_EXECUTABLE}
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/scripts/test_skill.py")
+add_test(NAME hunter_career_contract COMMAND ${Python3_EXECUTABLE}
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/scripts/test_career.py")
 add_test(NAME hunter_package_contract COMMAND ${Python3_EXECUTABLE}
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/scripts/test_package.py")
 if(HUNTER_BUILD_TOOLS)
@@ -267,7 +298,8 @@ endif()
 file(GENERATE OUTPUT "${HUNTER_GEN}/test-cfg-tools-$<CONFIG>.json" CONTENT
     "{\"luax\":\"${HUNTER_LUAX}\",\"luaxc\":\"${hunter_test_luaxc}\",\"bundle_tool\":\"${hunter_test_bundle_tool}\",\"cache\":\"${CMAKE_CURRENT_BINARY_DIR}/cfg-cache\"}")
 foreach(target hunter_script_contract hunter_game_contract hunter_entity_contract hunter_perf
-    hunter_pve_contract hunter_gameplay_contract hunter_gameplay_edges_contract)
+    hunter_pve_contract hunter_gameplay_contract hunter_gameplay_edges_contract
+    hunter_monster_contract hunter_hunt_contract hunter_scene_contract)
     target_compile_definitions(${target} PRIVATE
         HUNTER_CONTENT_JSON="${HUNTER_GEN}/content.json"
         HUNTER_TEST_PYTHON="${Python3_EXECUTABLE}"
@@ -281,3 +313,10 @@ set_tests_properties(hunter_game_contract hunter_gameplay_contract
 get_property(hunter_targets DIRECTORY PROPERTY BUILDSYSTEM_TARGETS)
 list(JOIN hunter_targets "\",\n  \"" hunter_targets_json)
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/hunter-targets.json" "[\n  \"${hunter_targets_json}\"\n]\n")
+
+add_executable(hunter_hunter_store_contract tests/contract/HunterStoreContract.cpp)
+hunter_target(hunter_hunter_store_contract)
+target_link_libraries(hunter_hunter_store_contract PRIVATE hunter_storage_fault
+    nlohmann_json::nlohmann_json hunter_sqlite)
+add_test(NAME hunter_hunter_store_contract COMMAND hunter_hunter_store_contract)
+set_tests_properties(hunter_hunter_store_contract PROPERTIES TIMEOUT 60)

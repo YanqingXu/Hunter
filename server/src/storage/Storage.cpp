@@ -4,10 +4,12 @@
 #include "storage/Db.h"
 #include "storage/Schema.h"
 #include "storage/Store.h"
+#include "storage/HunterStore.h"
 
 #include <asio/executor_work_guard.hpp>
 #include <asio/post.hpp>
 
+#include <algorithm>
 #include <condition_variable>
 #include <deque>
 #include <limits>
@@ -19,7 +21,7 @@ namespace hunter::storage
 namespace
 {
 
-enum class Kind { Open, Load, Alloc, Commit, Find, Stop };
+enum class Kind { Open, Load, Alloc, Commit, Find, Hunters, Hunter, HunterFind, Stop };
 enum class State { New, Opening, Ready, Faulted, Stopping, Stopped };
 constexpr usize small_result = 1024;
 
@@ -31,6 +33,7 @@ struct Op
     Str path;
     u64 id = 0;
     CommitMatch req;
+    HunterReq hunter;
     Str json;
     usize req_bytes = 0;
     usize done_bytes = 0;
@@ -86,6 +89,7 @@ struct Storage::Impl : std::enable_shared_from_this<Impl>
     {
         if (instance == 0 || cfg.max_ops == 0 || cfg.max_req_bytes < sizeof(Op) ||
             cfg.max_result_bytes < small_result || cfg.max_done_bytes < cfg.max_result_bytes ||
+            cfg.max_hunter_bytes < small_result ||
             cfg.max_result_bytes > static_cast<usize>(std::numeric_limits<i32>::max()))
         {
             fail(Code::Invalid, "invalid_storage_cfg");
@@ -239,6 +243,7 @@ struct Storage::Impl : std::enable_shared_from_this<Impl>
             {
                 auto candidate = std::make_unique<Db>(op.path);
                 open_schema(*candidate);
+                recover_hunters(*candidate);
                 db = std::move(candidate);
                 return Opened{};
             }
@@ -269,6 +274,14 @@ struct Storage::Impl : std::enable_shared_from_this<Impl>
                 return write_match(*db, op.req, op.json, cfg.max_result_bytes);
             case Kind::Find:
                 return read_match(*db, op.id, cfg.max_result_bytes);
+            case Kind::Hunters:
+                return read_hunters(*db, op.id, std::min(cfg.max_result_bytes, cfg.max_hunter_bytes));
+            case Kind::Hunter:
+                return write_hunter(*db, op.hunter, op.json,
+                    std::min(cfg.max_result_bytes, cfg.max_hunter_bytes));
+            case Kind::HunterFind:
+                return storage::find_hunter_op(*db, op.hunter.player_id, op.hunter.op_id,
+                    op.hunter.intent_json, std::min(cfg.max_result_bytes, cfg.max_hunter_bytes));
             default:
                 return rejected(Code::Internal, "unknown_storage_operation");
             }
@@ -315,6 +328,7 @@ struct Storage::Impl : std::enable_shared_from_this<Impl>
             Vec<ItemDelta>{}.swap(op->req.items);
             Str{}.swap(op->json);
             Str{}.swap(op->path);
+            op->hunter = HunterReq{};
             const bool stop = op->kind == Kind::Stop;
             complete(std::move(op), std::move(result));
 
@@ -352,7 +366,7 @@ struct Storage::Impl : std::enable_shared_from_this<Impl>
             return Unexpect(valid.error());
         }
 
-        if ((kind == Kind::Find || kind == Kind::Load) && !id_ok(id))
+        if ((kind == Kind::Find || kind == Kind::Load || kind == Kind::Hunters) && !id_ok(id))
         {
             return rejected(Code::Invalid, "persistent_id_range");
         }
@@ -362,7 +376,7 @@ struct Storage::Impl : std::enable_shared_from_this<Impl>
         op->id = id;
         op->done = std::move(done);
         op->req_bytes = sizeof(Op);
-        op->done_bytes = kind == Kind::Load || kind == Kind::Find ?
+        op->done_bytes = kind == Kind::Load || kind == Kind::Find || kind == Kind::Hunters ?
             cfg.max_result_bytes : small_result;
         return submit(std::move(op));
     }
@@ -462,6 +476,82 @@ Expect<Accepted, Error> Storage::commit_match(CommitMatch req, Done done)
 Expect<Accepted, Error> Storage::find_match(u64 match_id, Done done)
 {
     return impl_->simple(Kind::Find, match_id, std::move(done));
+}
+
+Expect<Accepted, Error> Storage::load_hunters(u64 player_id, Done done)
+{
+    return impl_->simple(Kind::Hunters, player_id, std::move(done));
+}
+
+Expect<Accepted, Error> Storage::apply_hunter(HunterReq req, Done done)
+{
+    auto& self = *impl_;
+    const auto valid = self.allowed(Kind::Hunter);
+    if (!valid)
+    {
+        return Unexpect(valid.error());
+    }
+    try
+    {
+        usize bytes = sizeof(Op);
+        charge(bytes, req.op_id.capacity(), self.cfg.max_req_bytes);
+        charge(bytes, req.kind.capacity(), self.cfg.max_req_bytes);
+        charge(bytes, req.payload_json.capacity(), self.cfg.max_req_bytes);
+        charge(bytes, req.intent_json.capacity(), self.cfg.max_req_bytes);
+        auto json = encode_hunter(req);
+        charge(bytes, json.capacity(), self.cfg.max_req_bytes);
+        auto op = std::make_shared<Op>();
+        op->kind = Kind::Hunter;
+        op->hunter = std::move(req);
+        op->json = std::move(json);
+        op->done = std::move(done);
+        op->req_bytes = bytes;
+        op->done_bytes = self.cfg.max_result_bytes;
+        return self.submit(std::move(op));
+    }
+    catch (const Error& error)
+    {
+        return Unexpect(error);
+    }
+    catch (const std::exception&)
+    {
+        return rejected(Code::Invalid, "invalid_hunter_request");
+    }
+}
+
+Expect<Accepted, Error> Storage::find_hunter_op(u64 player_id, Str op_id,
+    Str intent_json, Done done)
+{
+    auto& self = *impl_;
+    const auto valid = self.allowed(Kind::HunterFind);
+    if (!valid)
+    {
+        return Unexpect(valid.error());
+    }
+    if (!id_ok(player_id) || op_id.empty() || op_id.size() > 128
+        || op_id.find('\0') != Str::npos || intent_json.size() > 262144)
+    {
+        return rejected(Code::Invalid, "invalid_hunter_operation_lookup");
+    }
+    try
+    {
+        usize bytes = sizeof(Op);
+        charge(bytes, op_id.capacity(), self.cfg.max_req_bytes);
+        charge(bytes, intent_json.capacity(), self.cfg.max_req_bytes);
+        auto op = std::make_shared<Op>();
+        op->kind = Kind::HunterFind;
+        op->hunter.player_id = player_id;
+        op->hunter.op_id = std::move(op_id);
+        op->hunter.intent_json = std::move(intent_json);
+        op->done = std::move(done);
+        op->req_bytes = bytes;
+        op->done_bytes = self.cfg.max_result_bytes;
+        return self.submit(std::move(op));
+    }
+    catch (const Error& error)
+    {
+        return Unexpect(error);
+    }
 }
 
 Expect<Accepted, Error> Storage::stop(Done done)

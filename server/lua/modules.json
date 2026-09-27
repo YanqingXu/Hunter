@@ -66,7 +66,9 @@
         "game.player",
         "game.monster",
         "game.loadout",
-        "game.movement"
+        "game.movement",
+        "game.skill",
+        "game.exploration"
       ],
       "kind": "factory"
     },
@@ -75,7 +77,8 @@
       "file": "game/damage.lua",
       "deps": [
         "game.world",
-        "game.player"
+        "game.player",
+        "game.hunt"
       ],
       "kind": "factory"
     },
@@ -87,7 +90,8 @@
         "game.world",
         "game.combat",
         "game.damage",
-        "game.movement"
+        "game.movement",
+        "game.scene"
       ],
       "kind": "factory"
     },
@@ -99,7 +103,9 @@
         "game.combat",
         "game.world",
         "game.monster",
-        "game.damage"
+        "game.damage",
+        "game.ability",
+        "game.encounter"
       ],
       "kind": "factory"
     },
@@ -121,7 +127,12 @@
         "game.vitals",
         "game.cfg",
         "game.loadout",
-        "game.statecheck"
+        "game.statecheck",
+        "game.hunt",
+        "game.damage",
+        "game.encounter",
+        "game.career",
+        "game.scene"
       ],
       "kind": "factory"
     },
@@ -154,7 +165,8 @@
         "game.world",
         "game.movement",
         "game.combat",
-        "game.damage"
+        "game.damage",
+        "game.scene"
       ],
       "kind": "factory"
     },
@@ -167,7 +179,10 @@
         "game.combat",
         "game.projectile",
         "framework.state",
-        "game.inventory"
+        "game.inventory",
+        "game.hunt",
+        "game.scene",
+        "game.exploration"
       ],
       "kind": "factory"
     },
@@ -200,7 +215,8 @@
       "kind": "factory",
       "deps": [
         "framework.state",
-        "game.cfg_geometry"
+        "game.cfg_geometry",
+        "game.skill"
       ]
     },
     {
@@ -222,7 +238,8 @@
       "file": "game/loadout.lua",
       "kind": "factory",
       "deps": [
-        "framework.state"
+        "framework.state",
+        "game.skill"
       ]
     },
     {
@@ -233,7 +250,8 @@
         "framework.state",
         "game.loadout",
         "game.movement",
-        "game.monster"
+        "game.monster",
+        "game.skill"
       ]
     },
     {
@@ -241,8 +259,77 @@
       "file": "game/inventory.lua",
       "kind": "factory",
       "deps": [
-        "game.world"
+        "game.world",
+        "game.encounter",
+        "game.cfg",
+        "game.loadout"
       ]
+    },
+    {
+      "name": "game.skill",
+      "file": "game/skill.lua",
+      "deps": [
+        "framework.state"
+      ],
+      "kind": "factory"
+    },
+    {
+      "name": "game.hunt",
+      "file": "game/hunt.lua",
+      "deps": [
+        "game.skill",
+        "game.world",
+        "game.movement",
+        "game.player"
+      ],
+      "kind": "factory"
+    },
+    {
+      "name": "game.ability",
+      "file": "game/ability.lua",
+      "deps": [
+        "game.world",
+        "game.monster",
+        "game.movement",
+        "game.combat",
+        "game.damage"
+      ],
+      "kind": "factory"
+    },
+    {
+      "name": "game.encounter",
+      "file": "game/encounter.lua",
+      "deps": [
+        "game.world",
+        "game.monster",
+        "game.movement"
+      ],
+      "kind": "factory"
+    },
+    {
+      "name": "game.career",
+      "file": "game/career.lua",
+      "deps": [
+        "game.loadout"
+      ],
+      "kind": "factory"
+    },
+    {
+      "name": "game.scene",
+      "file": "game/scene.lua",
+      "deps": [
+        "game.world",
+        "game.damage",
+        "game.movement",
+        "game.combat"
+      ],
+      "kind": "factory"
+    },
+    {
+      "name": "game.exploration",
+      "file": "game/exploration.lua",
+      "deps": [],
+      "kind": "factory"
     }
   ]
 }

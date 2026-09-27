@@ -292,6 +292,10 @@ struct Runtime::Loop
                     {
                         reject_action("paused", queued->action_req());
                     }
+                    else if (queued->has_hunter_req())
+                    {
+                        reject("paused", queued->hunter_req().req_id());
+                    }
                 }
 
                 pending_seqs.clear();
@@ -301,7 +305,7 @@ struct Runtime::Loop
                     return;
                 }
 
-                if (!commit(script->event(4, R"({"v":7,"paused":true})")))
+                if (!commit(script->event(4, R"({"v":8,"paused":true})")))
                 {
                     return;
                 }
@@ -323,7 +327,7 @@ struct Runtime::Loop
 
                 if (was_paused)
                 {
-                    if (!commit(script->event(4, R"({"v":7,"paused":false})")))
+                    if (!commit(script->event(4, R"({"v":8,"paused":false})")))
                     {
                         return;
                     }
@@ -381,7 +385,7 @@ struct Runtime::Loop
             token = random_hex(32);
             instance_id = std::stoull(instance.substr(0, 16), nullptr, 16) | 1ULL;
             script = std::make_unique<Script>();
-            const nlohmann::json ctx = {{"v", 7},
+            const nlohmann::json ctx = {{"v", 8},
                 {"snapshot_every", cfg.tick_hz / cfg.snapshot_hz}};
             auto out = script->open(cfg, ctx.dump());
 
@@ -395,7 +399,11 @@ struct Runtime::Loop
                 throw std::runtime_error(out ? "init must not emit network output" : out.error());
             }
 
-            storage = std::make_unique<storage::Storage>(io, storage::StorageCfg{}, instance_id);
+            storage::StorageCfg limits;
+            require(cfg.max_frame_bytes >= 2048 && cfg.max_json_bytes >= 2048,
+                "hunter_capacity_too_small");
+            limits.max_hunter_bytes = std::min(cfg.max_frame_bytes, cfg.max_json_bytes) - 1024;
+            storage = std::make_unique<storage::Storage>(io, limits, instance_id);
             const auto accepted = storage->open(cfg.save_path, [this, req_id](storage::Rsp result)
             {
                 if (stopped)
@@ -492,7 +500,7 @@ struct Runtime::Loop
         evt["port"] = port;
         evt["instance"] = instance;
         evt["token"] = token;
-        evt["protocol_version"] = 5;
+        evt["protocol_version"] = 6;
         evt["content_version"] = script->world().content_key;
         emit(std::move(evt));
     }
@@ -504,7 +512,7 @@ struct Runtime::Loop
         {
             const auto& hello = msg.hello();
 
-            if (!msg.has_hello() || hello.protocol_version() != 5
+            if (!msg.has_hello() || hello.protocol_version() != 6
                 || hello.content_version() != script->world().content_key
                 || hello.instance() != instance || hello.token() != token)
             {
@@ -517,7 +525,7 @@ struct Runtime::Loop
             net->authenticate();
             wire::Envelope reply;
             auto* ack = reply.mutable_hello_ack();
-            ack->set_protocol_version(5);
+            ack->set_protocol_version(6);
             ack->set_content_version(Str(script->world().content_key));
             ack->set_instance(instance);
 
@@ -536,6 +544,28 @@ struct Runtime::Loop
         if (msg.has_save_req())
         {
             save_query(msg.save_req());
+            return;
+        }
+
+        if (msg.has_hunter_req())
+        {
+            const auto& req = msg.hunter_req();
+            if (req.req_id().empty() || req.req_id().size() > 128)
+            {
+                reject("invalid_request");
+            }
+            else if (req.kind() == wire::HunterReq::PROFILE)
+            {
+                hunter_query(req);
+            }
+            else if (paused)
+            {
+                reject("paused", req.req_id());
+            }
+            else
+            {
+                enqueue(std::move(msg));
+            }
             return;
         }
 
@@ -736,6 +766,8 @@ struct Runtime::Loop
                 reply->set_world_id(world.world_id);
                 reply->set_player_entity_id(world.player_entity_id);
                 *reply->mutable_loadout() = world.get_loadout();
+                reply->set_hunter_id(world.hunter_id);
+                reply->set_test_mode(world.hunter_id == 0);
             }
         }
 
@@ -880,13 +912,19 @@ struct Runtime::Loop
                 continue;
             }
 
+            if (input->has_hunter_req())
+            {
+                hunter_command(input->hunter_req());
+                continue;
+            }
+
             if (input->has_action_req())
             {
                 action(input->action_req());
                 continue;
             }
 
-            nlohmann::json payload = {{"v", 7}};
+            nlohmann::json payload = {{"v", 8}};
             i64 event_id = 2;
             if (input->has_login_req())
             {
@@ -920,9 +958,481 @@ struct Runtime::Loop
         }
     }
 
+    // 从永久档案刷新查询投影；历史操作重放不会倒退当前版本。
+    void update_hunters(const nlohmann::json& value)
+    {
+        const auto revision = value.at("revision").get<u64>();
+        if (revision < profile.revision)
+        {
+            return;
+        }
+        hunter_profile = value;
+        profile.revision = revision;
+        profile.items.clear();
+        for (const auto& item : value.at("stash"))
+        {
+            profile.items.push_back({item.at("item_uid").get<u64>(),
+                item.at("cfg_id").get<u32>(), item.at("count").get<i32>(),
+                item.at("acquired_match_id").get<u64>()});
+        }
+    }
+
+    // 返回永久操作原始响应；当前档案另由 PROFILE 显式查询。
+    void hunter_reply(const wire::HunterReq& req, const storage::HunterResult& result)
+    {
+        if (result.result_json.size() + 512 > shared.cfg.max_frame_bytes)
+        {
+            reject("hunter_profile_too_large", req.req_id());
+            return;
+        }
+        wire::Envelope reply;
+        auto& value = *reply.mutable_hunter_rsp();
+        value.set_req_id(req.req_id());
+        value.set_op_id(req.op_id());
+        value.set_revision(result.revision);
+        value.set_hunter_id(result.hunter_id);
+        value.set_match_id(result.match_id);
+        value.set_replayed(result.replayed);
+        value.set_result_json(result.result_json);
+        send_msg(reply);
+    }
+
+    // 暂停期间也允许读取档案，价格和资产来源始终来自存档和脚本。
+    void hunter_query(const wire::HunterReq& req)
+    {
+        if (!script || script->world().player_id == 0)
+        {
+            reject("not_logged_in", req.req_id());
+            return;
+        }
+        const auto accepted = storage->load_hunters(profile.player_id,
+            [this, req](storage::Rsp result)
+            {
+                if (stopped || !script)
+                {
+                    return;
+                }
+                if (!result.result)
+                {
+                    reject(result.result.error().message, req.req_id());
+                    return;
+                }
+                const auto& value = std::get<storage::HunterResult>(*result.result);
+                update_hunters(nlohmann::json::parse(value.result_json));
+                hunter_reply(req, value);
+            });
+        if (!accepted)
+        {
+            reject(accepted.error().message, req.req_id());
+        }
+    }
+
+    // 计算已授权原始意图的规范指纹，不包含可变档案或由 Lua 计算的价额。
+    Str hunter_intent(const wire::HunterReq& req) const
+    {
+        return nlohmann::json({{"kind", static_cast<i32>(req.kind())},
+            {"revision", req.revision()}, {"hunter_id", req.hunter_id()},
+            {"cfg_id", req.cfg_id()}, {"skill_id", req.skill_id()},
+            {"slot", req.slot()}, {"item_uid", req.item_uid()}}).dump();
+    }
+
+    // 调用只读经济规则，仅将成功且形状正确的服务端载荷交给存储。
+    Expect<nlohmann::json, Str> hunter_rules(nlohmann::json value)
+    {
+        value["v"] = 8;
+        const auto result = script->check_hunter(value.dump());
+        if (!result)
+        {
+            return Unexpect(result.error());
+        }
+        const auto parsed = nlohmann::json::parse(*result, nullptr, false);
+        if (!parsed.is_object() || !parsed.contains("ok") || !parsed["ok"].is_boolean())
+        {
+            return Unexpect(Str("invalid_hunter_rule_result"));
+        }
+        if (!parsed["ok"].get<bool>())
+        {
+            return Unexpect(parsed.value("error", Str("hunter_rule_rejected")));
+        }
+        if (!parsed.contains("payload") || !parsed["payload"].is_object())
+        {
+            return Unexpect(Str("invalid_hunter_rule_payload"));
+        }
+        return parsed["payload"];
+    }
+
+    // 先查持久操作，再对当前档案校验，保证退役和消费后的重发仍可得到原结果。
+    void hunter_command(const wire::HunterReq& req)
+    {
+        if (!script || script->world().player_id == 0)
+        {
+            reject("not_logged_in", req.req_id());
+            return;
+        }
+        if (req.kind() < wire::HunterReq::RECRUIT || req.kind() > wire::HunterReq::RETIRE
+            || req.op_id().empty() || req.op_id().size() > 96
+            || req.op_id().find('\0') != Str::npos || req.revision() == 0)
+        {
+            reject("invalid_hunter_request", req.req_id());
+            return;
+        }
+        if (hunter_busy || pending_start || save_busy || script->world().phase == "Playing"
+            || script->world().phase == "Settling")
+        {
+            reject("hunter_busy", req.req_id());
+            return;
+        }
+        hunter_busy = true;
+        const auto intent = hunter_intent(req);
+        const auto found = storage->find_hunter_op(profile.player_id, "ui:" + req.op_id(), intent,
+            [this, req, intent](storage::Rsp result)
+            {
+                if (stopped || !script)
+                {
+                    hunter_busy = false;
+                    return;
+                }
+                if (result.result)
+                {
+                    hunter_busy = false;
+                    hunter_reply(req, std::get<storage::HunterResult>(*result.result));
+                    return;
+                }
+                if (result.result.error().code != storage::Code::NotFound)
+                {
+                    hunter_busy = false;
+                    reject(result.result.error().message, req.req_id());
+                    return;
+                }
+                load_hunter_command(req, intent);
+            });
+        if (!found)
+        {
+            hunter_busy = false;
+            reject(found.error().message, req.req_id());
+        }
+    }
+
+    // 异步读取真实档案后计算经济参数，直到提交完成保持单操作屏障。
+    void load_hunter_command(const wire::HunterReq& req, const Str& intent)
+    {
+        const auto accepted = storage->load_hunters(profile.player_id,
+            [this, req, intent](storage::Rsp result)
+            {
+                if (stopped || !script)
+                {
+                    hunter_busy = false;
+                    return;
+                }
+                if (!result.result)
+                {
+                    hunter_busy = false;
+                    reject(result.result.error().message, req.req_id());
+                    return;
+                }
+                update_hunters(nlohmann::json::parse(
+                    std::get<storage::HunterResult>(*result.result).result_json));
+                if (paused || req.revision() != profile.revision)
+                {
+                    hunter_busy = false;
+                    reject(paused ? "paused" : "player_revision_conflict", req.req_id());
+                    return;
+                }
+                static constexpr const char* kinds[] = {"profile", "recruit", "equip",
+                    "buy_skill", "remove_skill", "retire"};
+                const Str kind = kinds[static_cast<i32>(req.kind())];
+                const auto payload = hunter_rules({{"kind", kind}, {"profile", hunter_profile},
+                    {"hunter_id", req.hunter_id()}, {"cfg_id", req.cfg_id()},
+                    {"skill_id", req.skill_id()}, {"slot", req.slot()},
+                    {"item_uid", req.item_uid()}});
+                if (!payload)
+                {
+                    hunter_busy = false;
+                    reject(payload.error(), req.req_id());
+                    return;
+                }
+                storage::HunterReq command{profile.player_id, profile.revision, req.hunter_id(),
+                    "ui:" + req.op_id(), kind, payload->dump(), intent};
+                const auto submitted = storage->apply_hunter(std::move(command),
+                    [this, req](storage::Rsp saved)
+                    {
+                        hunter_busy = false;
+                        if (stopped || !script)
+                        {
+                            return;
+                        }
+                        if (!saved.result)
+                        {
+                            reject(saved.result.error().message, req.req_id());
+                            return;
+                        }
+                        const auto& value = std::get<storage::HunterResult>(*saved.result);
+                        update_hunters(nlohmann::json::parse(value.result_json).at("profile"));
+                        hunter_reply(req, value);
+                    });
+                if (!submitted)
+                {
+                    hunter_busy = false;
+                    reject(submitted.error().message, req.req_id());
+                }
+            });
+        if (!accepted)
+        {
+            hunter_busy = false;
+            reject(accepted.error().message, req.req_id());
+        }
+    }
+
+    // 将已由只读 Lua 校验的永久配装投影为原生协议值，不填充免费默认物资。
+    wire::Loadout owned_loadout(const nlohmann::json& value) const
+    {
+        wire::Loadout result;
+        const auto cfg_id = [](const nlohmann::json& entry) -> u32
+        {
+            const auto id = entry.is_string() ? read_id(entry.get<Str>()) : entry.get<u64>();
+            require(id > 0 && id <= 2147483647, "invalid_hunter_loadout_cfg");
+            return static_cast<u32>(id);
+        };
+        result.set_player_cfg_id(cfg_id(value.at("player_cfg_id")));
+        for (const auto& entry : value.at("health_segments"))
+        {
+            result.add_health_segments(entry.get<u32>());
+        }
+        for (const auto& entry : value.at("weapons"))
+        {
+            auto& weapon = *result.add_weapons();
+            weapon.set_cfg_id(cfg_id(entry.at("cfg_id")));
+            weapon.set_ammo_cfg_id(cfg_id(entry.at("ammo_cfg_id")));
+        }
+        for (const auto& entry : value.at("tools"))
+        {
+            result.add_tools(cfg_id(entry));
+        }
+        for (const auto& entry : value.at("consumables"))
+        {
+            result.add_consumables(cfg_id(entry));
+        }
+        for (const auto& entry : value.at("skills"))
+        {
+            result.add_skills(cfg_id(entry));
+        }
+        require(result.weapons_size() > 0 && result.weapons_size() <= 2
+            && result.tools_size() <= 4 && result.consumables_size() <= 4
+            && result.skills_size() <= 32, "invalid_hunter_loadout_capacity");
+        return result;
+    }
+
+    // 恢复尚未建立世界的准备阶段，不将等待或暂停当成永久死亡。
+    void reject_hunter_start(const wire::StartReq& req, const Str& phase, const Str& error)
+    {
+        hunter_busy = false;
+        pending_start.reset();
+        pending_start_discarded = false;
+        if (!stopped && script)
+        {
+            if (!script->change([&](World& world) { world.phase = phase; }))
+            {
+                abort("prepare_failed");
+                return;
+            }
+            reject(error, req.req_id());
+        }
+    }
+
+    // 永久开局先读取档案并验证所有权，再原子登记基线和局号，完成后才创建世界。
+    void start_hunter(const wire::StartReq& incoming)
+    {
+        const auto& world = script->world();
+        const Str intent = nlohmann::json({{"hunter_id", incoming.hunter_id()},
+            {"revision", incoming.revision()}, {"after_match_id", incoming.after_match_id()}}).dump();
+        if (incoming.test_mode() || incoming.has_loadout() || incoming.revision() == 0
+            || incoming.req_id().size() > 96 || world.player_id == 0)
+        {
+            reject("invalid_hunter_start", incoming.req_id());
+            return;
+        }
+        if (incoming.req_id() == world.last_req)
+        {
+            if (intent != active_start_intent || world.hunter_id != incoming.hunter_id())
+            {
+                reject("request_conflict", incoming.req_id());
+                return;
+            }
+            auto req = incoming;
+            *req.mutable_loadout() = world.get_loadout();
+            begin_match(req, world.match_id, world.world_id);
+            return;
+        }
+        if (hunter_busy || pending_start || save_busy || world.phase == "Playing"
+            || world.phase == "Settling" || incoming.after_match_id() != world.match_id)
+        {
+            reject("invalid_state", incoming.req_id());
+            return;
+        }
+        const auto phase = world.phase;
+        hunter_busy = true;
+        pending_start = incoming;
+        pending_start_discarded = false;
+        if (!script->change([](World& value) { value.set_phase("Preparing"); }))
+        {
+            reject_hunter_start(incoming, phase, "prepare_failed");
+            return;
+        }
+        const auto found = storage->find_hunter_op(profile.player_id,
+            "start:" + incoming.req_id(), intent,
+            [this, incoming, phase, intent](storage::Rsp prior)
+            {
+                if (stopped || !script)
+                {
+                    return;
+                }
+                if (prior.result || prior.result.error().code != storage::Code::NotFound)
+                {
+                    reject_hunter_start(incoming, phase, prior.result
+                        ? "hunter_start_already_closed" : prior.result.error().message);
+                    return;
+                }
+                load_hunter_start(incoming, phase, intent);
+            });
+        if (!found)
+        {
+            reject_hunter_start(incoming, phase, found.error().message);
+        }
+    }
+
+    // 从当前永久状态构造配装，缺配置或资产不足时不分配局号。
+    void load_hunter_start(const wire::StartReq& incoming, const Str& phase, const Str& intent)
+    {
+        const auto loaded = storage->load_hunters(profile.player_id,
+            [this, incoming, phase, intent](storage::Rsp result)
+            {
+                if (stopped || !script)
+                {
+                    return;
+                }
+                if (!result.result)
+                {
+                    reject_hunter_start(incoming, phase, result.result.error().message);
+                    return;
+                }
+                update_hunters(nlohmann::json::parse(
+                    std::get<storage::HunterResult>(*result.result).result_json));
+                if (paused || pending_start_discarded || incoming.revision() != profile.revision)
+                {
+                    reject_hunter_start(incoming, phase, paused || pending_start_discarded
+                        ? "paused" : "player_revision_conflict");
+                    return;
+                }
+                const auto payload = hunter_rules({{"kind", "start"},
+                    {"profile", hunter_profile}, {"hunter_id", incoming.hunter_id()},
+                    {"cfg_id", 0}, {"item_uid", 0}, {"slot", 0}, {"skill_id", 0}});
+                if (!payload)
+                {
+                    reject_hunter_start(incoming, phase, payload.error());
+                    return;
+                }
+                auto req = incoming;
+                Map<u32, i32> counts;
+                try
+                {
+                    *req.mutable_loadout() = owned_loadout(payload->at("loadout"));
+                    for (const auto& item : payload->at("tool_counts"))
+                    {
+                        const auto cfg = read_id(item.at("cfg_id").get<Str>());
+                        const auto count = item.at("count").get<i64>();
+                        require(cfg > 0 && cfg <= 2147483647 && count >= 0 && count <= 100000,
+                            "invalid_hunter_tool_count");
+                        require(counts.emplace(static_cast<u32>(cfg), static_cast<i32>(count)).second,
+                            "duplicate_hunter_tool");
+                    }
+                }
+                catch (const std::exception& error)
+                {
+                    reject_hunter_start(incoming, phase, error.what());
+                    return;
+                }
+                storage::HunterReq command{profile.player_id, profile.revision, req.hunter_id(),
+                    "start:" + req.req_id(), "begin_raid", nlohmann::json({{"content_key",
+                        script->world().content_key}}).dump(), intent};
+                const auto accepted = storage->apply_hunter(std::move(command),
+                    [this, req, phase, intent, counts](storage::Rsp saved)
+                    {
+                        if (stopped || !script)
+                        {
+                            return;
+                        }
+                        if (!saved.result)
+                        {
+                            reject_hunter_start(req, phase, saved.result.error().message);
+                            return;
+                        }
+                        const auto& value = std::get<storage::HunterResult>(*saved.result);
+                        update_hunters(nlohmann::json::parse(value.result_json).at("profile"));
+                        if (paused || pending_start_discarded)
+                        {
+                            cancel_hunter_start(req, phase, value.match_id);
+                            return;
+                        }
+                        hunter_busy = false;
+                        pending_start.reset();
+                        pending_start_discarded = false;
+                        if (!script->change([&](World& world) { world.phase = phase; }))
+                        {
+                            abort("prepare_failed");
+                            return;
+                        }
+                        active_hunter = req.hunter_id();
+                        active_start_intent = intent;
+                        hunter_tool_counts = counts;
+                        begin_match(req, value.match_id, ++next_world);
+                    });
+                if (!accepted)
+                {
+                    reject_hunter_start(incoming, phase, accepted.error().message);
+                }
+            });
+        if (!loaded)
+        {
+            reject_hunter_start(incoming, phase, loaded.error().message);
+        }
+    }
+
+    // 暂停作废已登记开局时先解除持久占用；异常退出仍由下次启动回退。
+    void cancel_hunter_start(const wire::StartReq& req, const Str& phase, u64 match)
+    {
+        storage::HunterReq command{profile.player_id, profile.revision, req.hunter_id(),
+            "cancel:" + std::to_string(match), "recover_raid",
+            nlohmann::json({{"match_id", match}}).dump(), {}};
+        const auto accepted = storage->apply_hunter(std::move(command),
+            [this, req, phase](storage::Rsp result)
+            {
+                if (result.result)
+                {
+                    const auto& value = std::get<storage::HunterResult>(*result.result);
+                    update_hunters(nlohmann::json::parse(value.result_json).at("profile"));
+                }
+                reject_hunter_start(req, phase,
+                    result.result ? "paused" : result.result.error().message);
+            });
+        if (!accepted)
+        {
+            reject_hunter_start(req, phase, accepted.error().message);
+        }
+    }
+
     // 在 Tick 边界申请持久局号，同请求只保留一次分配，完成后才创建世界。
     void start_match(const wire::StartReq& incoming)
     {
+        if (incoming.hunter_id() != 0)
+        {
+            start_hunter(incoming);
+            return;
+        }
+        if (!incoming.test_mode() || incoming.revision() != 0 || hunter_busy)
+        {
+            reject("invalid_test_start", incoming.req_id());
+            return;
+        }
         const auto& world = script->world();
         auto req = incoming;
 
@@ -1042,17 +1552,48 @@ struct Runtime::Loop
     {
         const auto previous = script->world().match_id;
         if (previous != match && !script->change([&](World& world)
-            { world.prepare_loadout(req.loadout()); }))
+            { world.hunter_id = req.hunter_id(); world.prepare_loadout(req.loadout()); }))
         {
             abort("loadout_prepare_failed");
             return;
         }
 
-        const nlohmann::json payload = {{"v", 7}, {"req_id", req.req_id()},
+        const nlohmann::json payload = {{"v", 8}, {"req_id", req.req_id()},
             {"after_match_id", std::to_string(req.after_match_id())},
             {"match_id", std::to_string(match)}, {"world_id", std::to_string(world_id)}};
 
-        if (!commit(script->event(3, payload.dump())))
+        auto output = script->event(3, payload.dump());
+        if (output && previous != match && req.hunter_id() != 0)
+        {
+            const auto changed = script->change([&](World& world)
+            {
+                auto& player = std::get<Player>(
+                    world.actors[world.slot(world.player_entity_id)]->value);
+                for (auto& tool : player.tools)
+                {
+                    if (tool.cfg_id != 0)
+                    {
+                        const auto found = hunter_tool_counts.find(tool.cfg_id);
+                        require(found != hunter_tool_counts.end() && found->second <= tool.count,
+                            "invalid_hunter_tool_count");
+                        tool.count = found->second;
+                    }
+                }
+            });
+            if (!changed)
+            {
+                abort(changed.error());
+                return;
+            }
+            for (auto& value : *output)
+            {
+                if (value.message.has_snapshot())
+                {
+                    value.message = script->world().snapshot(profile.player_id);
+                }
+            }
+        }
+        if (!commit(std::move(output)))
         {
             return;
         }
@@ -1063,6 +1604,7 @@ struct Runtime::Loop
         {
             binding.enter(world.world_id, world.match_id);
             frozen.reset();
+            frozen_hunter.reset();
             saved.reset();
             save_state = "Idle";
             save_error.clear();
@@ -1094,20 +1636,21 @@ struct Runtime::Loop
         }
 
         const i32 kind = static_cast<i32>(req.kind());
-        if (kind < wire::ActionReq::BAG || kind > wire::ActionReq::INTERACT)
+        if (kind < wire::ActionReq::BAG || kind > wire::ActionReq::VISION_OFF)
         {
             reject_action("invalid_request", req);
             return;
         }
 
         static constexpr const char* names[] = {"bag", "pickup", "abandon", "switch_weapon",
-            "select_tool", "melee", "use", "interact"};
+            "select_tool", "melee", "use", "interact", "revive", "vision_on", "vision_off"};
         const auto target = req.kind() == wire::ActionReq::PICKUP
             ? req.item_id() : req.target_id();
-        const nlohmann::json payload = {{"v", 7}, {"req_id", req.req_id()},
+        const nlohmann::json payload = {{"v", 8}, {"req_id", req.req_id()},
             {"kind", names[kind]}, {"slot", req.slot()},
             {"target_id", std::to_string(target)},
-            {"action_seq", std::to_string(req.action_seq())}};
+            {"action_seq", std::to_string(req.action_seq())},
+            {"death_seq", std::to_string(req.death_seq())}};
         auto output = script->event(5, payload.dump());
         Opt<wire::Envelope> response;
 
@@ -1167,6 +1710,31 @@ struct Runtime::Loop
         req.outcome = world.raid.player_state;
         req.content_key = Str(script->world().content_key);
 
+        if (world.hunter_id != 0)
+        {
+            frozen = req;
+            const auto snapshot = script->export_state();
+            if (!snapshot)
+            {
+                save_failed({storage::Code::Invalid, 0, false, snapshot.error()});
+                return;
+            }
+            const auto payload = hunter_rules({{"kind", "finish_raid"},
+                {"profile", hunter_profile}, {"hunter_id", world.hunter_id},
+                {"cfg_id", 0}, {"item_uid", 0}, {"slot", 0}, {"skill_id", 0},
+                {"state", nlohmann::json::parse(*snapshot)}});
+            if (!payload)
+            {
+                save_failed({storage::Code::Invalid, 0, false, payload.error()});
+                return;
+            }
+            frozen_hunter = storage::HunterReq{profile.player_id, profile.revision,
+                world.hunter_id, "finish:" + std::to_string(world.match_id), "finish_raid",
+                payload->dump(), {}};
+            submit_result();
+            return;
+        }
+
         if (req.outcome == "Extracted")
         {
             for (const auto& entry : world.items)
@@ -1193,7 +1761,7 @@ struct Runtime::Loop
     }
 
     // 使用已提交记录更新永久视图；重放结果不能重复附加物品。
-    void committed(storage::MatchResult result)
+    void committed(storage::MatchResult result, bool refreshed = false)
     {
         try
         {
@@ -1201,6 +1769,27 @@ struct Runtime::Loop
             if (doc.at("player_id").get<u64>() != profile.player_id)
             {
                 throw std::runtime_error("result_player_mismatch");
+            }
+
+            if (doc.at("v") == 2 && !refreshed)
+            {
+                const auto loaded = storage->load_hunters(profile.player_id,
+                    [this, result](storage::Rsp value) mutable
+                    {
+                        if (!value.result)
+                        {
+                            save_failed(value.result.error());
+                            return;
+                        }
+                        update_hunters(nlohmann::json::parse(
+                            std::get<storage::HunterResult>(*value.result).result_json));
+                        committed(std::move(result), true);
+                    });
+                if (!loaded)
+                {
+                    save_failed(loaded.error());
+                }
+                return;
             }
 
             if (profile.revision < result.revision)
@@ -1217,6 +1806,8 @@ struct Runtime::Loop
             }
 
             saved = std::move(result);
+            profile.last_match_id = saved->match_id;
+            active_hunter = 0;
             save_busy = false;
             save_state = "Committed";
             save_error.clear();
@@ -1254,6 +1845,35 @@ struct Runtime::Loop
         save_busy = true;
         save_state = "Saving";
         save_error.clear();
+        if (active_hunter != 0 || frozen_hunter)
+        {
+            if (!frozen_hunter)
+            {
+                save_failed({storage::Code::Invalid, 0, false, "hunter_result_not_validated"});
+                return;
+            }
+            const auto accepted = storage->apply_hunter(*frozen_hunter,
+                [this](storage::Rsp result)
+                {
+                    if (!result.result)
+                    {
+                        save_failed(result.result.error());
+                        return;
+                    }
+                    const auto& value = std::get<storage::HunterResult>(*result.result);
+                    const auto doc = nlohmann::json::parse(value.result_json);
+                    update_hunters(doc.at("profile"));
+                    committed({value.match_id, value.revision, value.replayed,
+                        doc.at("result").dump()}, true);
+                });
+            if (!accepted)
+            {
+                save_failed(accepted.error());
+                return;
+            }
+            notify_save("");
+            return;
+        }
         const auto accepted = storage->commit_match(*frozen, [this](storage::Rsp result)
         {
             if (result.result)
@@ -1582,6 +2202,11 @@ struct Runtime::Loop
     UPtr<Transport> net;
     UPtr<storage::Storage> storage;
     storage::PlayerSave profile;
+    nlohmann::json hunter_profile;
+    bool hunter_busy = false;
+    u64 active_hunter = 0;
+    Str active_start_intent;
+    Map<u32, i32> hunter_tool_counts;
     Session binding;
     ActionLog actions;
     u64 instance_id = 0;
@@ -1589,6 +2214,7 @@ struct Runtime::Loop
     Opt<wire::StartReq> pending_start;
     bool pending_start_discarded = false;
     Opt<storage::CommitMatch> frozen;
+    Opt<storage::HunterReq> frozen_hunter;
     Opt<storage::MatchResult> saved;
     Str save_state = "Idle";
     Str save_error;

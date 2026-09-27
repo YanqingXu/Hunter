@@ -1,6 +1,9 @@
 -- 在 Lua 计算拾取距离、背包叠堆和消耗品槽位，再交给原生批量接口原子提交。
 return function(deps)
     local world_api = deps["game.world"]
+    local encounter = deps["game.encounter"]
+    local cfg_api = deps["game.cfg"]
+    local loadout = deps["game.loadout"]
     local api = {}
 
     -- 创建绑定物品旧数量的候选，不在计算过程中修改原生背包。
@@ -27,6 +30,28 @@ return function(deps)
         end
         local batch = {owner = World.get_player_id(world), items = json.array({}),
             tools = json.array({})}
+        local item_cfg = content.items[source.cfg_id]
+        if item_cfg ~= nil and item_cfg.skill_cfg_id ~= "0" then
+            local candidate = json.decode(World.loadout(world))
+            candidate.skills = json.array({})
+            for slot = 1, Player.get_skill_count(player.controls) do
+                local id = Player.get_skill_id(player.controls, slot)
+                if id == item_cfg.skill_cfg_id then
+                    return "already_known_skill"
+                end
+                if not Player.get_skill_spent(player.controls, slot) then
+                    candidate.skills[#candidate.skills + 1] = id
+                end
+            end
+            candidate.skills[#candidate.skills + 1] = item_cfg.skill_cfg_id
+            local accepted, reason = loadout.check(cfg_api.load(), candidate, true)
+            if accepted == nil then
+                return reason
+            end
+            batch.items[1] = item_change(source, 0, "Ground")
+            local error = World.commit_skill(world, json.encode(batch), item_cfg.skill_cfg_id)
+            return error ~= "" and error or nil
+        end
         local cfg = content.tools[source.cfg_id]
         if cfg ~= nil and (cfg.kind == "needle" or cfg.kind == "bomb") then
             local slot = 0
@@ -70,7 +95,14 @@ return function(deps)
             end
             batch.items[#batch.items + 1] = item_change(source, remaining, "Bag")
         end
-        local error = World.commit(world, json.encode(batch))
+        local error
+        if content.encounter and World.get_wave(world) == 1
+            and source.cfg_id == content.encounter.bounty_cfg_id then
+            error = World.commit_wave(world, json.encode(batch),
+                encounter.wave_specs(content), source.id)
+        else
+            error = World.commit(world, json.encode(batch))
+        end
         return error ~= "" and error or nil
     end
 

@@ -5,6 +5,7 @@ return function(deps)
     local combat = deps["game.combat"]
     local damage = deps["game.damage"]
     local movement = deps["game.movement"]
+    local scene_api = deps["game.scene"]
     local api = {}
 
     -- 匍匐只能朝角色当前局部前上方瞄准，负的世界横坐标方向仍可对应左朝向。
@@ -56,6 +57,15 @@ return function(deps)
                 end
             end
         end
+        for index, cfg in ipairs(content.scenes) do
+            if cfg.barrel ~= false and not World.barrel_exploded(world, index) then
+                local at = combat.ray(x, y, dx, dy, range, cfg.x, cfg.y, cfg.w, cfg.h)
+                if at ~= nil then
+                    insert_hit(hits, {distance = at, id = cfg.id, solid = true,
+                        penetrable = false, barrel = index})
+                end
+            end
+        end
         return hits
     end
 
@@ -68,6 +78,9 @@ return function(deps)
         for _, hit in ipairs(intersections(world, content, x, y, dx, dy, range)) do
             last = hit.distance
             if hit.solid then
+                if hit.barrel ~= nil then
+                    scene_api.hit(world, content, hit.barrel, amount, false, player.id)
+                end
                 if not hit.penetrable then
                     break
                 end

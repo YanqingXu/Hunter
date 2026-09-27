@@ -21,9 +21,9 @@ import gameplay
 def content_identity(data, header):
     value = json.loads(data.decode("utf-8"), object_pairs_hook=gameplay.unique_pairs)
     canonical, _ = gameplay.content_bytes(value)
-    if canonical != data or type(value) is not dict or value.get("v") != 4:
-        raise ValueError("content.json must be canonical content v4")
-    identity = "gameplay-v4:" + hashlib.sha256(data).hexdigest()
+    if canonical != data or type(value) is not dict or value.get("v") != 5:
+        raise ValueError("content.json must be canonical content v5")
+    identity = "gameplay-v5:" + hashlib.sha256(data).hexdigest()
     text = header.decode("utf-8")
     match = re.search(r'inline constexpr std::string_view version = "([^"]+)";', text)
     if not match or match.group(1) != identity or "json_text" in text:
@@ -61,8 +61,8 @@ def verify_bundle(args, build, source_hash):
         raise ValueError("Bundle source identity differs from generated/game.lua")
     policy = bundle.load_policy(args.policy)
     contract = json.loads((ROOT / "lua/contract.json").read_text(encoding="utf-8"))
-    if contract["version"] != 7:
-        raise ValueError("package requires Host/state contract v7")
+    if contract["version"] != 8:
+        raise ValueError("package requires Host/state contract v8")
     for key in bundle.KEYS[5:]:
         expected = bundle.digest({"identity": key, "source": {
             "contract_version": contract["version"], "schema": contract[key]}})
@@ -121,11 +121,13 @@ def files(args):
             '向宿主 stdin 输入：{"cmd":"Start","req_id":"start"}\n'
             "同时读取 stdout 和 stderr。将 Ready 的完整 JSON 传给 hunter_client.exe 的第一行，"
             "随后 login/start/input/switch_weapon/select_tool/melee/use/interact/pickup/"
+            "revive/vision_on/vision_off/hunters/recruit/equip/buy_skill/remove_skill/retire/"
             "status/result/stash。\n"
-            "协议 v5、内容 v4、Host/状态 v7；SQLite V1。Start 可带完整免费配装，"
+            "协议 v6、内容 v5、Host/状态 v8；SQLite V2。测试 Start 须显式 test_mode，"
             "缺省使用默认配装。Action 重试必须保留原 action_seq。\n"
-            "Boss 死亡后回到出生地附近出口，读条成功后等待 Committed。\n"
-            "永久仓库只读；停止使用宿主 Stop。实例令牌只用于本次回环握手，不写共享日志。\n"
+            "开局即可到出生地附近出口撤离，读条成功后等待 Committed。\n"
+            "永久猎人出战需要完整经济配置和持有装备；停止使用宿主 Stop。"
+            "实例令牌只用于本次回环握手，不写共享日志。\n"
             "Unity、Android 与完整 Demo 尚未联调；Hunter.cs 为协议产物。\n")
     note += ("content.json 是客户端共享内容，ContentId.h 仅供核对身份；服务端由 Lua 加载配置。\n"
              + ("配置和玩法共同包含在签名 Bundle 内；本包不提供编译器或私钥。\n" if args.bundle else

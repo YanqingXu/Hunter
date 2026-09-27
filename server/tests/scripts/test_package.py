@@ -51,7 +51,7 @@ class PackageContract(unittest.TestCase):
         manifest = json.loads(files["manifest.json"])
         self.assertEqual(manifest["host_state"], 7)
         self.assertEqual(manifest["content_key"],
-                         "gameplay-v4:" + hashlib.sha256(self.content).hexdigest())
+                         "gameplay-v5:" + hashlib.sha256(self.content).hexdigest())
         self.assertEqual(manifest["script_source_sha256"],
                          hashlib.sha256(files["game.lua"]).hexdigest())
         self.assertIn("cfg/Manifest.json", files)
@@ -64,7 +64,9 @@ class PackageContract(unittest.TestCase):
 
     # 数值字节与身份头之间不可只改一个，即使 JSON 仍能解析也必须拒绝。
     def test_content_identity_mismatch(self):
-        header = self.header.replace(b"651046", b"ffffff")
+        digest = hashlib.sha256(self.content).hexdigest().encode()
+        wrong = (b"0" if digest[:1] != b"0" else b"1") + digest[1:]
+        header = self.header.replace(digest, wrong)
         with self.assertRaisesRegex(ValueError, "identity mismatch"):
             package.content_identity(self.content, header)
         with self.assertRaisesRegex(ValueError, "canonical"):

@@ -222,7 +222,7 @@ class Server:
         else:
             self.conn.sendall(hello)
         ack = wait_msg(self.conn, 2)
-        assert ack[1] == 5 and ack[3].decode() == self.ready["instance"]
+        assert ack[1] == 6 and ack[3].decode() == self.ready["instance"]
         return self.conn
 
     # 请求退出并确保旧端口不再监听；stdin 保持打开以覆盖阻塞读取取消。
@@ -261,7 +261,7 @@ def enter_game(conn):
     conn.sendall(frame(10, blob(1, "login")))
     login = wait_msg(conn, 11)
     assert login[1] == b"login" and login[2] == 1 and login[4] == b"Lobby"
-    conn.sendall(frame(12, blob(1, "start")))
+    conn.sendall(frame(12, blob(1, "start") + number(6, 1)))
     start = wait_msg(conn, 13)
     assert start[1] == b"start" and start[2] == 1 and start[3] == b"Playing"
     return wait_msg(conn, 9)
@@ -286,12 +286,12 @@ def round_trip(args, index):
         srv.cmd("Start", "again")
         assert srv.event("Ready", "again")["instance"] == ready["instance"]
         conn = srv.connect(split=index == 0)
-        conn.sendall(frame(12, blob(1, "premature")))
+        conn.sendall(frame(12, blob(1, "premature") + number(6, 1)))
         assert wait_msg(conn, 6)[1] == b"not_logged_in"
         initial = enter_game(conn)
         conn.sendall(frame(10, blob(1, "again")))
         assert wait_msg(conn, 11)[2] == 1
-        conn.sendall(frame(12, blob(1, "start")))
+        conn.sendall(frame(12, blob(1, "start") + number(6, 1)))
         assert wait_msg(conn, 13)[2] == 1
         conn.sendall(input_frame(1, 1) + input_frame(2, 1))
         first = wait_msg(conn, 8)
@@ -408,7 +408,7 @@ def slow_reader(args):
         conn.connect(("127.0.0.1", srv.ready["port"]))
         srv.conn = conn
         conn.sendall(srv.hello())
-        assert wait_msg(conn, 2)[1] == 5
+        assert wait_msg(conn, 2)[1] == 6
         enter_game(conn)
         seq = 0
         for _ in range(10):

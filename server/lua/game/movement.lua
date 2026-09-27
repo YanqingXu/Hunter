@@ -149,6 +149,9 @@ return function(deps)
     -- 统一玩家姿态、跑步、起跳和使用减速，成功动作才修改回复延迟。
     function api.player(player, content)
         local input = player.controls
+        if not Unit.get_alive(player.health) then
+            return false, false
+        end
         local cfg = content.players[player.cfg_id]
         local ladder_id = Player.get_ladder_id(input)
         if ladder_id ~= 0 then

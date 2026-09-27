@@ -3,8 +3,10 @@ return function(deps)
     local state = deps["framework.state"]
     local player_api = deps["game.player"]
     local monster_api = deps["game.monster"]
+    local exploration = deps["game.exploration"]
     local loadout_api = deps["game.loadout"]
     local movement = deps["game.movement"]
+    local skill = deps["game.skill"]
     local api = {}
     local cache = {}
     local revision = 0
@@ -122,14 +124,19 @@ return function(deps)
     -- 重建局内对象，保留连接序号和全局 Tick。
     function api.start(world, content, request)
         local accepted, reason = loadout_api.check(content,
-            request.loadout or json.decode(World.loadout(world)))
+            request.loadout or json.decode(World.loadout(world)),
+            World.get_hunter_id(world) ~= "0")
         assert(accepted ~= nil, reason or "invalid_loadout")
         World.accept_loadout(world, json.encode(accepted))
         World.begin(world, request.req_id, request.after_match_id, request.match_id, request.world_id)
-        assert(api.spawn(world, content, "player") ~= nil, "player spawn failed")
+        exploration.start(world, content)
+        assert(api.spawn(world, skill.effective(content, accepted), "player") ~= nil,
+            "player spawn failed")
         for _, spawn in ipairs(content.map.enemies) do
-            assert(api.spawn(world, content, "monster", spawn.spawn_id) ~= nil,
-                "monster spawn failed")
+            if exploration.selected(world, content, spawn) then
+                assert(api.spawn(world, content, "monster", spawn.spawn_id) ~= nil,
+                    "monster spawn failed")
+            end
         end
     end
 
@@ -144,6 +151,9 @@ return function(deps)
             return
         end
         local player = api.find(world, World.find_player(world, World.get_player_id(world)))
+        if Player.get_downed(player.controls) then
+            return
+        end
         if not Unit.get_alive(player.health) then
             World.set_phase(world, "Dead")
         else
