@@ -2,6 +2,7 @@
 #pragma once
 
 #include "common/Types.h"
+#include "storage/Model.h"
 
 namespace hunter
 {
@@ -10,7 +11,7 @@ struct Cfg
     Str source_path;
     Str bundle_path;
     Str policy_path;
-    Str save_path;
+    storage::OpenCfg storage;
     u32 tick_hz = 60;
     u32 snapshot_hz = 20;
     u32 max_catchup = 4;

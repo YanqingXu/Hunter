@@ -20,24 +20,6 @@ namespace
 using Json = nlohmann::json;
 constexpr u64 max_id = static_cast<u64>(std::numeric_limits<i64>::max());
 
-// 检查持久整数边界，避免转换到 SQLite 时符号回绕。
-void valid_id(u64 value)
-{
-    if (value == 0 || value > max_id)
-    {
-        fail(Code::Invalid, "persistent_id_range");
-    }
-}
-
-// 检查持久文本最小约束，UTF-8 由规范 JSON 编码器进一步验证。
-void valid_text(const Str& value)
-{
-    if (value.empty() || value.find('\0') != Str::npos)
-    {
-        fail(Code::Invalid, "persistent_text_empty_or_nul");
-    }
-}
-
 // 校验存档正数列，拒绝把损坏负数转换成巨大无符号值。
 u64 positive(i64 value)
 {
@@ -105,40 +87,9 @@ Str award(Db& db, const CommitMatch& req, i64 now, usize limit)
 
 }
 
-Str encode_req(const CommitMatch& req)
-{
-    valid_id(req.match_id);
-    valid_id(req.player_id);
-    valid_id(req.expected_revision);
-    valid_text(req.outcome);
-    valid_text(req.content_key);
-    Json items = Json::array();
-
-    for (const auto& item : req.items)
-    {
-        if (item.cfg_id == 0 || item.count <= 0)
-        {
-            fail(Code::Invalid, "invalid_item_delta");
-        }
-
-        items.push_back({{"cfg_id", item.cfg_id}, {"count", item.count}});
-    }
-
-    try
-    {
-        return Json({{"v", 1}, {"match_id", req.match_id}, {"player_id", req.player_id},
-            {"expected_revision", req.expected_revision}, {"outcome", req.outcome},
-            {"content_key", req.content_key}, {"items", std::move(items)}}).dump();
-    }
-    catch (const Json::exception&)
-    {
-        fail(Code::Invalid, "invalid_request_utf8");
-    }
-}
-
 PlayerSave read_player(Db& db, u64 player_id, usize limit)
 {
-    valid_id(player_id);
+    req::valid_id(player_id);
     fit(sizeof(Rsp) + sizeof(PlayerSave), limit);
     Txn txn(db);
     PlayerSave result;
@@ -217,7 +168,7 @@ MatchId next_match(Db& db)
 
 MatchResult read_match(Db& db, u64 match_id, usize limit)
 {
-    valid_id(match_id);
+    req::valid_id(match_id);
     Stmt stmt(db, "SELECT match_id,revision_after,result_json FROM match_result WHERE match_id=?");
     stmt.bind(1, static_cast<i64>(match_id));
 

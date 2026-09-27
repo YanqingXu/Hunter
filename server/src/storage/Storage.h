@@ -1,8 +1,9 @@
-// 对逻辑线程提供异步存档入口，工作线程独占 SQLite，完成通过 Asio 延后交付。
+// 对逻辑线程提供异步存档入口，工作线程独占业务后端，完成通过 Asio 延后交付。
 #pragma once
 
 #include "common/Types.h"
 #include "storage/Model.h"
+#include "storage/Backend.h"
 
 #include <asio/io_context.hpp>
 
@@ -17,6 +18,9 @@ public:
     // 在所属逻辑线程创建；io 必须在该线程运行且活过 Closed 和所有回调。
     Storage(asio::io_context& io, StorageCfg cfg, u64 instance);
 
+    // 注入后端工厂；工厂在存档线程执行，捕获的数据须活过该线程退出。
+    Storage(asio::io_context& io, StorageCfg cfg, u64 instance, BackendFactory factory);
+
     // 保底停止并等待工作退出；正常流程应先 stop 并驱动 io 至 Closed。
     ~Storage();
 
@@ -26,10 +30,13 @@ public:
     // 连接、线程和关联表不能复制赋值。
     Storage& operator=(const Storage&) = delete;
 
-    // 异步打开显式 UTF-8 文件路径；每个对象只允许一次已接受的打开操作。
+    // 异步打开显式后端配置；每个对象只允许一次已接受的打开操作。
+    Expect<Accepted, Error> open(OpenCfg cfg, Done done);
+
+    // 兼容 SQLite UTF-8 文件路径入口，等价于默认后端的 OpenCfg。
     Expect<Accepted, Error> open(Str path, Done done);
 
-    // 读取拥有全部物品的永久玩家；超限返回错误而不截断，回调不得抛异常。
+    // 读取永久玩家及可用仓库物品；超限返回错误而不截断，回调不得抛异常。
     Expect<Accepted, Error> load_player(u64 player_id, Done done);
 
     // 事务分配跨启动不复用的对局 ID，只有完成成功时才可使用。

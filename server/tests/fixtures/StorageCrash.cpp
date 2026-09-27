@@ -134,7 +134,8 @@ void disk_full(const Str& path)
     req.content_key = Str(32768, 'c');
     auto result = host.commit(req);
     check(!result && result.error().code == Code::Write &&
-        (result.error().sqlite_code & 0xff) == SQLITE_FULL, "real SQLITE_FULL");
+        (result.error().native_code & 0xff) == SQLITE_FULL
+        && result.error().backend == "sqlite", "real SQLITE_FULL");
     check(host.load().revision == 1 && host.load().items.empty(), "full rollback player");
     auto found = host.find();
     check(!found && found.error().code == Code::NotFound, "full rollback result");

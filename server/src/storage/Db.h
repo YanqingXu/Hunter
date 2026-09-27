@@ -2,7 +2,7 @@
 #pragma once
 
 #include "common/Types.h"
-#include "storage/Model.h"
+#include "storage/Error.h"
 
 #include <thread>
 
@@ -11,9 +11,6 @@ struct sqlite3_stmt;
 
 namespace hunter::storage
 {
-
-// 抛出模块内部错误，由异步边界转换为完成结果。
-[[noreturn]] void fail(Code code, const Str& message);
 
 class Db
 {

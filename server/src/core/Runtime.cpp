@@ -404,7 +404,7 @@ struct Runtime::Loop
                 "hunter_capacity_too_small");
             limits.max_hunter_bytes = std::min(cfg.max_frame_bytes, cfg.max_json_bytes) - 1024;
             storage = std::make_unique<storage::Storage>(io, limits, instance_id);
-            const auto accepted = storage->open(cfg.save_path, [this, req_id](storage::Rsp result)
+            const auto accepted = storage->open(cfg.storage, [this, req_id](storage::Rsp result)
             {
                 if (stopped)
                 {

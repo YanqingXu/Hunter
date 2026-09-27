@@ -48,11 +48,19 @@ function(hunter_target target)
     endif()
 endfunction()
 
-set(HUNTER_STORAGE_SOURCES src/storage/Db.cpp src/storage/Schema.cpp
-    src/storage/Store.cpp src/storage/Storage.cpp src/storage/HunterStore.cpp)
+set(HUNTER_STORAGE_COMMON_SOURCES src/storage/Error.cpp src/storage/Req.cpp
+    src/storage/Storage.cpp)
+set(HUNTER_STORAGE_SQLITE_SOURCES src/storage/Db.cpp src/storage/Schema.cpp
+    src/storage/Store.cpp src/storage/HunterStore.cpp src/storage/SqliteBackend.cpp)
+add_library(hunter_storage_common STATIC ${HUNTER_STORAGE_COMMON_SOURCES})
+hunter_target(hunter_storage_common)
+target_link_libraries(hunter_storage_common PUBLIC hunter_asio Threads::Threads
+    nlohmann_json::nlohmann_json)
+
+set(HUNTER_STORAGE_SOURCES src/storage/Backend.cpp ${HUNTER_STORAGE_SQLITE_SOURCES})
 add_library(hunter_storage STATIC ${HUNTER_STORAGE_SOURCES})
 hunter_target(hunter_storage)
-target_link_libraries(hunter_storage PUBLIC hunter_asio Threads::Threads
+target_link_libraries(hunter_storage PUBLIC hunter_storage_common
     PRIVATE hunter_sqlite nlohmann_json::nlohmann_json)
 target_compile_definitions(hunter_storage PRIVATE HUNTER_STORAGE_TESTING=0)
 

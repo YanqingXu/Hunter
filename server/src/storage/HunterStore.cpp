@@ -5,7 +5,6 @@
 
 #include <nlohmann/json.hpp>
 #include <sqlite3.h>
-#include <limits>
 
 #if HUNTER_STORAGE_TESTING
 #include "StorageHooks.h"
@@ -16,60 +15,12 @@ namespace hunter::storage
 namespace
 {
 using Json = nlohmann::json;
-constexpr i64 max_value = std::numeric_limits<i64>::max();
-constexpr usize max_payload = 262144;
-
-// 对所有业务拒绝使用拥有型存储错误。
-void ensure(bool ok, const char* message, Code code = Code::Invalid)
-{
-    if (!ok)
-    {
-        fail(code, message);
-    }
-}
-
-// 校验闭集字段，禁止缺省参数掩盖未填写的经济配置。
-void fields(const Json& value, std::initializer_list<const char*> names)
-{
-    ensure(value.is_object() && value.size() == names.size(), "hunter_payload_fields");
-    for (const auto name : names)
-    {
-        ensure(value.contains(name), "hunter_payload_missing_field");
-    }
-}
-
-// 读取精确有界整数，不接受浮点或布尔转换。
-i64 number(const Json& value, i64 low = 0, i64 high = max_value)
-{
-    ensure(value.is_number_integer() && (!value.is_number_unsigned()
-        || value.get<u64>() <= static_cast<u64>(max_value)), "hunter_integer");
-    const auto result = value.get<i64>();
-    ensure(result >= low && result <= high, "hunter_integer_range");
-    return result;
-}
-
-// 校验数据库绑定前的领域身份。
-i64 identity(u64 value)
-{
-    ensure(value > 0 && value <= static_cast<u64>(max_value), "hunter_identity");
-    return static_cast<i64>(value);
-}
-
-// 读取无空字节的有限文本。
-Str text_value(const Json& value, usize limit)
-{
-    ensure(value.is_string(), "hunter_text_type");
-    const auto result = value.get<Str>();
-    ensure(!result.empty() && result.size() <= limit && result.find('\0') == Str::npos,
-        "hunter_text_range");
-    return result;
-}
-
-// 校验有界列表，在任何写操作前限制工作量。
-void array(const Json& value, usize limit)
-{
-    ensure(value.is_array() && value.size() <= limit, "hunter_array_limit");
-}
+using req::ensure;
+using req::identity;
+using req::max_payload;
+using req::max_value;
+using req::number;
+using req::text_value;
 
 // 对已有计数执行不会溢出的非负增量。
 i64 add(i64 current, i64 delta)
@@ -211,124 +162,6 @@ Json account_doc(Db& db, u64 player_id)
     stmt.bind(1, identity(player_id));
     ensure(stmt.step(), "account_progress_missing", Code::Corrupt);
     return {{"xp", stmt.integer(0)}, {"currency", stmt.integer(1)}};
-}
-
-// 校验规范命令载荷；所有参数必须显式出现。
-Json payload(const HunterReq& req)
-{
-    ensure(req.payload_json.size() <= max_payload, "hunter_payload_limit", Code::TooLarge);
-    auto value = Json::parse(req.payload_json, nullptr, false);
-    ensure(!value.is_discarded(), "hunter_payload_json");
-    if (req.kind == "recruit")
-    {
-        fields(value, {"cfg_id", "level", "xp", "points", "currency_cost", "skills"});
-        number(value["cfg_id"], 1, 2147483647);
-        number(value["level"], 1, 1000000);
-        number(value["xp"]);
-        number(value["points"]);
-        number(value["currency_cost"]);
-        array(value["skills"], 64);
-        Set<i64> skills;
-        for (const auto& skill : value["skills"])
-        {
-            ensure(skills.insert(number(skill, 1, 2147483647)).second, "duplicate_skill");
-        }
-        ensure(req.hunter_id == 0, "recruit_requires_no_hunter");
-    }
-    else if (req.kind == "equip")
-    {
-        fields(value, {"items"});
-        array(value["items"], 16);
-        Set<i64> slots, items;
-        for (const auto& item : value["items"])
-        {
-            fields(item, {"slot", "item_uid"});
-            ensure(slots.insert(number(item["slot"], 1, 16)).second, "duplicate_slot");
-            ensure(items.insert(number(item["item_uid"], 1)).second, "duplicate_item");
-        }
-    }
-    else if (req.kind == "buy_skill" || req.kind == "remove_skill")
-    {
-        const auto key = req.kind == "buy_skill" ? "cost" : "refund";
-        fields(value, {"cfg_id", key});
-        number(value["cfg_id"], 1, 2147483647);
-        number(value[key]);
-    }
-    else if (req.kind == "retire")
-    {
-        fields(value, {"max_level", "account_xp"});
-        number(value["max_level"], 1, 1000000);
-        number(value["account_xp"]);
-    }
-    else if (req.kind == "begin_raid")
-    {
-        fields(value, {"content_key"});
-        text_value(value["content_key"], 256);
-    }
-    else if (req.kind == "recover_raid")
-    {
-        fields(value, {"match_id"});
-        number(value["match_id"], 1);
-    }
-    else if (req.kind == "finish_raid")
-    {
-        fields(value, {"match_id", "outcome", "content_key", "level", "xp", "points",
-            "account_xp", "currency_gain", "skills", "equipment", "items"});
-        number(value["match_id"], 1);
-        text_value(value["content_key"], 256);
-        const auto outcome = text_value(value["outcome"], 16);
-        ensure(outcome == "Extracted" || outcome == "Dead" || outcome == "Abandoned",
-            "hunter_outcome");
-        number(value["level"], outcome == "Extracted" ? 1 : 0, 1000000);
-        for (const auto key : {"xp", "points", "account_xp", "currency_gain"})
-        {
-            number(value[key]);
-        }
-        array(value["skills"], 64);
-        array(value["equipment"], 16);
-        array(value["items"], 64);
-        Set<i64> skills, items;
-        for (const auto& skill : value["skills"])
-        {
-            fields(skill, {"cfg_id", "paid_cost", "source"});
-            ensure(skills.insert(number(skill["cfg_id"], 1, 2147483647)).second,
-                "duplicate_skill");
-            number(skill["paid_cost"]);
-            const auto source = text_value(skill["source"], 16);
-            ensure(source == "recruit" || source == "purchased" || source == "loot",
-                "hunter_skill_source");
-        }
-        for (const auto& item : value["equipment"])
-        {
-            fields(item, {"item_uid", "count"});
-            ensure(items.insert(number(item["item_uid"], 1)).second, "duplicate_item");
-            number(item["count"], 1, 2147483647);
-        }
-        for (const auto& item : value["items"])
-        {
-            fields(item, {"cfg_id", "count"});
-            number(item["cfg_id"], 1, 2147483647);
-            number(item["count"], 1, 2147483647);
-        }
-        if (outcome != "Extracted")
-        {
-            ensure(value["skills"].empty() && value["equipment"].empty()
-                && value["items"].empty(), "dead_hunter_assets");
-            for (const auto key : {"level", "xp", "points", "account_xp", "currency_gain"})
-            {
-                ensure(value[key] == 0, "dead_hunter_reward");
-            }
-        }
-    }
-    else
-    {
-        fail(Code::Invalid, "unknown_hunter_operation");
-    }
-    if (req.kind != "recruit")
-    {
-        identity(req.hunter_id);
-    }
-    return value;
 }
 
 // 创建猎人和初始免费技能，不生成任何免费装备资产。
@@ -612,21 +445,6 @@ const Map<Str, Str>& hunter_tables()
     return tables;
 }
 
-Str encode_hunter(const HunterReq& req)
-{
-    identity(req.player_id);
-    identity(req.expected_revision);
-    text_value(req.op_id, 128);
-    ensure(req.intent_json.size() <= max_payload, "hunter_intent_limit", Code::TooLarge);
-    const auto value = payload(req);
-    auto encoded = Json({{"v", 2}, {"player_id", req.player_id},
-        {"expected_revision", req.expected_revision}, {"hunter_id", req.hunter_id},
-        {"op_id", req.op_id}, {"kind", req.kind}, {"payload", value},
-        {"intent", req.intent_json}}).dump();
-    ensure(encoded.size() <= max_payload * 2 + 1024, "hunter_request_limit", Code::TooLarge);
-    return encoded;
-}
-
 HunterResult find_hunter_op(Db& db, u64 player_id, const Str& op_id,
     const Str& intent_json, usize limit)
 {
@@ -683,7 +501,7 @@ HunterResult write_hunter(Db& db, const HunterReq& req, const Str& json, usize l
         "player_revision_conflict", Code::Revision);
     ensure(req.expected_revision < static_cast<u64>(max_value),
         "player_revision_exhausted", Code::Overflow);
-    const auto value = payload(req);
+    const auto value = hunter_payload(req);
     HunterResult result{req.expected_revision + 1, req.hunter_id, 0, false, {}};
     Json terminal;
     if (req.kind == "recruit")

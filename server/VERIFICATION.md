@@ -1,5 +1,39 @@
 # 服务端验证记录
 
+## 持久化后端解耦（2026-09-27）
+
+基线 `e251c6b`。比赛继续使用 SQLite V2；本轮实现同步 Backend、SqliteBackend、
+共享请求校验与编码、OpenCfg 及后端诊断，Storage 保留原异步队列和关闭屏障。
+公共代码独立编译为 hunter_storage_common，不链接 SQLite；默认装配继续链接 hunter_storage。
+SQLite DDL、版本、事务写入顺序、恢复策略、协议及历史结果编码均未变更。
+MySQL 未实现，比赛存档不迁入赛后新库；独立服务器账号和远程部署不属于本轮验收。
+
+使用构建缓存中的 VS 2026 配套 CMake 4.3.1-msvc1，而非系统 PATH 中不支持该生成器的
+CMake 4.1.1。两种 preset 均完整构建；以下为与改动相关的测试子集，不代表完整 CTest：
+
+| 验证 | 实际结果与证据 |
+| --- | --- |
+| Windows 开发完整构建 | 成功；`build/storage-dev-build.log` |
+| Windows Bundle 完整构建 | 成功；`build/storage-bundle-build.log` |
+| 开发存储及 Runtime 相关 CTest | 13/13，通过；286.96 秒；`build/storage-dev-tests.log` |
+| Bundle 存储及 Runtime 相关 CTest | 14/14，通过；281.41 秒；`build/storage-bundle-tests.log` |
+| 后端边界最终重编译与直接执行 | 两套通过；最终编译无 C++ warning/error；`build/storage-*-final-build.log`、`build/storage-*-backend-final-test.log` |
+| 差异检查 | `git diff --check` 通过；公共门面及请求实现无 Db、SQLite SQL 或恢复实现依赖 |
+
+CTest 子集包括存储业务、后端边界、SQLite 强杀、宿主配置、猎人资产、真实玩法、完整撤离、
+存档边界、Runtime 崩溃恢复、进程生命周期和 intent 检查；Bundle 另含生产链接检查。
+可复用的结算、猎人经济及出战用例只调用 Storage，并接受 OpenCfg；SQLite 的结构、
+文件损坏、写锁、满盘、V1 迁移、全库恢复及故障检查点继续保留专属验证。
+
+新后端边界测试检查工厂创建、全部业务调用、关闭和销毁均在同一存档线程；完成回调延后
+交付给逻辑线程，队列饱和仍可关闭，析构兜底排空已接受工作。打开、工厂及关闭失败保持
+结构化错误，原生码、后端来源和 commit_unknown 不丢失；JSON 原文及大于 2^53 的整数保真。
+测试异常收尾的捕获对象生命周期经审查修正，并单独重编译运行两套后端边界测试。
+
+宿主配置测试覆盖显式 `--storage sqlite`、省略后端参数、SQLite 文件重复打开；`mysql`、
+未知及空名称在创建默认或显式目录前失败，既有文件字节保持不变。未测试远程数据库，
+也未将 Windows 结果视为 Android 真机或 Unity 联调证据。
+
 ## 新策划战斗、探索与永久猎人（2026-09-27）
 
 按 [SRV-014](intents/usecases/hunt.intent.md) 完成机制实现。当前版本：网络 v6、内容 v5、

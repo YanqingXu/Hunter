@@ -1,5 +1,11 @@
 # Hunter Server 首版规划
 
+2026-09-27 持久化增量：比赛继续使用 SQLite V2，本次按
+[SRV-007](intents/modules/storage.intent.md) 拆分异步 `Storage` 与同步业务 `Backend`，
+保持现有 Runtime、事务和文件行为。MySQL 留到赛后，由独立服务端访问新库，不导入比赛存档；
+账号体系、客户端远程连接与部署独立安排。本次不包含 MySQL 实现，实际验证见
+[VERIFICATION.md](VERIFICATION.md)。
+
 2026-09-27 增量：按用户确认的 [SRV-014](intents/usecases/hunt.intent.md) 实现配置契约、
 怪物能力和手动复活，再接完整撤离循环与 SQLite V2 永久猎人。代码与内容门禁分开：
 缺失策划数值继续保留草稿，独立测试配置覆盖机制；生产不猜数值。协议 v6、内容 v5、
@@ -34,9 +40,10 @@ Lua 保留运动、AI、枪械、伤害及终态规则，高频输入、事件�
 网络协议 v3、内容 v2 保持不变；Host 契约和内部状态为 v4，旧状态拒绝导入。
 Item 仅为基础实例，不扩展背包、掉落、拾取、装备、技能、撤离或平台范围。
 
-SRV-007 已新增独立 SQLite V1 底座：永久玩家／物品、持久对局 ID、原子幂等结算、
-异步完成与 Windows 强杀验证。当前不接入 Runtime、World、Lua 或网络，不代表 P4 闭环完成；
-具体接口和当前验证范围以存储 intent、README 和 VERIFICATION 为准。
+SRV-007 最初提供独立 SQLite V1 底座：永久玩家／物品、持久对局 ID、原子幂等结算、
+异步完成与 Windows 强杀验证。SRV-011 已将存储接入 Runtime 和结算链路，SRV-014 扩展为
+SQLite V2 永久猎人；存储模块本身仍不依赖 World、Lua 或网络。具体接口和当前验证范围
+以存储 intent、README 和 VERIFICATION 为准。
 
 本计划面向比赛用单人 PvE 撤离 Demo。服务端采用 **C++23 / Standalone Asio / Luax**，与 Unity 客户端一起打包为 Android APK，在同一手机上以两个进程运行。Windows 保留开发、联调和自动化测试宿主。
 
@@ -57,7 +64,7 @@ SRV-007 已新增独立 SQLite V1 底座：永久玩家／物品、持久对局 
 | 脚本组织 | `main.lua` 入口与独立功能模块，各模块可使用已授权的宿主接口 |
 | 双向调用 | C++ 可调用脚本入口，脚本可调用 C++ Host API；跨线程通过队列调度 |
 | 热更新 | 开发构建支持局内逻辑更新，状态结构固定；发布构建关闭更新入口 |
-| 存档 | SQLite，由服务端单一写入；结算、去重与累计结果事务提交 |
+| 存档 | 比赛使用 SQLite V2，由服务端单一写入；结算、去重与累计结果事务提交；赛后另实现 MySQL 后端 |
 | 开发方式 | 参考 game-net-core，采用 intent → 契约 → 测试 → 实现流程 |
 
 首个完整用例：断网安装并启动 APK → 自动启动本地服务端 → 进入灰盒地图 → 战斗并击杀 Boss → 拾取 → 撤离 → 提交结算 → 退出重进仍可读取已确认结果，重复请求不重复发奖。
@@ -101,7 +108,7 @@ Android APK
 | ScriptRuntime | Luax Runtime/Isolate、模块入口、Host 注册、执行预算与错误转换 |
 | ScriptScheduler | 入口投递、AwaitRequest 适配、操作关联、完成事件及取消处理 |
 | Game scripts | 对局、实体、运动碰撞、枪械、伤害、AI、掉落、拾取、死亡、撤离与奖励计算 |
-| Storage | SQLite 事务、去重、存档版本与完成通知；不决定游戏奖励 |
+| Storage / Backend | Storage 管理有界异步请求和完成；Backend 管理业务事务、去重、存档版本与恢复，不决定游戏奖励 |
 | ReloadController | 开发脚本版本装载、状态快照校验、候选验证与安全切换 |
 
 实体、位置、血量、物品和计时只在 C++ World 拥有的对象中保存一份权威状态。
@@ -113,7 +120,7 @@ Lua 持有受代次校验的句柄、不可变身份视图和不跨 Tick 的局�
 
 - 原生逻辑线程创建并独占 Luax Runtime/Isolate，同时运行单线程 Asio `io_context`。Android UI、Service 主线程和 Binder 回调只投递命令，不执行脚本或磁盘操作。
 - 网络回调完成分帧与校验后入队；玩法命令在 Tick 边界处理，不从收包栈直接进入玩法函数。
-- 存档线程独占 SQLite 连接，只接收和返回拥有自身数据的任务，不持有 Isolate、脚本对象或借用字符串。
+- 存档线程创建、调用并销毁 Backend，独占其数据库资源；只接收和返回拥有自身数据的任务，不持有 Isolate、脚本对象或借用字符串。
 - 默认模拟 60 Hz，快照 20 Hz，单次调度最多补算 4 个 Tick；持续超时记录耗时并保留事件循环响应，不无限追赶。最终预算用 Android 真机确认。
 - 游戏时间由 Tick 推进。暂停、后台和更新停止游戏时间；网络、操作 deadline 与退出超时使用单调时钟。
 - 消息、完成事件、发送缓存均按条数和字节限制。旧的未发送快照可以合并；控制、结算和操作完成事件不得静默丢弃。工作启动前预留完成容量，容量不足明确拒绝。
@@ -265,6 +272,36 @@ JSON 仅用于初始化、低频控制及开发状态往返；不在高频网络
 - 保存损坏时报告诊断并保留原文件，不静默覆盖；具体重置入口由客户端与策划共同验收。
 - C++ 调用脚本使用资源预算与结构化错误；脚本错误、非法输出、过期句柄和超时均有日志及关联 ID。
 - 状态机明确区分宿主 `Starting/Ready/Stopping/Stopped/Faulted` 与对局 `Idle/Running/Paused/Settling/Finished/Aborted`。热更新是宿主调度屏障，不借助散落的布尔值改变终态。
+
+### 7.1 本次持久化后端边界
+
+- `Storage` 保留有界队列、完成预算、Asio 投递、关联 ID 和关闭屏障，仅调用同步 `Backend`。
+  后端覆盖打开、关闭、玩家读取、局号分配、结算提交和查询、猎人读取、操作提交和查询九项操作，
+  返回现有拥有型值及结构化错误；不建立通用 SQL 抽象。
+- `BackendFactory` 在存档线程创建实例，所有操作和销毁均在同一线程完成。
+  `SqliteBackend` 封装现有 `Db/Schema/Store/HunterStore`；schema、迁移和未完成出战回退归后端。
+  SQLite 全库回退依赖单实例独占文件，不成为共有打开契约。
+- `OpenCfg{backend="sqlite", path}` 描述打开配置，`StorageCfg` 只描述容量；
+  `Storage::open(OpenCfg, Done)` 保留原 `open(path, Done)` 作为 SQLite 兼容入口。
+  宿主以 `--storage sqlite` 选择后端，保留 `--save` 及默认本地路径；仅 SQLite 准备目录。
+  未知或未实现后端返回 `Unsupported`，不回退 SQLite。
+- 共用请求校验和确定性编码；`Error.native_code` 与 `backend` 替代 `sqlite_code`，
+  调用方只依赖 `Code` 和 `commit_unknown`。保留 `hunter_storage` 构建目标，分组公共及 SQLite 源集。
+  本次不变更 SQLite V2、协议、玩法及幂等结果原文。
+
+### 7.2 赛后 MySQL 实现要求
+
+MySQL 由独立服务端访问新库，不迁移比赛 SQLite 存档；本次仅准备替换边界，未实现驱动及连接配置。
+MySQL 后端与账号体系、远程通信和部署分开实施，不能以新增后端代表这些能力完成。
+
+- 独立实现 schema 版本管理和 DDL，并在即时外键检查下安排结算写入顺序及活动出战唯一性约束。
+- 显式保护玩家 revision、局号分配及幂等竞争，不能用普通事务替换 `BEGIN IMMEDIATE` 后照搬先查后写。
+  ID 继续保持正有符号 64 位范围、允许跳号且不复用；事务提交前不交付已分配 ID 或资产。
+- 保留请求和结果 JSON 原文，操作 ID 与请求比较保持精确字节语义；历史结果不按当前配置重算。
+- 为断连、超时、死锁和提交结果未知定义错误及查询确认策略；共享库恢复只处理归属正确且已失效的实例出战，
+  不在启动时无条件回退全库活动局。
+- 通过现有共有业务契约，另补并发写、ID 分配、幂等竞争、断连、提交未知和实例恢复验证。
+  SQLite 文件、PRAGMA、锁和迁移检查保留后端专属测试，不能替代 MySQL 验收。
 
 ## 8. Intent 驱动的开发约定
 

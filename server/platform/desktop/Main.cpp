@@ -215,7 +215,11 @@ hunter::Cfg parse_cfg(i32 argc, char** argv)
         }
         else if (name == "--save")
         {
-            cfg.save_path = value;
+            cfg.storage.path = value;
+        }
+        else if (name == "--storage")
+        {
+            cfg.storage.backend = value;
         }
         else if (name == "--handshake-ms")
         {
@@ -239,7 +243,12 @@ hunter::Cfg parse_cfg(i32 argc, char** argv)
         }
     }
 
-    if (cfg.save_path.empty())
+    if (cfg.storage.backend != "sqlite")
+    {
+        throw std::runtime_error("storage_backend_unsupported");
+    }
+
+    if (cfg.storage.path.empty())
     {
         wchar_t root[32768]{};
         const auto length = GetEnvironmentVariableW(L"LOCALAPPDATA", root, 32768);
@@ -250,11 +259,11 @@ hunter::Cfg parse_cfg(i32 argc, char** argv)
 
         const auto path = std::filesystem::path(root) / "Hunter" / "save.sqlite";
         const auto text = path.u8string();
-        cfg.save_path.assign(text.begin(), text.end());
+        cfg.storage.path.assign(text.begin(), text.end());
     }
 
     const auto path = std::filesystem::path(
-        std::u8string(cfg.save_path.begin(), cfg.save_path.end()));
+        std::u8string(cfg.storage.path.begin(), cfg.storage.path.end()));
 
     if (path.has_parent_path())
     {

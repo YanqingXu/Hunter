@@ -3,12 +3,10 @@
 
 #include "common/Types.h"
 #include "storage/Db.h"
+#include "storage/Req.h"
 
 namespace hunter::storage
 {
-
-// 验证完整 typed 请求并生成确定的 v1 JSON，奖励顺序保持原样。
-Str encode_req(const CommitMatch& req);
 
 // 读取永久玩家；按结果容量逐行计费，不返回部分存档。
 PlayerSave read_player(Db& db, u64 player_id, usize limit);

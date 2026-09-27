@@ -1,10 +1,8 @@
-// 用预留完成容量和单一工作线程连接 SQLite 与所属逻辑线程，不同步执行回调。
+// 用预留完成容量和单一工作线程连接业务后端与逻辑线程，不同步执行回调。
 #include "common/Types.h"
 #include "storage/Storage.h"
-#include "storage/Db.h"
-#include "storage/Schema.h"
-#include "storage/Store.h"
-#include "storage/HunterStore.h"
+#include "storage/Error.h"
+#include "storage/Req.h"
 
 #include <asio/executor_work_guard.hpp>
 #include <asio/post.hpp>
@@ -30,7 +28,7 @@ struct Op
     Kind kind = Kind::Alloc;
     Key key;
     Storage::Done done;
-    Str path;
+    OpenCfg open_cfg;
     u64 id = 0;
     CommitMatch req;
     HunterReq hunter;
@@ -42,7 +40,7 @@ struct Op
 // 返回有限错误值，拒绝发生时尚未接受或执行任务。
 Unexpect<Error> rejected(Code code, const char* message)
 {
-    return Unexpect(Error{code, 0, false, message});
+    return Unexpect(Error{code, 0, false, message, {}});
 }
 
 // 逐项计费并避免任意长度输入使计数加法溢出。
@@ -69,6 +67,7 @@ struct Storage::Impl : std::enable_shared_from_this<Impl>
     asio::io_context& io;
     asio::executor_work_guard<asio::io_context::executor_type> guard;
     const StorageCfg cfg;
+    const BackendFactory factory;
     const u64 instance;
     const std::thread::id owner = std::this_thread::get_id();
     State state = State::New;
@@ -84,10 +83,11 @@ struct Storage::Impl : std::enable_shared_from_this<Impl>
     std::jthread worker;
 
     // 固定配置并保活事件循环，直到关闭完成已被交付。
-    Impl(asio::io_context& ctx, StorageCfg limits, u64 inst)
-        : io(ctx), guard(asio::make_work_guard(ctx)), cfg(limits), instance(inst)
+    Impl(asio::io_context& ctx, StorageCfg limits, u64 inst, BackendFactory create)
+        : io(ctx), guard(asio::make_work_guard(ctx)), cfg(limits), factory(std::move(create)),
+          instance(inst)
     {
-        if (instance == 0 || cfg.max_ops == 0 || cfg.max_req_bytes < sizeof(Op) ||
+        if (!factory || instance == 0 || cfg.max_ops == 0 || cfg.max_req_bytes < sizeof(Op) ||
             cfg.max_result_bytes < small_result || cfg.max_done_bytes < cfg.max_result_bytes ||
             cfg.max_hunter_bytes < small_result ||
             cfg.max_result_bytes > static_cast<usize>(std::numeric_limits<i32>::max()))
@@ -235,31 +235,36 @@ struct Storage::Impl : std::enable_shared_from_this<Impl>
     }
 
     // 在唯一存档线程执行任务，异常不会越过线程入口或伪装为保存成功。
-    Expect<Value, Error> execute(const Op& op, UPtr<Db>& db)
+    Expect<Value, Error> execute(const Op& op, UPtr<Backend>& backend, Str& backend_name)
     {
         try
         {
             if (op.kind == Kind::Open)
             {
-                auto candidate = std::make_unique<Db>(op.path);
-                open_schema(*candidate);
-                recover_hunters(*candidate);
-                db = std::move(candidate);
+                backend_name = op.open_cfg.backend;
+                auto candidate = factory(op.open_cfg);
+                if (!candidate)
+                {
+                    fail(Code::Internal, "storage_backend_missing");
+                }
+
+                candidate->open(op.open_cfg);
+                backend = std::move(candidate);
                 return Opened{};
             }
 
             if (op.kind == Kind::Stop)
             {
-                if (db)
+                if (backend)
                 {
-                    db->close();
-                    db.reset();
+                    auto closing = std::move(backend);
+                    closing->close();
                 }
 
                 return Closed{};
             }
 
-            if (!db)
+            if (!backend)
             {
                 return rejected(Code::NotReady, "storage_connection_unavailable");
             }
@@ -267,39 +272,47 @@ struct Storage::Impl : std::enable_shared_from_this<Impl>
             switch (op.kind)
             {
             case Kind::Load:
-                return read_player(*db, op.id, cfg.max_result_bytes);
+                return backend->load_player(op.id, cfg.max_result_bytes);
             case Kind::Alloc:
-                return next_match(*db);
+                return backend->alloc_match();
             case Kind::Commit:
-                return write_match(*db, op.req, op.json, cfg.max_result_bytes);
+                return backend->commit_match(op.req, op.json, cfg.max_result_bytes);
             case Kind::Find:
-                return read_match(*db, op.id, cfg.max_result_bytes);
+                return backend->find_match(op.id, cfg.max_result_bytes);
             case Kind::Hunters:
-                return read_hunters(*db, op.id, std::min(cfg.max_result_bytes, cfg.max_hunter_bytes));
+                return backend->load_hunters(op.id,
+                    std::min(cfg.max_result_bytes, cfg.max_hunter_bytes));
             case Kind::Hunter:
-                return write_hunter(*db, op.hunter, op.json,
+                return backend->apply_hunter(op.hunter, op.json,
                     std::min(cfg.max_result_bytes, cfg.max_hunter_bytes));
             case Kind::HunterFind:
-                return storage::find_hunter_op(*db, op.hunter.player_id, op.hunter.op_id,
+                return backend->find_hunter_op(op.hunter.player_id, op.hunter.op_id,
                     op.hunter.intent_json, std::min(cfg.max_result_bytes, cfg.max_hunter_bytes));
             default:
                 return rejected(Code::Internal, "unknown_storage_operation");
             }
         }
-        catch (const Error& error)
+        catch (Error& error)
         {
+            if (error.backend.empty())
+            {
+                error.backend = backend_name;
+            }
+
             return Unexpect(error);
         }
         catch (const std::exception&)
         {
-            return rejected(Code::Internal, "storage_execution_exception");
+            return Unexpect(Error{Code::Internal, 0, false,
+                "storage_execution_exception", backend_name});
         }
     }
 
     // 连接在本函数创建并释放，关闭屏障等待正常回调或析构保底通知。
     void run()
     {
-        UPtr<Db> db;
+        UPtr<Backend> backend;
+        Str backend_name;
 
         for (;;)
         {
@@ -322,12 +335,13 @@ struct Storage::Impl : std::enable_shared_from_this<Impl>
                 }
             }
 
-            auto result = execute(*op, db);
+            auto result = execute(*op, backend, backend_name);
             Str{}.swap(op->req.outcome);
             Str{}.swap(op->req.content_key);
             Vec<ItemDelta>{}.swap(op->req.items);
             Str{}.swap(op->json);
-            Str{}.swap(op->path);
+            Str{}.swap(op->open_cfg.path);
+            Str{}.swap(op->open_cfg.backend);
             op->hunter = HunterReq{};
             const bool stop = op->kind == Kind::Stop;
             complete(std::move(op), std::move(result));
@@ -382,8 +396,8 @@ struct Storage::Impl : std::enable_shared_from_this<Impl>
     }
 };
 
-Storage::Storage(asio::io_context& io, StorageCfg cfg, u64 instance)
-    : impl_(std::make_shared<Impl>(io, cfg, instance))
+Storage::Storage(asio::io_context& io, StorageCfg cfg, u64 instance, BackendFactory factory)
+    : impl_(std::make_shared<Impl>(io, cfg, instance, std::move(factory)))
 {
     impl_->worker = std::jthread([self = impl_.get()] { self->run(); });
 }
@@ -395,6 +409,11 @@ Storage::~Storage()
 
 Expect<Accepted, Error> Storage::open(Str path, Done done)
 {
+    return open(OpenCfg{"sqlite", std::move(path)}, std::move(done));
+}
+
+Expect<Accepted, Error> Storage::open(OpenCfg cfg, Done done)
+{
     auto& self = *impl_;
     auto valid = self.allowed(Kind::Open);
     if (!valid)
@@ -402,7 +421,12 @@ Expect<Accepted, Error> Storage::open(Str path, Done done)
         return Unexpect(valid.error());
     }
 
-    if (path.empty() || path.find('\0') != Str::npos)
+    if (cfg.backend.empty() || cfg.backend.size() > 64 || cfg.backend.find('\0') != Str::npos)
+    {
+        return rejected(Code::Invalid, "invalid_storage_backend");
+    }
+
+    if (cfg.backend == "sqlite" && (cfg.path.empty() || cfg.path.find('\0') != Str::npos))
     {
         return rejected(Code::Invalid, "invalid_database_path");
     }
@@ -410,10 +434,11 @@ Expect<Accepted, Error> Storage::open(Str path, Done done)
     try
     {
         usize bytes = sizeof(Op);
-        charge(bytes, path.capacity(), self.cfg.max_req_bytes);
+        charge(bytes, cfg.path.capacity(), self.cfg.max_req_bytes);
+        charge(bytes, cfg.backend.capacity(), self.cfg.max_req_bytes);
         auto op = std::make_shared<Op>();
         op->kind = Kind::Open;
-        op->path = std::move(path);
+        op->open_cfg = std::move(cfg);
         op->done = std::move(done);
         op->req_bytes = bytes;
         op->done_bytes = small_result;

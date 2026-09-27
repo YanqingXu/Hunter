@@ -60,7 +60,7 @@ Luax 输出提交与 Protobuf 转换共用同一校验器。C# 产物尚未进�
 
 ```powershell
 ./build/win-dev/Release/hunter_server_desktop.exe `
-    --source build/win-dev/generated/game.lua --save ./saves/demo.sqlite
+    --source build/win-dev/generated/game.lua --storage sqlite --save ./saves/demo.sqlite
 ```
 
 stdin 每行一个 JSON 对象；`req_id` 为非空字符串，最多 128 字节。标准输出只有控制 JSON，
@@ -75,6 +75,8 @@ stdin 每行一个 JSON 对象；`req_id` 为非空字符串，最多 128 字节
 
 Start 成功返回 `type=Ready`，包含 `port/instance/token/protocol_version/content_version`。
 Ready 之前必须完成存档打开和玩家加载；省略 `--save` 使用 `%LOCALAPPDATA%/Hunter/save.sqlite`。
+`--storage` 默认 `sqlite`，当前仅实现此后端；未知或未实现的后端明确失败，不回退 SQLite。
+只有选择 SQLite 时才准备默认存档路径及父目录，`--save` 始终表示 SQLite 文件路径。
 首次启动创建 SQLite V2；旧 V1 在事务中迁移并保留 UID、局号高水位和历史结果原文。
 损坏、陌生版本、不可写路径返回失败，禁止自动清档。
 后续控制返回 `Rsp` 或 `Error`，关联原始 `req_id`。错误与状态的精确定义见
@@ -241,21 +243,33 @@ python tools/package_demo.py --build build/win-bundle `
 ## 独立持久化模块（SRV-007）
 
 使用方链接 `hunter_storage` 并包含 `storage/Storage.h`，命名空间为 `hunter::storage`。
-`Db` 封装资源、`Schema` 固定 V1 结构、`Store` 执行业务事务，`Storage` 提供异步门面；
-这些模块没有 Luax、World、Protobuf 依赖，也不会自行创建桌面游戏存档。
+比赛阶段使用 SQLite V2，Runtime 已接入启动读档、持久局号、猎人资产及原子幂等结算。
+本次拆分 `Storage` 异步门面和同步业务 `Backend`，保留队列、Asio 完成投递及关闭屏障。
+`SqliteBackend` 封装 `Db/Schema/Store/HunterStore`，持有连接、SQL、迁移和恢复策略；
+公共请求校验与确定性编码不依赖 SQLite，模块仍不依赖 Luax、World 或 Protobuf。
+构建保留 `hunter_storage` 目标，源集按公共部分和 SQLite 实现分组；尚无 MySQL 实现。
+仅使用自定义后端时可链接不依赖 SQLite 的 `hunter_storage_common`，并调用四参数构造
+`Storage(io, limits, instance, factory)`；默认三参数构造和 SQLite 装配由 `hunter_storage` 提供。
 
 在逻辑线程构造 `Storage(io, StorageCfg{}, instance)`，instance 必须为非零关联 ID。
-调用 `open(UTF-8 文件路径, done)`；父目录由宿主准备，首次成功打开才初始化玩家 1。
+调用 `open(OpenCfg{"sqlite", UTF-8 文件路径}, done)`；`OpenCfg.backend` 默认 `sqlite`，
+`StorageCfg` 只描述容量限制。旧 `open(path, done)` 保留为 SQLite 兼容入口。
+父目录由宿主准备，SQLite 首次成功打开才初始化玩家 1。
 收到 `Opened` 后才能提交业务请求。打开失败需关闭该对象，使用新对象重试。
-同一个存档文件由一个 Storage 实例拥有。
+同一个 SQLite 存档文件由一个 Storage 实例拥有；全库未完成出战回退仅属于此后端的打开策略，
+不属于公共 `open` 契约。`BackendFactory` 在存档线程创建后端，打开、业务调用、
+关闭及销毁均在该线程执行；公共层不持有数据库连接或构造 SQL。
 
 | 方法 | 成功完成值 | 含义 |
 | --- | --- | --- |
-| `open(path, done)` | `Opened` | 文件、配置、schema 和完整性检查通过 |
-| `load_player(player_id, done)` | `PlayerSave` | 身份、revision、最后提交的 match_id 和全部永久物品 |
+| `open(cfg, done)` / `open(path, done)` | `Opened` | 所选后端完成打开；后者固定选择 SQLite |
+| `load_player(player_id, done)` | `PlayerSave` | 身份、revision、最后提交的 match_id 和可用仓库物品 |
 | `alloc_match(done)` | `MatchId` | 已事务提交的稳定 ID，允许空洞、不复用 |
 | `commit_match(req, done)` | `MatchResult` | 已 Committed，`replayed` 表示返回先前的同一结果 |
 | `find_match(match_id, done)` | `MatchResult` | 已提交的原始结果，缺失返回 `NotFound` |
+| `load_hunters(player_id, done)` | `HunterResult` | 账号、猎人、技能、装备和可用仓库的完整档案 |
+| `apply_hunter(req, done)` | `HunterResult` | 猎人操作及其幂等记录已原子提交 |
+| `find_hunter_op(player_id, op_id, intent_json, done)` | `HunterResult` | 按原始意图查询已经提交的操作结果 |
 | `stop(done)` | `Closed` | 已接受任务及其回调排空，数据库连接已关闭 |
 
 每个入口返回 `std::expected<Accepted, Error>`；拒绝不会产生回调或磁盘副作用。
@@ -266,12 +280,15 @@ python tools/package_demo.py --build build/win-bundle `
 `CommitMatch` 提供 `match_id/player_id/expected_revision/outcome/content_key/items`。
 items 为 `{cfg_id, count}` 正数增量，可为空；每行产生独立物品，顺序是请求内容的一部分。
 存储层生成固定格式的 request_json；同 ID 同内容先于 revision 校验返回旧结果，不同内容冲突。
-请求、奖励、玩家 revision 和结果在一个事务内提交。SQLite INTEGER 的上限也是 ID/revision
+请求、奖励、玩家 revision 和结果在一个事务内提交。正有符号 64 位整数的上限也是 ID/revision
 上限，JSON 直接编码整数，不经过浮点数；永久 item_uid 不使用 World 实体 ID。
 
 `Error.code` 区分参数、容量、未就绪、未找到、内容冲突、revision 冲突、溢出、版本、损坏、
-锁超时及写失败；`sqlite_code` 保留 SQLite 扩展码。`commit_unknown=true` 表示不能确认
-COMMIT 结果，调用方通过查询或相同请求重试确认，不能展示保存成功。
+锁超时及写失败；`Unsupported` 表示后端未知或尚未实现，不自动回退或创建 SQLite 文件。
+`native_code` 与 `backend` 替代原 `sqlite_code`，分别保存后端原始码及来源；通用校验错误
+可无后端来源。业务只依据 `Code` 和 `commit_unknown` 分支，不依赖驱动错误码。
+`commit_unknown=true` 表示不能确认 COMMIT 结果，调用方通过查询或相同请求重试确认，
+不能展示保存成功。
 
 默认限制为 64 个未交付操作、请求 1 MiB、完成 4 MiB、单结果 1 MiB。读取和结算按最大结果
 预留完成槽，因此默认最多同时接受四个大结果操作；超限显式失败，不截断存档。
@@ -282,20 +299,33 @@ stop 使用独立控制槽，普通队列饱和也能关闭；已接受事务不
 析构仅作为等待磁盘工作退出的保底路径，不执行“保存全部”；旧完成拥有独立关联和数据，
 回调捕获的对象仍须由调用方保证有效。正常业务不依赖析构或退出回调保存结算。
 
-数据库使用 `user_version=1`、WAL、FULL、外键和 2000 ms 锁等待。仅空库从 0 初始化，
-已有库必须匹配 V1 完整结构并通过 quick_check／外键检查；不自动重置异常或高版本库。
-物品表增加正数约束和延迟外键，结果表约束 JSON 合法性及 revision 增量。
+SQLite 使用 `user_version=2`、WAL、FULL、外键和 2000 ms 锁等待。空库初始化为 V2，
+合法 V1 在事务内升级 V2；已有库必须匹配对应版本完整结构并通过 quick_check／外键检查，
+不自动重置异常或高版本库。V2 在玩家、物品和结算表之外增加账号成长、猎人、技能、装备、
+出战和永久操作表；保留正数、JSON、revision、外键及活动出战唯一性约束。
 
 ```powershell
-cmake --build --preset win-dev --target hunter_storage_contract hunter_storage_crash --parallel 8
-ctest --preset win-dev -R hunter_storage
+cmake --build --preset win-dev --target hunter_storage_contract `
+    hunter_storage_backend_contract hunter_storage_crash hunter_hunter_store_contract --parallel 8
+ctest --preset win-dev -R '^hunter_(storage_(contract|backend_contract|crash_integration)|hunter_store_contract)$'
 ```
 
 `hunter_storage_contract` 覆盖事务、重启、容量和线程；`hunter_storage_crash_integration`
 由父进程在精确事务检查点强杀并重新读取，同时验证真实 SQLITE_FULL 回滚。
+`hunter_storage_backend_contract` 使用无数据库测试后端检查工厂、调用和销毁的线程归属，
+以及完成延后与关闭排空；测试结果以 [验证记录](VERIFICATION.md) 为准。
+`hunter_storage_cfg_integration` 随桌面集成验证显式及默认 SQLite 选择、未知后端拒绝和文件保留。
 注入点只编译到测试专用 `hunter_storage_fault`，正式库没有故障开关。
 Runtime 已接入启动读档、持久对局 ID、冻结奖励与网络查询。SQLite V2 仍限定一局一名玩家。
 `hunter_runtime_fault` 只供测试，在相同桌面 Runtime／TCP 链路注入事务检查点，不能发行。
+
+赛后由独立服务端访问 MySQL 新库，不导入比赛 SQLite 存档。本次只建立后端替换边界，
+MySQL 驱动、连接配置及实现尚未提供；账号体系、客户端远程连接与部署另行安排。
+后续 MySQL 必须通过共有业务契约，并独立实现 DDL、版本管理、并发 revision 和局号分配、
+幂等竞争、即时外键下的结算写入顺序、JSON 原文及操作 ID 的精确比较、断连与提交未知处理。
+共享数据库的出战恢复需校验实例归属和失效状态，不能照搬 SQLite 启动时回退全部活动局。
+具体边界见 [存储契约](intents/modules/storage.intent.md) 和 [规划](plan.md)；
+[db.md](db.md) 保留为早期 SQLite V1 设计稿，不代表当前实现状态。
 
 ## Android 探针与后续边界
 

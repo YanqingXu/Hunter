@@ -3,15 +3,13 @@
 
 #include "common/Types.h"
 #include "storage/Db.h"
+#include "storage/Req.h"
 
 namespace hunter::storage
 {
 
 // 返回 V2 增量表的冻结 DDL，迁移和完整性检查使用相同定义。
 const Map<Str, Str>& hunter_tables();
-
-// 校验命令边界并规范化 JSON，异步队列只保留拥有型值。
-Str encode_hunter(const HunterReq& req);
 
 // 在单一读事务中返回账号、猎人、技能、装备和可用仓库。
 HunterResult read_hunters(Db& db, u64 player_id, usize limit);

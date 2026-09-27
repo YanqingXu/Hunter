@@ -1,5 +1,6 @@
 // 用真实文件、SQLite 和 Asio 验证持久事务、容量、线程与关闭契约。
 #include "common/Types.h"
+#include "../fixtures/StorageCases.h"
 #include "storage/Storage.h"
 #include "storage/Db.h"
 #include "storage/Schema.h"
@@ -19,230 +20,8 @@ namespace
 {
 
 using namespace hunter::storage;
+using namespace hunter::storage::test;
 using Json = nlohmann::json;
-
-// 检查公开行为，保留可定位的失败原因。
-void check(bool ok, const Str& msg)
-{
-    if (!ok)
-    {
-        throw std::runtime_error(msg);
-    }
-}
-
-// 将临时目录转换为 SQLite 接受的 UTF-8 文件路径。
-Str utf8(const std::filesystem::path& path)
-{
-    const auto value = path.u8string();
-    return Str(value.begin(), value.end());
-}
-
-struct Temp
-{
-    std::filesystem::path root;
-
-    // 建立本次测试独占的临时目录，不使用用户存档。
-    Temp()
-    {
-        const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
-        root = std::filesystem::temp_directory_path() /
-            ("hunter-storage-" + std::to_string(stamp));
-        check(std::filesystem::create_directory(root), "unique temporary directory");
-    }
-
-    // 只移除由本对象创建的目录，失败时不覆盖原测试异常。
-    ~Temp()
-    {
-        std::error_code error;
-        std::filesystem::remove_all(root, error);
-    }
-
-    // 为独立用例返回同一测试目录内的数据库路径。
-    Str file(const Str& name) const
-    {
-        return utf8(root / name);
-    }
-};
-
-struct Host
-{
-    asio::io_context io;
-    UPtr<Storage> store;
-
-    // 在当前线程创建存档门面及独立关联实例。
-    explicit Host(StorageCfg cfg = {}, u64 instance = 17)
-        : store(std::make_unique<Storage>(io, cfg, instance))
-    {
-    }
-
-    // 释放工作线程后交付剩余拥有型完成包。
-    ~Host()
-    {
-        store.reset();
-        io.restart();
-        io.poll();
-    }
-
-    // 有界驱动真实事件循环，避免测试失败时无限等待。
-    void until(const Func<bool()>& done)
-    {
-        const auto end = std::chrono::steady_clock::now() + std::chrono::seconds(10);
-
-        while (!done() && std::chrono::steady_clock::now() < end)
-        {
-            io.restart();
-            io.run_for(std::chrono::milliseconds(5));
-        }
-
-        check(done(), "completion deadline");
-    }
-
-    // 同步等待测试调用，生产接口仍然异步并验证操作关联。
-    template<typename F>
-    std::expected<Value, Error> call(F submit)
-    {
-        auto result = std::make_shared<std::optional<Rsp>>();
-        const auto owner = std::this_thread::get_id();
-        auto ticket = submit([result, owner](Rsp rsp)
-        {
-            check(owner == std::this_thread::get_id(), "callback owning thread");
-            check(!result->has_value(), "one terminal completion");
-            *result = std::move(rsp);
-        });
-        check(ticket.has_value(), ticket ? "" : ticket.error().message);
-        check(!result->has_value(), "never complete inline");
-        until([&] { return result->has_value(); });
-        check((*result)->key.instance == ticket->key.instance &&
-            (*result)->key.op == ticket->key.op, "correlated operation");
-        return std::move((*result)->result);
-    }
-
-    // 打开测试文件并要求数据库已完成初始化。
-    void open(const Str& path)
-    {
-        auto result = call([&](auto done) { return store->open(path, std::move(done)); });
-        check(result.has_value(), result ? "" : result.error().message);
-        check(std::holds_alternative<Opened>(*result), "opened result");
-    }
-
-    // 分配已提交的稳定对局 ID。
-    u64 alloc()
-    {
-        auto result = call([&](auto done) { return store->alloc_match(std::move(done)); });
-        check(result.has_value(), result ? "" : result.error().message);
-        return std::get<MatchId>(*result).value;
-    }
-
-    // 读取单机永久玩家的完整存档。
-    PlayerSave load()
-    {
-        auto result = call([&](auto done) { return store->load_player(1, std::move(done)); });
-        check(result.has_value(), result ? "" : result.error().message);
-        return std::get<PlayerSave>(std::move(*result));
-    }
-
-    // 提交给定测试请求，错误也保留为可断言结果。
-    std::expected<Value, Error> commit(const CommitMatch& req)
-    {
-        return call([&](auto done) { return store->commit_match(req, std::move(done)); });
-    }
-
-    // 查询已保存结果，不从当前内存推断结算。
-    std::expected<Value, Error> find(u64 id)
-    {
-        return call([&](auto done) { return store->find_match(id, std::move(done)); });
-    }
-
-    // 驱动关闭直到数据库资源已释放。
-    void stop()
-    {
-        auto result = call([&](auto done) { return store->stop(std::move(done)); });
-        check(result && std::holds_alternative<Closed>(*result), "closed completion");
-    }
-};
-
-// 构造确定的奖励输入；同配置的两行仍为两个独立永久物品。
-CommitMatch req(u64 id, u64 revision = 1)
-{
-    return {id, 1, revision, "extracted", "content-v1", {{10003, 2}, {10003, 1}}};
-}
-
-// 验证错误分类，避免把任何失败都误认为预期行为。
-void error_is(const std::expected<Value, Error>& result, Code code)
-{
-    check(!result && result.error().code == code, "expected error category");
-}
-
-// 验证永久物品、去重、冲突以及重启后的序列与结果精度。
-void transaction_contract(const Temp& tmp)
-{
-    const Str path = tmp.file("事务.db");
-    Str saved;
-    u64 first_uid = 0;
-    {
-        Host host;
-        host.open(path);
-        auto player = host.load();
-        check(player.player_id == 1 && player.revision == 1 && player.items.empty() &&
-            player.last_match_id == 0, "initial player");
-        check(host.alloc() == 1, "first allocated id");
-        auto result = host.commit(req(1));
-        check(result.has_value(), "first commit");
-        const auto& match = std::get<MatchResult>(*result);
-        check(!match.replayed && match.revision == 2, "committed revision");
-        saved = match.result_json;
-        auto json = Json::parse(saved);
-        check(json["items"].size() == 2 && json["revision_after"] == 2, "stored result");
-        first_uid = json["items"][0]["item_uid"].get<u64>();
-        check(first_uid > 0, "permanent uid");
-        result = host.commit(req(1));
-        check(result && std::get<MatchResult>(*result).replayed &&
-            std::get<MatchResult>(*result).result_json == saved, "exact replay");
-        auto changed = req(1);
-        changed.items[0].count++;
-        error_is(host.commit(changed), Code::Conflict);
-        changed = req(1);
-        changed.expected_revision = 2;
-        error_is(host.commit(changed), Code::Conflict);
-        changed = req(1);
-        std::swap(changed.items[0], changed.items[1]);
-        error_is(host.commit(changed), Code::Conflict);
-        check(host.alloc() == 2, "second id");
-        error_is(host.commit(req(2)), Code::Revision);
-        error_is(host.find(2), Code::NotFound);
-        error_is(host.commit(req(500, 2)), Code::Invalid);
-        player = host.load();
-        check(player.revision == 2 && player.items.size() == 2 &&
-            player.items[0].count == 2 && player.last_match_id == 1, "no duplicate award");
-        host.stop();
-    }
-
-    {
-        Host host({}, 18);
-        host.open(path);
-        check(host.alloc() == 3, "allocated gap survives restart");
-        auto result = host.commit(req(1));
-        check(result && std::get<MatchResult>(*result).result_json == saved, "restart replay");
-        auto empty = req(3, 2);
-        empty.items.clear();
-        result = host.commit(empty);
-        check(result && std::get<MatchResult>(*result).revision == 3, "empty reward commits");
-        check(host.load().items[0].item_uid == first_uid, "uid survives restart");
-        host.stop();
-    }
-
-    for (u64 i = 0; i < 10; ++i)
-    {
-        Host host;
-        host.open(path);
-        const auto player = host.load();
-        const auto id = host.alloc();
-        auto result = host.commit(req(id, player.revision));
-        check(result.has_value(), "ten restart commits");
-        check(host.load().items.size() == 2 + 2 * (i + 1), "cumulative items");
-        host.stop();
-    }
-}
 
 // 用直接连接建立异常文件，确保正式接口保留文件并拒绝错误版本和结构。
 void schema_contract(const Temp& tmp)
@@ -433,6 +212,8 @@ void failure_contract(const Temp& tmp)
         Txn txn(lock);
         auto result = host.commit(req(1));
         error_is(result, Code::Busy);
+        check(result.error().backend == "sqlite" && result.error().native_code != 0,
+            "sqlite driver error keeps its source and native code");
     }
 
     check(host.load().revision == 1, "busy left unchanged");
@@ -591,12 +372,12 @@ void lifetime_contract(const Temp& tmp)
 }
 
 // 运行独立存档契约，失败返回非零退出码。
-int main()
+i32 main()
 {
     try
     {
         Temp tmp;
-        transaction_contract(tmp);
+        transaction_contract(OpenCfg{"sqlite", tmp.file("事务.db")});
         schema_contract(tmp);
         async_contract(tmp);
         failure_contract(tmp);

@@ -1,5 +1,6 @@
 // 用真实 SQLite、异步门面和子进程退出验证猎人迁移、资产原子性及出战回退。
 #include "common/Types.h"
+#include "../fixtures/StorageCases.h"
 #include "storage/HunterStore.h"
 #include "storage/Storage.h"
 #include "storage/Schema.h"
@@ -19,51 +20,10 @@
 namespace
 {
 using namespace hunter::storage;
+using namespace hunter::storage::test;
 using Json = nlohmann::json;
 Str failure_stage;
 bool crash = false;
-
-// 检查行为及不变量，错误包含当前用例说明。
-void check(bool ok, const Str& message)
-{
-    if (!ok)
-    {
-        throw std::runtime_error(message);
-    }
-}
-
-// 将独占临时路径转换为 SQLite 接受的 UTF-8。
-Str utf8(const std::filesystem::path& path)
-{
-    const auto value = path.u8string();
-    return Str(value.begin(), value.end());
-}
-
-struct Temp
-{
-    std::filesystem::path path;
-
-    // 创建只属于本次测试的目录，不访问用户存档。
-    Temp()
-    {
-        path = std::filesystem::temp_directory_path() / ("hunter-v2-" + std::to_string(
-            std::chrono::steady_clock::now().time_since_epoch().count()));
-        check(std::filesystem::create_directory(path), "创建独占测试目录");
-    }
-
-    // 回收本对象创建的临时目录，清理错误不覆盖原始断言。
-    ~Temp()
-    {
-        std::error_code error;
-        std::filesystem::remove_all(path, error);
-    }
-
-    // 返回目录内的单个测试数据库路径。
-    Str file(const Str& name) const
-    {
-        return utf8(path / name);
-    }
-};
 
 // 以正式读取接口获取最新账号版本。
 u64 rev(Db& db)
@@ -173,62 +133,13 @@ void migration(const Temp& temp)
     check(read_match(db, last, 1048576).result_json == saved, "重复打开迁移幂等");
 }
 
-// 验证技能实际支付、操作持久幂等、完整配装原子性和退休归仓。
-void economy(const Temp& temp)
+// 保留直接事务的极小结果预算检查，公开门面有更高的最小完成预算。
+void sqlite_budget(const Temp& temp)
 {
-    Db db(temp.file("economy.db"));
+    Db db(temp.file("tiny-budget.db"));
     open_schema(db);
-    const auto old = seed_items(db);
-    const auto item = Json::parse(old.result_json)["items"][0]["item_uid"];
-    auto recruit = request(db, "recruit", "recruit", 0,
-        {{"cfg_id", 2}, {"level", 1}, {"xp", 0}, {"points", 8},
-            {"currency_cost", 0}, {"skills", Json::array({1})}});
-    recruit.intent_json = R"({"cfg_id":2})";
-    const auto created = apply(db, recruit);
-    const auto again = apply(db, recruit);
-    check(again.replayed && again.result_json == created.result_json, "招募同操作精确重放");
-    auto changed = recruit;
-    changed.payload_json = Json({{"cfg_id", 3}, {"level", 1}, {"xp", 0}, {"points", 8},
-        {"currency_cost", 0}, {"skills", Json::array({1})}}).dump();
-    rejects(db, changed, Code::Conflict);
-    const auto id = created.hunter_id;
-    apply(db, request(db, "buy", "buy_skill", id, {{"cfg_id", 2}, {"cost", 3}}));
-    rejects(db, request(db, "double-buy", "buy_skill", id, {{"cfg_id", 2}, {"cost", 3}}),
-        Code::Conflict);
-    apply(db, request(db, "remove", "remove_skill", id, {{"cfg_id", 2}, {"refund", 1}}));
-    check(hunter(db, id)["points"] == 6, "按实际支付退点");
-    rejects(db, request(db, "free-refund", "remove_skill", id,
-        {{"cfg_id", 1}, {"refund", 1}}), Code::Invalid);
-    apply(db, request(db, "buy-one", "buy_skill", id, {{"cfg_id", 2}, {"cost", 1}}));
-    apply(db, request(db, "refund-one", "remove_skill", id, {{"cfg_id", 2}, {"refund", 1}}));
-    check(hunter(db, id)["points"] == 6, "支付一点可退一点");
-    apply(db, request(db, "equip", "equip", id,
-        {{"items", Json::array({{{"slot", 1}, {"item_uid", item}}})}}));
-    check(read_player(db, 1, 1048576).items.size() == 1, "已装备物品不出现在可用仓库");
-    rejects(db, request(db, "bad-equip", "equip", id, {{"items", Json::array({
-        {{"slot", 1}, {"item_uid", item}}, {{"slot", 2}, {"item_uid", 9999}}})}}),
-        Code::NotFound);
-    const auto second = recruit_one(db, "second");
-    rejects(db, request(db, "stolen", "equip", second.hunter_id,
-        {{"items", Json::array({{{"slot", 1}, {"item_uid", item}}})}}), Code::Busy);
-    rejects(db, request(db, "early-retire", "retire", id,
-        {{"max_level", 2}, {"account_xp", 10}}), Code::Invalid);
-    const auto retired = apply(db, request(db, "retire", "retire", id,
-        {{"max_level", 1}, {"account_xp", 10}}));
-    check(hunter(db, id).is_null() && read_player(db, 1, 1048576).items.size() == 2,
-        "退役后猎人消失而装备归仓");
-    check(Json::parse(retired.result_json)["profile"]["account_xp"] == 10,
-        "退役经验同事务增加");
-    check(find_hunter_op(db, 1, "recruit", recruit.intent_json, 1048576).result_json
-        == created.result_json, "人物退役后先按原始意图返回成功响应");
-    auto excessive = request(db, "oversized-intent", "retire", second.hunter_id,
-        {{"max_level", 1}, {"account_xp", 0}});
-    excessive.intent_json.assign(262145, 'x');
-    rejects(db, excessive, Code::TooLarge);
-    auto invalid = request(db, "missing-cost", "recruit", 0,
-        {{"cfg_id", 2}, {"level", 1}, {"xp", 0}, {"points", 8}, {"skills", Json::array()}});
-    rejects(db, invalid, Code::Invalid);
-    rejects(db, request(db, "result-budget", "buy_skill", second.hunter_id,
+    const auto created = recruit_one(db, "recruit");
+    rejects(db, request(db, "result-budget", "buy_skill", created.hunter_id,
         {{"cfg_id", 2}, {"cost", 1}}), Code::TooLarge, 128);
 }
 
@@ -509,7 +420,9 @@ i32 main(i32 argc, char** argv)
         }
         Temp temp;
         migration(temp);
-        economy(temp);
+        economy_contract(OpenCfg{"sqlite", temp.file("economy.db")});
+        raid_contract(OpenCfg{"sqlite", temp.file("raid-business.db")});
+        sqlite_budget(temp);
         raids(temp);
         async_api(temp);
         async_budget(temp);

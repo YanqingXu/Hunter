@@ -1,6 +1,20 @@
-我看了 `Hunter` 当前仓库结构和规划。这个项目其实已经把 SQLite 持久化的核心原则定下来了，只是还没有进入实现阶段：[`server/plan.md`](https://github.com/YanqingXu/Hunter/blob/main/server/plan.md) 明确要求 **SQLite 单写入、结算/去重/累计存档同一事务**；[`storage.intent.md`](https://github.com/YanqingXu/Hunter/blob/main/server/intents/modules/storage.intent.md) 也规定了 **Accepted ≠ Committed、同 ID 同内容幂等、不同内容冲突、未完成局不恢复/不发奖**。
+# SQLite V1 历史设计稿
 
-结合现在的 `World / Player / Item / Weapon / Monster` 结构，我建议把 Hunter 的持久化做成下面这套。
+本文保留 SRV-007 实施前的设计背景；下文“当前”“尚未实现”、Schema V1 示例和建议实施顺序
+均指当时状态，不作为当前接口、DDL 或进度依据。当前说明见 [README](README.md)、
+[规划](plan.md)、[存储契约](intents/modules/storage.intent.md) 和 [验证记录](VERIFICATION.md)。
+
+截至 2026-09-27，Runtime 已接入读档、持久局号、原子结算及永久猎人，SQLite 已为 V2；
+合法 V1 可事务升级，保留 UID、局号高水位和历史结果。比赛继续使用 SQLite。
+本次只拆分异步 `Storage` 和同步业务 `Backend`，由 `SqliteBackend` 封装连接、schema、
+迁移和单实例文件恢复；原有事务、幂等及 `Accepted ≠ Committed` 语义保持不变。
+
+赛后计划由独立服务端访问 MySQL 新库，不导入比赛存档。MySQL 尚未实现，不能仅更改配置
+即可使用；账号与远程部署独立安排。其并发锁、ID、即时外键写入顺序、原文 JSON 比较、
+提交未知以及实例归属恢复要求见 [规划第 7 节](plan.md#7-结算与异常边界)。
+下文 SQLite 的 `BEGIN IMMEDIATE`、延迟外键、PRAGMA 和全库恢复思路不能作为 MySQL 实现契约。
+
+---
 
 ## 1. 先明确：哪些数据该进 SQLite
 

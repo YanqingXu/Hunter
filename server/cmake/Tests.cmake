@@ -67,12 +67,18 @@ target_link_libraries(hunter_storage_contract PRIVATE hunter_storage
 add_test(NAME hunter_storage_contract COMMAND hunter_storage_contract)
 set_tests_properties(hunter_storage_contract PROPERTIES TIMEOUT 60)
 
+add_executable(hunter_storage_backend_contract tests/contract/BackendContract.cpp)
+hunter_target(hunter_storage_backend_contract)
+target_link_libraries(hunter_storage_backend_contract PRIVATE hunter_storage)
+add_test(NAME hunter_storage_backend_contract COMMAND hunter_storage_backend_contract)
+set_tests_properties(hunter_storage_backend_contract PROPERTIES TIMEOUT 60)
+
 # 注入点只编译进测试专用副本，不改变正式存储目标。
 add_library(hunter_storage_fault STATIC ${HUNTER_STORAGE_SOURCES})
 hunter_target(hunter_storage_fault)
 target_include_directories(hunter_storage_fault PRIVATE tests/fixtures)
 target_compile_definitions(hunter_storage_fault PRIVATE HUNTER_STORAGE_TESTING=1)
-target_link_libraries(hunter_storage_fault PUBLIC hunter_asio Threads::Threads
+target_link_libraries(hunter_storage_fault PUBLIC hunter_storage_common
     PRIVATE hunter_sqlite nlohmann_json::nlohmann_json)
 add_executable(hunter_storage_crash tests/fixtures/StorageCrash.cpp)
 hunter_target(hunter_storage_crash)
@@ -180,6 +186,11 @@ else()
 endif()
 set_tests_properties(hunter_endurance_contract PROPERTIES TIMEOUT 90)
 if(TARGET hunter_server_desktop)
+    add_test(NAME hunter_storage_cfg_integration COMMAND ${Python3_EXECUTABLE}
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/storage_cfg_test.py"
+        --exe $<TARGET_FILE:hunter_server_desktop> ${process_args})
+    set_tests_properties(hunter_storage_cfg_integration PROPERTIES TIMEOUT 60)
+
     add_test(NAME hunter_gameplay_integration COMMAND ${Python3_EXECUTABLE}
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/gameplay_test.py"
         --exe $<TARGET_FILE:hunter_server_desktop> --client $<TARGET_FILE:hunter_client>

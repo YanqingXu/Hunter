@@ -12,15 +12,23 @@ namespace hunter::storage
 enum class Code
 {
     Invalid, WrongThread, NotReady, Closed, Capacity, TooLarge, NotFound,
-    Conflict, Revision, Overflow, Open, Version, Corrupt, Busy, Write, Internal
+    Conflict, Revision, Overflow, Open, Version, Corrupt, Busy, Write, Internal, Unsupported
 };
 
 struct Error
 {
     Code code = Code::Internal;
-    i32 sqlite_code = 0;
+    i32 native_code = 0;
     bool commit_unknown = false;
     Str message;
+    Str backend;
+};
+
+// 连接配置由后端解释；容量限制继续由 StorageCfg 管理。
+struct OpenCfg
+{
+    Str backend = "sqlite";
+    Str path;
 };
 
 struct Key

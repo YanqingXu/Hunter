@@ -9,11 +9,6 @@
 namespace hunter::storage
 {
 
-void fail(Code code, const Str& message)
-{
-    throw Error{code, 0, false, message.substr(0, 512)};
-}
-
 Db::Db(const Str& path)
 {
     const auto rc = sqlite3_open_v2(path.c_str(), &db_,
@@ -96,7 +91,7 @@ void Db::check(i32 rc) const
     }
 
     const Str message = db_ ? sqlite3_errmsg(db_) : sqlite3_errstr(rc);
-    throw Error{code, rc, false, message.substr(0, 512)};
+    throw Error{code, rc, false, message.substr(0, 512), "sqlite"};
 }
 
 void Db::exec(const char* sql)
