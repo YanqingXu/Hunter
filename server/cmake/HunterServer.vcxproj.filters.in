@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 按真实目录同时展示头文件、实现和脚本；由 CMake 生成。 -->
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+@hunter_vs_filters@  </ItemGroup>
+  <ItemGroup>
+@hunter_vs_filter_items@  </ItemGroup>
+</Project>

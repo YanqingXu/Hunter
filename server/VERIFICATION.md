@@ -1,5 +1,37 @@
 # 服务端验证记录
 
+## VS2026 单项目开发入口（2026-09-27）
+
+新增 `HunterServer.slnx`，引用 `build/win-dev/ide/HunterServer.vcxproj`；
+`build/win-dev/HunterServer.Dev.slnx` 是同一项目的另一入口。工程与筛选器由 CMake
+生成，目录浏览、IntelliSense 与调试入口聚合到一个项目，构建复用原有 CMake 目标。
+使用本机 VS2026 的 CMake 4.3.1-msvc1、MSBuild 18.9 和 v145 工具集验证。
+
+首次实际启动发现 Debug 在默认 50 毫秒脚本限时下初始化失败，返回
+`init: Host boundary native work stopped`。增加开发 Runtime 专用 `--script-ms`
+参数（严格正整数，1～60000 毫秒），VS 调试入口显式设置为 60000；默认值、指令预算与
+原生工作量预算不变。修复前已复现失败，修复后 Debug／Release 均实际启停成功，
+重新编译的生产 Runtime 拒绝该参数。相关验证并入现有进程集成测试。
+
+以下证据位于 `build/win-dev/ide/`，不表示运行了完整 CTest 或远程 CI：
+
+| 验证 | 实际结果与证据 |
+| --- | --- |
+| 工程与目录结构 | 两个入口各 1 个项目，无 ProjectReference；224 个浏览文件、30 个目录，覆盖 `src/` 全部 67 个 C++ 头文件与实现；`structure-check.json` |
+| VS2026 实际编译 | Debug、Release 成功；`build-debug-final.log`、`build-release-final.log`；首次 Debug 编译存在上游库告警 |
+| 清理与增量构建 | Debug Clean 成功；新增／删除含中文、空格、`&` 的临时文件自动刷新，未重新链接程序；`clean-debug.log`、`refresh-*.log`、`refresh-check.json` |
+| 四配置属性求值 | Debug／Release／RelWithDebInfo／MinSizeRel 的输出、包含目录、宏、调试程序及参数求值通过；`evaluated-*.json` |
+| 调试参数实际运行 | 按生成工程的工作目录、程序与完整参数运行，Debug／Release 均返回 Ready、Stopped，退出码 0；`runtime-*.json` |
+| 脚本限时参数 | 开发 Debug／Release 的非法值拒绝、边界值接受及真实启停通过；生产重新编译后拒绝此参数；`deadline-*-check.json`、`build-bundle-check.log` |
+| 相关 CTest | 4/4 通过，37.60 秒；存档配置、完整进程集成与两项 intent 检查；`final-tests.log` |
+| 差异与引用 | `git diff --check` 与本轮新增文档链接检查通过 |
+
+复验命令：在 `server/` 下使用 VS2026 配套工具执行
+`MSBuild HunterServer.slnx /t:Build /p:Configuration=Debug /p:Platform=x64`（Release 同理），
+以及 `ctest --preset win-dev -R "hunter_(process_integration|storage_cfg_integration|intent)"`。
+本轮通过 MSBuild 与真实进程核对，未操作 VS 图形界面点击 F5；RelWithDebInfo／MinSizeRel
+仅核对配置属性，未实际编译运行。Android 不在本轮范围。
+
 ## 持久化后端解耦（2026-09-27）
 
 基线 `e251c6b`。比赛继续使用 SQLite V2；本轮实现同步 Backend、SqliteBackend、

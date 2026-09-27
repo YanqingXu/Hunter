@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 从真实 CMake 编译目标派生当前配置的补全路径、宏和调试程序。 -->
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <NMakeIncludeSearchPath><![CDATA[@hunter_vs_includes@;$(NMakeIncludeSearchPath)]]></NMakeIncludeSearchPath>
+    <NMakePreprocessorDefinitions><![CDATA[WIN32;_WIN64;$<IF:$<CONFIG:Debug>,_DEBUG,NDEBUG>;@hunter_vs_defines@;$(NMakePreprocessorDefinitions)]]></NMakePreprocessorDefinitions>
+    <NMakeOutput><![CDATA[$<TARGET_FILE:hunter_server_desktop>]]></NMakeOutput>
+    <LocalDebuggerCommand><![CDATA[$<TARGET_FILE:hunter_server_desktop>]]></LocalDebuggerCommand>
+  </PropertyGroup>
+</Project>

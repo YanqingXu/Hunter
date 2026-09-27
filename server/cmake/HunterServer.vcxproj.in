@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 聚合服务端源码浏览、CMake 构建与本机调试；由 CMake 生成，请勿手工修改。 -->
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+@hunter_vs_configs@  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{27C8D2C2-433E-45B6-8E0C-6B2A792642CB}</ProjectGuid>
+    <ProjectName>HunterServer</ProjectName>
+    <Keyword>MakeFileProj</Keyword>
+    <WindowsTargetPlatformVersion>@CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION@</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Label="Configuration">
+    <ConfigurationType>Makefile</ConfigurationType>
+    <PlatformToolset>@CMAKE_VS_PLATFORM_TOOLSET@</PlatformToolset>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props"
+            Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" />
+    <Import Project="$(Configuration).props" />
+  </ImportGroup>
+  <PropertyGroup>
+    <IntDir>$(ProjectDir)obj\$(Configuration)\</IntDir>
+    <OutDir><![CDATA[@CMAKE_CURRENT_BINARY_DIR@/$(Configuration)/]]></OutDir>
+    <NMakeBuildCommandLine><![CDATA["@CMAKE_COMMAND@" --build "@CMAKE_CURRENT_BINARY_DIR@" --config $(Configuration) --target hunter_server_desktop --parallel 8]]></NMakeBuildCommandLine>
+    <NMakeReBuildCommandLine><![CDATA["@CMAKE_COMMAND@" --build "@CMAKE_CURRENT_BINARY_DIR@" --config $(Configuration) --target hunter_server_desktop --clean-first --parallel 8]]></NMakeReBuildCommandLine>
+    <NMakeCleanCommandLine><![CDATA["@CMAKE_COMMAND@" --build "@CMAKE_CURRENT_BINARY_DIR@" --config $(Configuration) --target clean --parallel 8]]></NMakeCleanCommandLine>
+    <NMakeAdditionalOptions>/std:c++latest /permissive- /utf-8 /Zc:__cplusplus /EHsc $(NMakeAdditionalOptions)</NMakeAdditionalOptions>
+    <LocalDebuggerWorkingDirectory><![CDATA[@CMAKE_CURRENT_BINARY_DIR@]]></LocalDebuggerWorkingDirectory>
+    <LocalDebuggerCommandArguments><![CDATA[--source "@HUNTER_GEN@/game.lua" --save "@hunter_vs_dir@/saves/$(Configuration).sqlite" --handshake-ms 60000 --script-ms 60000]]></LocalDebuggerCommandArguments>
+    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
+  </PropertyGroup>
+  <ItemGroup>
+@hunter_vs_items@  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>

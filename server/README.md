@@ -28,8 +28,57 @@ Entity/Unit/Player/Monster/Item/Weapon/World 各有 C++ 类及同名小写 Lua �
 
 ## 构建与测试
 
+### VS2026 单项目开发入口
+
+日常开发打开本目录的 **[HunterServer.slnx](HunterServer.slnx)**，解决方案只有一个
+`HunterServer` 项目。全新检出或删除 `build/` 后，先按下面的命令执行一次 CMake 配置，
+生成对应工程。也可打开 `build/win-dev/HunterServer.Dev.slnx`，它指向同一个项目。
+`build/win-dev/HunterServer.slnx` 是 CMake 的完整构建解决方案，包含第三方库和测试等目标。
+
+项目中的头文件与实现文件并列展示，目录对应源码位置：
+
+```text
+HunterServer（唯一项目）
+├─ src/          common、core、game、net、script、storage
+├─ platform/     desktop/Main.cpp 与 Android 探针
+├─ lua/          main.lua、game/、framework/ 与模块契约
+├─ protobuf/     仓库根目录的协议定义
+├─ generated/    自动生成的协议、配置身份与聚合脚本
+├─ cmake/        构建配置与 VS 工程模板
+├─ tools/        离线工具与协议客户端源码
+├─ tests/        契约、集成测试与夹具
+├─ intents/      设计契约
+└─ rules/        编码规则
+```
+
+1. 选择 `x64` 和 `Debug`（断点调试）或 `Release`；也支持 `RelWithDebInfo`、`MinSizeRel`。
+2. 按 **Ctrl+Shift+B** 编译，构建桌面服务及所需第三方库、协议和 Lua 产物。
+3. 按 **F5** 调试或 **Ctrl+F5** 运行，在控制台输入 `{"req_id":"start-1","cmd":"Start"}`，
+   收到 `Ready` 后可连接客户端；输入 `{"req_id":"stop-1","cmd":"Stop"}` 正常退出。
+4. 开发存档位于 `build/win-dev/ide/saves/<配置名>.sqlite`；脚本、工作目录和程序路径已配置。
+   此入口把客户端握手等待和单次脚本执行限时设为 60 秒，方便手动联调与断点调试；
+   如需修改启动参数，使用项目属性的“调试”页。普通启动的脚本限时仍为 50 毫秒；
+   `--script-ms` 仅在开发 Runtime 可用，范围为 1～60000 毫秒。
+
+该项目使用 [VS Makefile 项目类型](https://learn.microsoft.com/cpp/build/reference/creating-a-makefile-project)，
+将“生成／重新生成／清理”交给同一个 CMake 构建树。
+IntelliSense 的包含路径与宏从实际编译目标生成。可执行文件仍位于
+`build/win-dev/<配置名>/hunter_server_desktop.exe`；测试、Android 探针和工具源码便于查阅，
+不会因显示在项目中而自动加入桌面程序。需要协议客户端时执行
+`cmake --build --preset win-dev --target hunter_client`，完整测试仍使用下方命令。
+
+新增／删除文件会在后续构建时触发 CMake 更新目录，VS 提示工程变化时重新加载；也可手动
+执行 `cmake --preset win-dev` 立即刷新。新增需要编译的 `.cpp` 仍须加入 `CMakeLists.txt`
+中的对应目标；不要直接维护 `build/` 下生成的 `.vcxproj` 或 `.filters`。
+“清理／重新生成”会清理共享构建树的当前配置产物与共用生成文件，后者在下次构建时恢复；
+源码、依赖源码、其他配置的可执行文件及开发存档保留。
+
+### 命令行配置与完整测试
+
 需要 CMake 3.28+、支持 C++23 `std::expected/std::jthread` 的 x64 MSVC、Windows SDK、
-Python 3.10+ 和 Git。本机验证使用 VS 2026；CI 使用 Windows 2025 镜像上的 MSVC。
+Python 3.10+ 和 Git。VS2026 生成器需要支持它的 CMake，建议在 VS2026 Developer PowerShell
+使用 VS 自带版本；旧的 PATH 版本可能无法识别 `Visual Studio 18 2026`。
+本机验证使用 VS 2026；CI 使用 Windows 2025 镜像上的 MSVC。
 从仓库根目录进入 `server`，执行：
 
 ```powershell

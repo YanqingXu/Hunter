@@ -694,6 +694,8 @@ def script_fixture(folder, name, source, init="return true", shutdown="return tr
 def numeric_args(args):
     limits = {"--handshake-ms": 60000, "--stop-ms": 60000,
               "--queue-count": 65536, "--send-bytes": 16777216}
+    if not args.bundle:
+        limits["--script-ms"] = 60000
     for flag, maximum in limits.items():
         for value in ("-1", "+1", "0", "5junk", " 1", "1 ", "", str(maximum + 1),
                       "18446744073709551616"):
@@ -706,6 +708,22 @@ def numeric_args(args):
                                     input=b'{"cmd":"Stop","req_id":"stop"}\n',
                                     capture_output=True, timeout=3)
             assert result.returncode == 0, (flag, value, result.stderr)
+
+
+# 开发入口接受显式脚本限时并真实启停，生产入口拒绝调试专用参数。
+def script_deadline(args):
+    if args.bundle:
+        result = subprocess.run([args.exe, "--script-ms", "60000"], input=b"",
+                                capture_output=True, timeout=3)
+        assert result.returncode != 0
+        assert b"unknown argument: --script-ms" in result.stderr, result.stderr
+        return
+    srv = Server(args, extra=["--script-ms", "60000"])
+    try:
+        srv.start()
+        srv.stop()
+    finally:
+        srv.cleanup()
 
 
 # 在 stderr 真正阻塞时再送入超限行，验证输入错误不依赖诊断写入完成。
@@ -854,6 +872,7 @@ def main():
     client_lifecycle(args)
     host_failures(args)
     numeric_args(args)
+    script_deadline(args)
     bounded_dispatch(args)
     if not args.bundle:
         with tempfile.TemporaryDirectory(prefix="hunter-host-contract-") as folder:

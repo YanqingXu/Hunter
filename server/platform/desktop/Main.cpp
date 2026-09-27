@@ -229,6 +229,12 @@ hunter::Cfg parse_cfg(i32 argc, char** argv)
         {
             cfg.stop_timeout_ms = static_cast<u32>(parse_limit(value, 60000));
         }
+#if !HUNTER_PRODUCTION
+        else if (name == "--script-ms")
+        {
+            cfg.script_deadline_ms = static_cast<u32>(parse_limit(value, 60000));
+        }
+#endif
         else if (name == "--queue-count")
         {
             cfg.max_queue_count = static_cast<usize>(parse_limit(value, 65536));

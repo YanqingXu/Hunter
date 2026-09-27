@@ -1,0 +1,11 @@
+<!-- 提供服务端单项目入口；首次打开前先配置 win-dev 构建。 -->
+<Solution>
+  <Configurations>
+    <BuildType Name="Debug" />
+    <BuildType Name="Release" />
+    <BuildType Name="RelWithDebInfo" />
+    <BuildType Name="MinSizeRel" />
+    <Platform Name="x64" />
+  </Configurations>
+  <Project Path="build/win-dev/ide/HunterServer.vcxproj" Id="27c8d2c2-433e-45b6-8e0c-6b2a792642cb" />
+</Solution>

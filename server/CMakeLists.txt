@@ -179,3 +179,7 @@ endif()
 if(BUILD_TESTING AND NOT CMAKE_CROSSCOMPILING)
     include(cmake/Tests.cmake)
 endif()
+
+if(WIN32)
+    include(cmake/VisualStudio.cmake)
+endif()
