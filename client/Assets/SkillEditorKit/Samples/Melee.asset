@@ -1,0 +1,422 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a5d3f325067842bdbd2df02ea90aaeea, type: 3}
+  m_Name: Melee
+  m_EditorClassIdentifier: 
+  serializationData:
+    SerializedFormat: 2
+    SerializedBytes: 
+    ReferencedUnityObjects:
+    - {fileID: 7400000, guid: 814a2658c3c11754380bb60fde718533, type: 2}
+    SerializedBytesString: 
+    Prefab: {fileID: 0}
+    PrefabModificationsReferencedUnityObjects: []
+    PrefabModifications: []
+    SerializationNodes:
+    - Name: Tracks
+      Entry: 7
+      Data: 0|System.Collections.Generic.List`1[[SkillEditorKit.SkillTrackData, SkillEditorKit.Runtime]],
+        mscorlib
+    - Name: 
+      Entry: 12
+      Data: 2
+    - Name: 
+      Entry: 7
+      Data: 1|SkillEditorKit.SkillTrackData, SkillEditorKit.Runtime
+    - Name: TrackId
+      Entry: 1
+      Data: 66fe643aaf4f456fbd0f45d63ba2fb40
+    - Name: Name
+      Entry: 1
+      Data: Animation
+    - Name: Kind
+      Entry: 3
+      Data: 1
+    - Name: Enabled
+      Entry: 5
+      Data: true
+    - Name: Locked
+      Entry: 5
+      Data: false
+    - Name: Clips
+      Entry: 7
+      Data: 2|System.Collections.Generic.List`1[[SkillEditorKit.SkillTrackClip, SkillEditorKit.Runtime]],
+        mscorlib
+    - Name: 
+      Entry: 12
+      Data: 1
+    - Name: 
+      Entry: 7
+      Data: 3|SkillEditorKit.SkillTrackClip, SkillEditorKit.Runtime
+    - Name: Frame
+      Entry: 3
+      Data: 0
+    - Name: Data
+      Entry: 7
+      Data: 4|SkillEditorKit.SkillAnimationEvent, SkillEditorKit.Runtime
+    - Name: EventId
+      Entry: 6
+      Data: 
+    - Name: AnimationClip
+      Entry: 10
+      Data: 0
+    - Name: ApplyRootMotion
+      Entry: 5
+      Data: false
+    - Name: MainWeaponOnLeftHand
+      Entry: 5
+      Data: true
+    - Name: TransitionTime
+      Entry: 4
+      Data: 0.25
+    - Name: DurationFrame
+      Entry: 3
+      Data: 30
+    - Name: UseClipRange
+      Entry: 5
+      Data: false
+    - Name: ClipIn
+      Entry: 4
+      Data: 0
+    - Name: 
+      Entry: 8
+      Data: 
+    - Name: 
+      Entry: 8
+      Data: 
+    - Name: 
+      Entry: 13
+      Data: 
+    - Name: 
+      Entry: 8
+      Data: 
+    - Name: 
+      Entry: 8
+      Data: 
+    - Name: 
+      Entry: 7
+      Data: 5|SkillEditorKit.SkillTrackData, SkillEditorKit.Runtime
+    - Name: TrackId
+      Entry: 1
+      Data: 0c3233eefd594a5da87eb986cdc0030b
+    - Name: Name
+      Entry: 1
+      Data: Attack
+    - Name: Kind
+      Entry: 3
+      Data: 4
+    - Name: Enabled
+      Entry: 5
+      Data: true
+    - Name: Locked
+      Entry: 5
+      Data: false
+    - Name: Clips
+      Entry: 7
+      Data: 6|System.Collections.Generic.List`1[[SkillEditorKit.SkillTrackClip, SkillEditorKit.Runtime]],
+        mscorlib
+    - Name: 
+      Entry: 12
+      Data: 1
+    - Name: 
+      Entry: 7
+      Data: 7|SkillEditorKit.SkillTrackClip, SkillEditorKit.Runtime
+    - Name: Frame
+      Entry: 3
+      Data: 8
+    - Name: Data
+      Entry: 7
+      Data: 8|SkillEditorKit.SkillAttackDetectionEvent, SkillEditorKit.Runtime
+    - Name: EventId
+      Entry: 6
+      Data: 
+    - Name: TrackName
+      Entry: 1
+      Data: "\u653B\u51FB\u68C0\u6D4B\u8F68\u9053"
+    - Name: FrameIndex
+      Entry: 3
+      Data: 8
+    - Name: DurationFrame
+      Entry: 3
+      Data: 4
+    - Name: AttackDetectionData
+      Entry: 7
+      Data: 9|SkillEditorKit.AttackBoxDetectionData, SkillEditorKit.Runtime
+    - Name: Position
+      Entry: 7
+      Data: UnityEngine.Vector3, UnityEngine.CoreModule
+    - Name: 
+      Entry: 4
+      Data: 0
+    - Name: 
+      Entry: 4
+      Data: 0
+    - Name: 
+      Entry: 4
+      Data: 0
+    - Name: 
+      Entry: 8
+      Data: 
+    - Name: UseFootOrigin
+      Entry: 5
+      Data: true
+    - Name: Motion
+      Entry: 3
+      Data: 0
+    - Name: StartDistance
+      Entry: 4
+      Data: 2
+    - Name: EndDistance
+      Entry: 4
+      Data: 6
+    - Name: HeightOffset
+      Entry: 4
+      Data: 1
+    - Name: Anchor
+      Entry: 3
+      Data: 0
+    - Name: Facing
+      Entry: 3
+      Data: 0
+    - Name: SocketPath
+      Entry: 6
+      Data: 
+    - Name: Rotation
+      Entry: 7
+      Data: UnityEngine.Vector3, UnityEngine.CoreModule
+    - Name: 
+      Entry: 4
+      Data: 0
+    - Name: 
+      Entry: 4
+      Data: 0
+    - Name: 
+      Entry: 4
+      Data: 0
+    - Name: 
+      Entry: 8
+      Data: 
+    - Name: Scale
+      Entry: 7
+      Data: UnityEngine.Vector3, UnityEngine.CoreModule
+    - Name: 
+      Entry: 4
+      Data: 2
+    - Name: 
+      Entry: 4
+      Data: 2
+    - Name: 
+      Entry: 4
+      Data: 2
+    - Name: 
+      Entry: 8
+      Data: 
+    - Name: 
+      Entry: 8
+      Data: 
+    - Name: AttackHitConfig
+      Entry: 7
+      Data: 10|SkillEditorKit.AttackHitConfig, SkillEditorKit.Runtime
+    - Name: AttackMultiply
+      Entry: 4
+      Data: 1
+    - Name: RepelStrength
+      Entry: 7
+      Data: UnityEngine.Vector3, UnityEngine.CoreModule
+    - Name: 
+      Entry: 4
+      Data: 0
+    - Name: 
+      Entry: 4
+      Data: 0
+    - Name: 
+      Entry: 4
+      Data: 0
+    - Name: 
+      Entry: 8
+      Data: 
+    - Name: RepelTime
+      Entry: 4
+      Data: 0
+    - Name: HitEffectPrefab
+      Entry: 6
+      Data: 
+    - Name: HitAudioClip
+      Entry: 6
+      Data: 
+    - Name: 
+      Entry: 8
+      Data: 
+    - Name: HitRules
+      Entry: 7
+      Data: 11|SkillEditorKit.SkillHitRules, SkillEditorKit.Runtime
+    - Name: Mode
+      Entry: 3
+      Data: 1
+    - Name: Targets
+      Entry: 3
+      Data: 0
+    - Name: ExcludeSelf
+      Entry: 5
+      Data: true
+    - Name: IntervalSeconds
+      Entry: 4
+      Data: 0.5
+    - Name: BlockedByWalls
+      Entry: 5
+      Data: false
+    - Name: WallLayers
+      Entry: 7
+      Data: UnityEngine.LayerMask, UnityEngine.CoreModule
+    - Name: 
+      Entry: 3
+      Data: 0
+    - Name: 
+      Entry: 8
+      Data: 
+    - Name: MaxTargets
+      Entry: 3
+      Data: 0
+    - Name: 
+      Entry: 8
+      Data: 
+    - Name: 
+      Entry: 8
+      Data: 
+    - Name: 
+      Entry: 8
+      Data: 
+    - Name: 
+      Entry: 13
+      Data: 
+    - Name: 
+      Entry: 8
+      Data: 
+    - Name: 
+      Entry: 8
+      Data: 
+    - Name: 
+      Entry: 13
+      Data: 
+    - Name: 
+      Entry: 8
+      Data: 
+    - Name: skillCustomEventData
+      Entry: 7
+      Data: 12|SkillEditorKit.SkillCustomEventData, SkillEditorKit.Runtime
+    - Name: FrameData
+      Entry: 7
+      Data: 13|System.Collections.Generic.Dictionary`2[[System.Int32, mscorlib],[SkillEditorKit.SkillCustomEvent,
+        SkillEditorKit.Runtime]], mscorlib
+    - Name: comparer
+      Entry: 7
+      Data: 14|System.Collections.Generic.GenericEqualityComparer`1[[System.Int32,
+        mscorlib]], mscorlib
+    - Name: 
+      Entry: 8
+      Data: 
+    - Name: 
+      Entry: 12
+      Data: 0
+    - Name: 
+      Entry: 13
+      Data: 
+    - Name: 
+      Entry: 8
+      Data: 
+    - Name: 
+      Entry: 8
+      Data: 
+    - Name: SkillAnimationData
+      Entry: 7
+      Data: 15|SkillEditorKit.SkillAnimationData, SkillEditorKit.Runtime
+    - Name: FrameData
+      Entry: 7
+      Data: 16|System.Collections.Generic.Dictionary`2[[System.Int32, mscorlib],[SkillEditorKit.SkillAnimationEvent,
+        SkillEditorKit.Runtime]], mscorlib
+    - Name: comparer
+      Entry: 9
+      Data: 14
+    - Name: 
+      Entry: 12
+      Data: 0
+    - Name: 
+      Entry: 13
+      Data: 
+    - Name: 
+      Entry: 8
+      Data: 
+    - Name: 
+      Entry: 8
+      Data: 
+    - Name: SkillAudioData
+      Entry: 7
+      Data: 17|SkillEditorKit.SkillAudioData, SkillEditorKit.Runtime
+    - Name: FrameData
+      Entry: 7
+      Data: 18|System.Collections.Generic.List`1[[SkillEditorKit.SkillAudioEvent,
+        SkillEditorKit.Runtime]], mscorlib
+    - Name: 
+      Entry: 12
+      Data: 0
+    - Name: 
+      Entry: 13
+      Data: 
+    - Name: 
+      Entry: 8
+      Data: 
+    - Name: 
+      Entry: 8
+      Data: 
+    - Name: SkillEffectData
+      Entry: 7
+      Data: 19|SkillEditorKit.SkillEffectData, SkillEditorKit.Runtime
+    - Name: FrameData
+      Entry: 7
+      Data: 20|System.Collections.Generic.List`1[[SkillEditorKit.SkillEffectEvent,
+        SkillEditorKit.Runtime]], mscorlib
+    - Name: 
+      Entry: 12
+      Data: 0
+    - Name: 
+      Entry: 13
+      Data: 
+    - Name: 
+      Entry: 8
+      Data: 
+    - Name: 
+      Entry: 8
+      Data: 
+    - Name: SkillAttackDetectionData
+      Entry: 7
+      Data: 21|SkillEditorKit.SkillAttackDetectionData, SkillEditorKit.Runtime
+    - Name: FrameData
+      Entry: 7
+      Data: 22|System.Collections.Generic.List`1[[SkillEditorKit.SkillAttackDetectionEvent,
+        SkillEditorKit.Runtime]], mscorlib
+    - Name: 
+      Entry: 12
+      Data: 0
+    - Name: 
+      Entry: 13
+      Data: 
+    - Name: 
+      Entry: 8
+      Data: 
+    - Name: 
+      Entry: 8
+      Data: 
+  DataVersion: 4
+  UseTrackModel: 1
+  SkillName: "\u793A\u4F8B\uFF1A\u8FD1\u6218\u8303\u56F4"
+  FrameCount: 29
+  FrameRote: 30

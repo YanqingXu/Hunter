@@ -1,0 +1,39 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" xsi="http://www.w3.org/2001/XMLSchema-instance" engine="UnityEngine.UIElements" editor="UnityEditor.UIElements" noNamespaceSchemaLocation="../../../../UIElementsSchema/UIElements.xsd" editor-extension-mode="True">
+    <!-- Header direction and content-driven height are owned by SkillEditorWorkflow.uss. -->
+    <ui:VisualElement name="TopMenu">
+        <ui:Button text="加载编辑器场景" display-tooltip-when-elided="true" name="LoadEditorSceneButton" style="width: 90px; margin-left: 0;" />
+        <ui:Button text="返回旧场景" display-tooltip-when-elided="true" name="LoadOldSceneButton" style="width: 90px;" />
+        <ui:Button text="基本信息" display-tooltip-when-elided="true" name="SkillBasicButton" style="width: 90px;" />
+        <uie:ObjectField label="演示角色预制体" name="PreviewCharacterPrefabObjectField" type="UnityEngine.GameObject, UnityEngine.CoreModule" allow-scene-objects="false" style="flex-grow: 1; flex-shrink: 1; flex-direction: row; align-items: center; justify-content: flex-start; font-size: 15px;" />
+        <uie:ObjectField label="演示角色物体" name="PreviewCharacterObjectField" type="UnityEngine.GameObject, UnityEngine.CoreModule" allow-scene-objects="true" style="flex-grow: 1; flex-shrink: 1; flex-direction: row; align-items: center; justify-content: flex-start; font-size: 15px;" />
+        <uie:ObjectField label="技能配置文件" name="SkillConfigObjectField" allow-scene-objects="false" style="flex-grow: 1; flex-shrink: 1; align-items: center; margin-left: 15px; font-size: 15px;" />
+    </ui:VisualElement>
+    <ui:VisualElement name="Content" style="flex-grow: 0; flex-direction: row; height: auto; width: auto; flex-shrink: 1;">
+        <ui:VisualElement name="Left" style="width: 365px; min-width: 365px; border-right-width: 0.5px; border-right-color: rgb(32, 32, 32);">
+            <ui:VisualElement name="Controller" style="border-bottom-width: 0.5px; border-bottom-color: rgb(32, 32, 32); flex-direction: row; flex-shrink: 0;">
+                <ui:VisualElement name="PlayController" style="flex-direction: row;">
+                    <ui:Button text="&lt;" display-tooltip-when-elided="true" name="PreviouFrameButton" style="font-size: 15px; -unity-font-style: normal;" />
+                    <ui:Button text="▶" display-tooltip-when-elided="true" name="PlayButton" style="font-size: 10px;" />
+                    <ui:Button text="&gt;" display-tooltip-when-elided="true" name="NextFrameButton" style="font-size: 15px;" />
+                </ui:VisualElement>
+                <ui:Toggle text="循环播放" name="LoopPlaybackToggle" tooltip="仅循环编辑器预览；播放完最后一帧后从第 0 帧重新开始" style="align-self: center; flex-shrink: 0; margin-left: 4px; margin-right: 4px;" />
+                <ui:DropdownField name="PlaybackSpeedField" tooltip="预览播放速度，不修改技能帧率；音效随倍速变调" style="width: 66px; min-width: 66px; align-self: center; flex-shrink: 0; margin-left: 2px; margin-right: 2px;" />
+                <ui:VisualElement name="FramerController" style="flex-direction: row; flex-shrink: 0; flex-grow: 1; justify-content: flex-end; align-items: center;">
+                    <uie:IntegerField value="0" name="CurrentFrameField" style="width: 40px;" />
+                    <ui:Label text="/" display-tooltip-when-elided="true" style="font-size: 15px;" />
+                    <uie:IntegerField value="0" name="FrameCountField" style="width: 40px;" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:ScrollView name="TrackMenuScrollView" horizontal-scroller-visibility="Hidden" vertical-scroller-visibility="Hidden">
+                <ui:VisualElement name="TrackMenuList" style="width: 100%; height: 100%; padding-left: 4px; flex-grow: 1; min-height: 1000px; min-width: auto;" />
+            </ui:ScrollView>
+        </ui:VisualElement>
+        <ui:VisualElement name="Right" style="flex-grow: 1; width: auto; flex-shrink: 1; padding-left: 10px; padding-right: 5px;">
+            <ui:IMGUIContainer name="TimerShaft" style="height: 30px; min-height: 30px; margin-bottom: 0; border-bottom-width: 0.5px; border-bottom-color: rgb(32, 32, 32); margin-right: 13px; margin-left: 0; margin-top: 0;" />
+            <ui:ScrollView name="MainContentView" mode="VerticalAndHorizontal" horizontal-scroller-visibility="AlwaysVisible" vertical-scroller-visibility="AlwaysVisible">
+                <ui:VisualElement name="ContentListView" style="min-height: 1000px; width: auto; flex-shrink: 0;" />
+            </ui:ScrollView>
+            <ui:IMGUIContainer name="SelectLine" style="position: absolute; left: 10px;" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

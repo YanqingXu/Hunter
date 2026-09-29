@@ -1,0 +1,6 @@
+{
+  "name": "SkillEditorKit.Runtime",
+  "rootNamespace": "SkillEditorKit",
+  "references": [],
+  "autoReferenced": true
+}

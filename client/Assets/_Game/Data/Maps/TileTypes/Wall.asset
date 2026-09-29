@@ -1,0 +1,28 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5127604332bf9c545b8c3dc80a440d7c, type: 3}
+  m_Name: Wall
+  m_EditorClassIdentifier: 
+  id: Wall
+  displayName: "\u5899"
+  layer: 0
+  tint: {r: 1, g: 1, b: 1, a: 1}
+  sprite: {fileID: 21300000, guid: efec7e084f5672f40a2bf438b34ee7cc, type: 3}
+  prefab: {fileID: 0}
+  collision: 1
+  walkable: 0
+  movementCost: 1
+  description: "\u5EFA\u7B51\u5916\u5899\u4E0E\u697C\u677F\uFF0C\u4F7F\u7528\u5B9E\u4F53\u683C\u5B50\u78B0\u649E\u3002"
+  tags:
+  - wall
+  propertySchema: {fileID: 11400000, guid: b8575992aec43e942a09074550034eb3, type: 2}
+  propertyOverrides: []

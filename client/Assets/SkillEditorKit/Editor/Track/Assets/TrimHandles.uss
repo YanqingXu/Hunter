@@ -1,0 +1,10 @@
+.skill-trim-handle {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 18%;
+    max-width: 8px;
+    cursor: resize-horizontal;
+    background-color: rgba(255, 255, 255, 0.24);
+}
+.skill-trim-handle:hover { background-color: rgba(255, 255, 255, 0.65); }

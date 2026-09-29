@@ -1,0 +1,5 @@
+{
+  "name": "YouYou.Framework.Editor",
+  "references": ["YouYou.Framework.Core", "YouYou.Framework.Unity", "Unity.ugui"],
+  "includePlatforms": ["Editor"]
+}

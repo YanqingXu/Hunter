@@ -1,0 +1,26 @@
+.skill-editor { flex-grow: 1; min-height: 0; font-size: 12px; }
+.skill-header { flex-direction: column; flex-basis: auto; height: auto; min-height: 0; flex-grow: 0; flex-shrink: 0; margin: 0; padding: 8px 10px 5px 10px; border-bottom-width: 1px; border-bottom-color: rgb(31, 31, 31); background-color: rgb(43, 45, 48); }
+.skill-header > .skill-row { flex-shrink: 0; min-width: 0; }
+.skill-row { flex-direction: row; flex-wrap: wrap; align-items: center; }
+.skill-command { height: 25px; flex-shrink: 0; padding-left: 9px; padding-right: 9px; margin-right: 4px; }
+.skill-document-title { flex-grow: 1; flex-shrink: 1; flex-basis: 160px; min-width: 100px; max-width: 280px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 14px; -unity-font-style: bold; margin-left: 12px; }
+.skill-asset-field { flex-grow: 1; min-width: 280px; margin-top: 7px; margin-bottom: 4px; }
+.skill-save-status { color: rgb(153, 200, 173); margin-left: 12px; margin-right: 10px; }
+.skill-workflow-hint { flex-grow: 1; flex-shrink: 1; min-width: 0; white-space: normal; color: rgb(182, 190, 203); margin-top: 5px; margin-bottom: 4px; }
+.skill-preview-status { white-space: normal; color: rgb(162, 180, 201); margin-top: 3px; }
+.skill-compact-toggle { flex-grow: 0; flex-shrink: 0; }
+.skill-compact-toggle > .unity-toggle__label { min-width: 0; width: auto; margin-right: 4px; }
+.skill-transport { height: auto; min-height: 34px; flex-shrink: 0; flex-direction: row; flex-wrap: wrap; align-items: center; padding: 4px 8px; background-color: rgb(47, 49, 52); }
+.skill-duration { margin-left: 12px; margin-right: 8px; color: rgb(180, 186, 196); }
+.skill-properties { padding: 6px 8px; background-color: rgb(44, 46, 49); }
+.skill-section-title { font-size: 13px; -unity-font-style: bold; margin-bottom: 9px; }
+.skill-welcome { flex-grow: 1; justify-content: center; padding: 30px 45px; color: rgb(199, 207, 220); }
+.skill-welcome .skill-command { height: 30px; }
+.skill-check-panel { padding: 4px 9px; flex-shrink: 0; background-color: rgb(40, 42, 45); }
+#PreviewBindings { padding-left: 8px; padding-right: 8px; }
+#PreviewCommands { margin-top: 5px; margin-bottom: 5px; }
+#PreviewSourceMode { max-width: 440px; }
+#PreviewReferences { margin-top: 5px; }
+#TrackHeader { justify-content: space-between; padding-left: 7px; padding-right: 4px; flex-wrap: nowrap; }
+#WelcomeRecent { margin-top: 18px; max-width: 520px; }
+#InlineInspectorBody .unity-base-field__label { min-width: 90px; }

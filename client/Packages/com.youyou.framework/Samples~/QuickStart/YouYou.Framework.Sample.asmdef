@@ -1,0 +1,4 @@
+{
+  "name": "YouYou.Framework.Sample",
+  "references": ["YouYou.Framework.Core", "YouYou.Framework.Unity"]
+}
