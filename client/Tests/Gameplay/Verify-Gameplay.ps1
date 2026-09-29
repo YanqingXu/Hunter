@@ -13,10 +13,11 @@ try {
     New-Item -ItemType Directory -Path (Join-Path $taskTemporary 'Editor') | Out-Null
     New-Item -ItemType Directory -Path $taskReport -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'GameplayPlayChecks.cs') -Destination $taskTemporary
+    Copy-Item -LiteralPath (Join-Path $taskProject 'Tests\PureCSharp\PureCSharpChecks.cs') -Destination $taskTemporary
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Editor\GameplayValidation.cs') -Destination (Join-Path $taskTemporary 'Editor')
     $taskArguments = @('-batchmode', '-projectPath', ('"' + $taskProject + '"'), '-executeMethod', 'GameplayValidation.Run', '-logFile', ('"' + $taskLog + '"'))
     $taskProcess = Start-Process -FilePath $UnityPath -ArgumentList $taskArguments -WindowStyle Hidden -PassThru
-    $taskDeadline = [DateTime]::UtcNow.AddMinutes(8)
+    $taskDeadline = [DateTime]::UtcNow.AddMinutes(20)
     while (-not $taskProcess.WaitForExit(1000)) {
         if ([DateTime]::UtcNow -gt $taskDeadline) { $taskProcess.Kill(); $taskProcess.WaitForExit(); throw "Gameplay validation timed out. See $taskLog" }
     }

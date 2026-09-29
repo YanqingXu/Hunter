@@ -1,5 +1,0 @@
-{
-  "name": "YouYou.Framework.Unity",
-  "references": ["YouYou.Framework.Core", "Unity.ugui"],
-  "autoReferenced": true
-}

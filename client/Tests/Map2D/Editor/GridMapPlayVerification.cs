@@ -180,6 +180,9 @@ public static class GridMapPlayVerification
         host.transform.position = new Vector3(7f, -5f, 0f);
         host.transform.localScale = new Vector3(1.25f, 1.25f, 1f);
         var renderer = host.AddComponent<GridMapRenderer>();
+        // These three lifecycle assertions cover Unity Tilemap-owned prefab instances.
+        // Streaming uses MapRuntimeTile plus the project pool and has its own acceptance suite.
+        renderer.StreamingEnabled = false;
         renderer.Map = map;
         renderer.ClearPreview();
         foreach (Tilemap tilemap in renderer.GetComponentsInChildren<Tilemap>(true))
@@ -297,6 +300,7 @@ public static class GridMapPlayVerification
         Check("Entering Play Mode rebuilds all six tilemaps after saved ClearPreview", () =>
         {
             GridMapRenderer renderer = FindRenderer();
+            Assert(!renderer.StreamingEnabled, "Tilemap prefab lifecycle checks require explicit non-streaming mode.");
             Assert(renderer.GetComponentsInChildren<Tilemap>(true).Length == 6, "Expected exactly six generated Tilemaps.");
             Tilemap solid = renderer.GetTilemap(MapLayer.Terrain, MapTileCollisionMode.Solid);
             Assert(solid != null, "Solid terrain Tilemap is missing.");
@@ -304,7 +308,9 @@ public static class GridMapPlayVerification
             var collider = solid.GetComponent<TilemapCollider2D>();
             Assert(collider != null && collider.enabled, "Ground collider is missing or disabled.");
             Physics2D.SyncTransforms();
-            Assert(Physics2D.OverlapPoint(renderer.CellToWorldCenter(1, 0)) == collider, "Ground collider does not occupy its expected world-space cell.");
+            var composite = solid.GetComponent<CompositeCollider2D>();
+            Assert(collider.usedByComposite && composite != null && Physics2D.OverlapPoint(renderer.CellToWorldCenter(1, 0)) == composite,
+                "Merged ground collider does not occupy its expected world-space cell.");
         });
         Check("Object Tilemap instantiates its prefab at the cell world center", () =>
         {
@@ -547,7 +553,7 @@ public static class GridMapPlayVerification
             exitCode = 1;
         }
         SessionState.EraseString(SessionKey);
-        EditorApplication.Exit(exitCode);
+        GridMapBatchExit.Request(exitCode, state.reportPath);
     }
 
     private static DateTime ParseUtc(string value)

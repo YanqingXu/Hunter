@@ -859,8 +859,8 @@ public static class GridMapStreamingVerification
     {
         Physics2D.SyncTransforms();
         var tilemap = renderer.GetTilemap(MapLayer.Objects, MapTileCollisionMode.Solid);
-        var collider = tilemap == null ? null : tilemap.GetComponent<TilemapCollider2D>();
-        Assert(collider != null, "Object collider component is missing.");
+        var collider = tilemap == null ? null : tilemap.GetComponent<CompositeCollider2D>();
+        Assert(collider != null && tilemap.GetComponent<TilemapCollider2D>().usedByComposite, "Object solid composite collider is missing.");
         bool found = false;
         foreach (Collider2D hit in Physics2D.OverlapPointAll(renderer.CellToWorldCenter(x, y)))
             if (hit == collider) { found = true; break; }
@@ -871,8 +871,9 @@ public static class GridMapStreamingVerification
     {
         Vector3 point = renderer.CellToWorldCenter(x, y);
         bool found = false;
+        var expected = GroundTilemap().GetComponent<CompositeCollider2D>();
         foreach (Collider2D collider in Physics2D.OverlapPointAll(point))
-            if (collider is TilemapCollider2D && collider.transform.IsChildOf(renderer.transform)) { found = true; break; }
+            if (collider == expected) { found = true; break; }
         Assert(found, "No generated ground collider at cell (" + x + "," + y + ") world " + point);
     }
 
@@ -976,7 +977,7 @@ public static class GridMapStreamingVerification
         }
         catch (Exception exception) { Debug.LogException(exception); exitCode = 1; }
         SessionState.EraseString(SessionKey);
-        EditorApplication.Exit(exitCode);
+        GridMapBatchExit.Request(exitCode, state.reportPath);
     }
 
     private static DateTime ParseUtc(string value)

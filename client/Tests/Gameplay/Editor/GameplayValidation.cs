@@ -10,7 +10,8 @@ public static class GameplayValidation
         try
         {
             BigWorld.Editor.BorderTrialBuilder.CreateAndConfigure();
-            EditorSceneManager.OpenScene("Assets/_Game/Scenes/BorderTrial.unity");
+            BigWorld.YouYou2D.Editor.NativeFramework2DBuild.PrepareContent(EditorUserBuildSettings.activeBuildTarget);
+            EditorSceneManager.OpenScene("Assets/_Project/Game/Scenes/BorderTrial.unity");
             new GameObject("Border Trial Gameplay Acceptance").AddComponent<GameplayPlayChecks>();
             EditorSceneManager.SaveScene(UnityEngine.SceneManagement.SceneManager.GetActiveScene(), "Assets/__GameplayChecks/Validation.unity");
             EditorApplication.EnterPlaymode();

@@ -8,6 +8,7 @@ using BigWorld.YouYou2D;
 using SkillEditorKit;
 using UnityEngine;
 using UnityEngine.UI;
+using YouYou;
 
 /// <summary>Runs on a temporary copy of the real scene, against real streamed terrain and skills.</summary>
 public sealed class GameplayPlayChecks : MonoBehaviour
@@ -47,7 +48,7 @@ public sealed class GameplayPlayChecks : MonoBehaviour
         screenshotDirectory = Path.Combine(Output, "Screenshots-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff"));
         Directory.CreateDirectory(screenshotDirectory);
         Application.logMessageReceived += OnLog;
-        deadline = Time.realtimeSinceStartup + 180;
+        deadline = Time.realtimeSinceStartup + 300;
         // Flatten nested iterators so assertions in helpers are caught and written to JSON too.
         var stack = new Stack<IEnumerator>();
         stack.Push(Checks());
@@ -57,7 +58,7 @@ public sealed class GameplayPlayChecks : MonoBehaviour
             try
             {
                 if (failure != null) throw new Exception(failure);
-                if (Time.realtimeSinceStartup > deadline) throw new TimeoutException("Gameplay checks exceeded 180 seconds.");
+                if (Time.realtimeSinceStartup > deadline) throw new TimeoutException("Gameplay checks exceeded 300 seconds.");
                 var current = stack.Peek();
                 if (!current.MoveNext()) { (current as IDisposable)?.Dispose(); stack.Pop(); continue; }
                 if (current.Current is IEnumerator nested) { stack.Push(nested); continue; }
@@ -77,20 +78,34 @@ public sealed class GameplayPlayChecks : MonoBehaviour
     private void Update()
     {
         if (!finished && deadline > 0 && Time.realtimeSinceStartup > deadline)
-            Finish("Gameplay checks exceeded 180 seconds while waiting for a frame or phase.");
+            Finish("Gameplay checks exceeded 300 seconds while waiting for a frame or phase.");
     }
 
     private IEnumerator Checks()
     {
-        yield return Until(() => LevelSession2D.Instance && LevelSession2D.Instance.Phase == LevelPhase.Ready, 15, "Initial Ready phase");
+        yield return Until(() => GameServices2D.Instance && GameServices2D.Instance.IsReady, 60, "Original framework content bootstrap");
+        yield return Until(() => LevelSession2D.Instance && LevelSession2D.Instance.Phase == LevelPhase.Ready, 60, "Initial Ready phase");
         level = LevelSession2D.Instance;
         player = level.Player; player.ReadKeyboard = false; level.ReadKeyboard = false;
         actor = player.GetComponent<SkillActor2D>(); body = player.GetComponent<Rigidbody2D>();
         streamer = level.World.Map.GetComponent<GridMapEntityStreamer>();
         actor.Damaged += OnPlayerDamaged;
-        yield return Until(() => FindObjectOfType<GameHud2D>(), 3, "Framework-loaded gameplay HUD");
+        yield return Until(() => FindObjectOfType<GameHud2D>(), 60, "Original framework-loaded gameplay HUD");
         hud = FindObjectOfType<GameHud2D>();
         yield return null;
+        var services = GameServices2D.Instance;
+        Check(services.Framework == GameEntry.Instance && services.Framework.IsInitialized && !services.Framework.AutoLaunchProcedure &&
+            Array.TrueForAll(NativeManagers(), manager => manager != null) &&
+            GameEntry.DataTable.AlreadyLoadTable.Count >= 17, "The playable level boots all 18 original managers, C# session data and course tables");
+        Check(GameEntry.DataTable.Sys_UIFormList.GetEntity(9001).HasValue && GameEntry.DataTable.Sys_UIFormList.GetEntity(9002).HasValue &&
+            GameEntry.DataTable.Sys_UIFormList.GetEntity(UIFormId.UI_Dialog).HasValue,
+            "The original FlatBuffers UI table preserves course forms alongside both 2D HUDs");
+        yield return PureCSharpChecks.Run(Check);
+        string hudPath = services.Assets.GetAssetPath("ui.game");
+        var indexedHud = GameEntry.Resource.ResourceLoaderManager.GetAssetEntity(AssetCategory.UIPrefab, hudPath);
+        Check(indexedHud != null && indexedHud.AssetFullName == hudPath && hud.UIFormId == 9001 &&
+            hud.transform.IsChildOf(services.Framework.UIRootRectTransform) && ReferenceEquals(hud.UserData, level.World),
+            "The gameplay HUD is original UI form 9001 loaded through the native resource index and UI hierarchy");
         Check(hud.IsMenuVisible && hud.DisplayedPhaseTitle == "边境试炼" && !player.ControlEnabled && Time.timeScale == 0,
             "Ready opens the real title HUD and freezes gameplay");
         Check(Vector2.Distance(body.position, level.StartPoint.position) < .15f &&
@@ -187,8 +202,9 @@ public sealed class GameplayPlayChecks : MonoBehaviour
         yield return Until(() => shutdown.IsCompleted, 10, "Framework shutdown drains the active level and pool");
         if (shutdown.IsFaulted) throw shutdown.Exception;
         yield return null; yield return null;
-        Check(!GameServices2D.Instance && FindObjectsOfType<BigWorld.Pooling.Unity.PoolDriver>().Length == 0,
-            "Closing the game drains streamed guards and pending pool requests before scene teardown");
+        Check(!GameServices2D.Instance && FindObjectsOfType<BigWorld.Pooling.Unity.PoolDriver>().Length == 0 && !GameEntry.Instance &&
+            Array.TrueForAll(NativeManagers(), manager => manager == null),
+            "Closing the game drains streamed guards and pending pool requests and releases every original manager");
     }
 
     private IEnumerator MovementChecks()
@@ -237,9 +253,11 @@ public sealed class GameplayPlayChecks : MonoBehaviour
     {
         var guard = Guard(1); var enemy = guard.GetComponent<PatrolEnemy2D>(); var enemyBody = guard.GetComponent<Rigidbody2D>();
         float x = enemyBody.position.x;
+        string beforePatrol = EnemySnapshot(guard);
         yield return new WaitForSeconds(.25f);
-        Check(enemy.State == PatrolEnemyState.Patrol && Mathf.Abs(enemyBody.position.x - x) > .1f && !guard.CombatPinned,
-            "A distant guard patrols under physics without keeping an unnecessary combat pin");
+        bool patrolPassed = enemy.State == PatrolEnemyState.Patrol && Mathf.Abs(enemyBody.position.x - x) > .1f && !guard.CombatPinned;
+        Check(patrolPassed, "A distant guard patrols under physics without keeping an unnecessary combat pin" +
+            (patrolPassed ? "" : "\nBefore: " + beforePatrol + "\nAfter: " + EnemySnapshot(guard)));
         yield return Warp(new Vector2(enemyBody.position.x - 4.5f, 2.05f));
         yield return new WaitForSeconds(.2f);
         Check(enemy.State == PatrolEnemyState.Chase && enemy.Target == player.transform && enemyBody.velocity.x < -.5f && guard.CombatPinned,
@@ -313,14 +331,90 @@ public sealed class GameplayPlayChecks : MonoBehaviour
         float stop = Time.realtimeSinceStartup + seconds;
         while (!condition())
         {
+            if (GameServices2D.Instance && !string.IsNullOrEmpty(GameServices2D.Instance.InitializationError))
+                throw new InvalidOperationException("Original framework initialization failed: " + GameServices2D.Instance.InitializationError);
+            if (LevelSession2D.Instance && LevelSession2D.Instance.Phase == LevelPhase.Error)
+                throw new InvalidOperationException("Level initialization failed: " + LevelSession2D.Instance.StatusMessage);
             if (Time.realtimeSinceStartup > stop) throw new TimeoutException(description);
             yield return null;
         }
     }
 
+    private static object[] NativeManagers() => new object[]
+    {
+        GameEntry.Logger, GameEntry.Event, GameEntry.Time, GameEntry.Fsm, GameEntry.Procedure,
+        GameEntry.DataTable, GameEntry.Socket, GameEntry.Http, GameEntry.Data, GameEntry.Localization,
+        GameEntry.Pool, GameEntry.Scene, GameEntry.Resource, GameEntry.Download, GameEntry.UI,
+        GameEntry.Audio, GameEntry.Input, GameEntry.Task
+    };
+
     private MapStreamedEntity Guard(int number)
     {
         return streamer && streamer.TryGetActor("spawn:trial-guard-" + number + ":0", out var result) ? result : null;
+    }
+
+    private string EnemySnapshot(MapStreamedEntity guard)
+    {
+        if (!guard) return "missing guard";
+        var enemy = guard.GetComponent<PatrolEnemy2D>();
+        var enemyBody = guard.GetComponent<Rigidbody2D>();
+        var shape = guard.GetComponent<BoxCollider2D>();
+        var bounds = shape.bounds;
+        int facing = guard.GetComponent<SkillFacing2D>().Direction;
+        float reach = bounds.extents.x + .2f + enemy.MoveSpeed * Time.fixedDeltaTime;
+        Vector2 floor = new Vector2(bounds.center.x + facing * reach, bounds.min.y + .2f);
+        Vector2Int feet = level.World.Map.WorldToCell(new Vector2(bounds.center.x, bounds.min.y - .05f));
+        return "id=" + guard.EntityId + "/" + guard.GetInstanceID() + ", current=" + ReferenceEquals(guard, Guard(1)) +
+            ", state=" + enemy.State + ", enabled=" + enemy.enabled + ", active=" + guard.gameObject.activeInHierarchy +
+            ", health=" + guard.Health + ", pin=" + guard.CombatPinned + ", target=" + (enemy.Target ? enemy.Target.name : "none") +
+            ", pos=" + enemyBody.position.ToString("F4") + ", render=" + guard.transform.position.ToString("F4") +
+            ", velocity=" + enemyBody.velocity.ToString("F4") + ", simulated=" + enemyBody.simulated +
+            ", sleeping=" + enemyBody.IsSleeping() +
+            ", drag=" + enemyBody.drag + ", gravity=" + enemyBody.gravityScale + ", collisionMode=" + enemyBody.collisionDetectionMode +
+            ", friction=" + (shape.sharedMaterial ? shape.sharedMaterial.friction.ToString() : "default") +
+            ", contacts=" + ContactSnapshot(enemyBody) +
+            ", bodyType=" + enemyBody.bodyType + ", constraints=" + enemyBody.constraints + ", facing=" + facing +
+            ", player=" + body.position.ToString("F4") + ", distance=" + Vector2.Distance(body.position, enemyBody.position).ToString("F4") +
+            ", detection=" + enemy.DetectionDistance + ", phase=" + level.Phase + ", gameplay=" + level.IsGameplayActive +
+            ", moveSpeed=" + enemy.MoveSpeed + ", playerHealth=" + actor.Health + ", playerAlive=" + actor.IsAlive +
+            ", fixedTime=" + Time.fixedTime.ToString("F4") + ", fixedDelta=" + Time.fixedDeltaTime +
+            ", groundCell=" + feet + "/" + level.World.Map.IsCellLoaded(feet.x, feet.y) +
+            ", floor=" + TerrainRay(floor, Vector2.down, .65f, enemy) +
+            ", wall=" + TerrainRay(bounds.center, Vector2.right * facing, reach, enemy) +
+            ", lowWall=" + TerrainRay(new Vector2(bounds.center.x, bounds.min.y + .22f), Vector2.right * facing, reach, enemy);
+    }
+
+    private static string TerrainRay(Vector2 origin, Vector2 direction, float distance, PatrolEnemy2D enemy)
+    {
+        var hits = Physics2D.RaycastAll(origin, direction, distance, enemy.GroundLayers);
+        var output = new System.Text.StringBuilder("[");
+        foreach (var hit in hits)
+        {
+            if (!hit.collider || hit.collider.isTrigger || hit.collider.transform.IsChildOf(enemy.transform) ||
+                hit.collider.GetComponentInParent<PatrolEnemy2D>() || hit.collider.GetComponentInParent<PlayerController2D>()) continue;
+            output.Append(hit.collider.name).Append('/').Append(hit.collider.GetType().Name).Append("/trigger=").Append(hit.collider.isTrigger)
+                .Append('@').Append(hit.distance.ToString("F4")).Append(';');
+        }
+        return output.Append(']').ToString();
+    }
+
+    private static string ContactSnapshot(Rigidbody2D target)
+    {
+        var contacts = new ContactPoint2D[32];
+        int count = target.GetContacts(contacts);
+        var output = new System.Text.StringBuilder("[");
+        for (int i = 0; i < count; i++)
+        {
+            var contact = contacts[i];
+            output.Append(contact.collider ? contact.collider.name : "none").Append('/')
+                .Append(contact.otherCollider ? contact.otherCollider.name : "none")
+                .Append(" point=").Append(contact.point.ToString("F4"))
+                .Append(" normal=").Append(contact.normal.ToString("F4"))
+                .Append(" separation=").Append(contact.separation.ToString("F4"))
+                .Append(" normalImpulse=").Append(contact.normalImpulse.ToString("F4"))
+                .Append(" tangentImpulse=").Append(contact.tangentImpulse.ToString("F4")).Append(';');
+        }
+        return output.Append(']').ToString();
     }
 
     private void Freeze(PatrolEnemy2D enemy)

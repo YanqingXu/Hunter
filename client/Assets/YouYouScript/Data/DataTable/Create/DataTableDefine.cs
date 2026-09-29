@@ -1,0 +1,41 @@
+public sealed class DataTableDefine
+{
+    public const string DTBattleAttrName = "DTBattleAttr";
+    public const int DTBattleAttrVersion = 8;
+    public const string DTBuffName = "DTBuff";
+    public const int DTBuffVersion = 10;
+    public const string DTSkillName = "DTSkill";
+    public const int DTSkillVersion = 7;
+    public const string DTSkillLevelName = "DTSkillLevel";
+    public const int DTSkillLevelVersion = 12;
+    public const string DTPVPSceneMonsterPointName = "DTPVPSceneMonsterPoint";
+    public const int DTPVPSceneMonsterPointVersion = 12;
+    public const string DTBaseRoleName = "DTBaseRole";
+    public const int DTBaseRoleVersion = 4;
+    public const string DTJobName = "DTJob";
+    public const int DTJobVersion = 7;
+    public const string DTJobLevelName = "DTJobLevel";
+    public const int DTJobLevelVersion = 20;
+    public const string DTRoleAnimationName = "DTRoleAnimation";
+    public const int DTRoleAnimationVersion = 6;
+    public const string DTRoleAnimCategoryName = "DTRoleAnimCategory";
+    public const int DTRoleAnimCategoryVersion = 6;
+    public const string DTSpriteName = "DTSprite";
+    public const int DTSpriteVersion = 23;
+    public const string DTSys_AudioName = "DTSys_Audio";
+    public const int DTSys_AudioVersion = 5;
+    public const string DTSys_CodeName = "DTSys_Code";
+    public const int DTSys_CodeVersion = 3;
+    public const string DTSys_EffectName = "DTSys_Effect";
+    public const int DTSys_EffectVersion = 6;
+    public const string DTSys_PrefabName = "DTSys_Prefab";
+    public const int DTSys_PrefabVersion = 10;
+    public const string DTSys_SceneName = "DTSys_Scene";
+    public const int DTSys_SceneVersion = 7;
+    public const string DTSys_SceneDetailName = "DTSys_SceneDetail";
+    public const int DTSys_SceneDetailVersion = 5;
+    public const string DTSys_StorySoundName = "DTSys_StorySound";
+    public const int DTSys_StorySoundVersion = 4;
+    public const string DTSys_UIFormName = "DTSys_UIForm";
+    public const int DTSys_UIFormVersion = 11;
+}

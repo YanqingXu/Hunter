@@ -12,13 +12,25 @@ public static class Framework2DValidation
         try
         {
             Framework2DDemoBuilder.Create();
+            NativeFramework2DBuild.PrepareContent(EditorUserBuildSettings.activeBuildTarget);
             var catalog = AssetDatabase.LoadAssetAtPath<GameAssetCatalog>(Framework2DDemoBuilder.CatalogPath);
-            var provider = catalog.CreateProvider();
-            if (!provider.Load<GameObject>("actor.player") || provider.Load<AudioClip>("actor.player") || provider.Load<GameObject>("missing"))
-                throw new Exception("Asset catalog lookup/type checks failed.");
+            catalog.ValidateEntries();
+            string playerPath = catalog.GetAssetPath("actor.player");
+            if (!AssetDatabase.LoadAssetAtPath<GameObject>(playerPath) || AssetDatabase.LoadAssetAtPath<AudioClip>(playerPath))
+                throw new Exception("Native resource authoring path/type checks failed.");
+            bool missingRejected = false;
+            try { catalog.GetAssetPath("missing"); }
+            catch (System.Collections.Generic.KeyNotFoundException) { missingRejected = true; }
+            if (!missingRejected) throw new Exception("Missing resource keys were not rejected.");
             bool rejected = false;
-            try { new CatalogAssetProvider(new[] { catalog.Entries[0], catalog.Entries[0] }); }
+            var duplicateCatalog = ScriptableObject.CreateInstance<GameAssetCatalog>();
+            try
+            {
+                duplicateCatalog.Entries = new[] { catalog.Entries[0], catalog.Entries[0] };
+                duplicateCatalog.ValidateEntries();
+            }
             catch (ArgumentException) { rejected = true; }
+            finally { UnityEngine.Object.DestroyImmediate(duplicateCatalog); }
             if (!rejected) throw new Exception("Duplicate resource keys were not rejected.");
             EditorSceneManager.OpenScene(Framework2DDemoBuilder.ScenePath);
             new GameObject("Existing Project Pool Driver").AddComponent<BigWorld.Pooling.Unity.PoolDriver>();

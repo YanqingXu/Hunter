@@ -253,7 +253,7 @@ PlayerSettings:
   shaderPrecisionModel: 0
   clonedFromGUID: c0afd0d1d80e3634a9dac47e8a0426ea
   templatePackageId: com.unity.template.3d@8.1.0
-  templateDefaultScene: Assets/_Game/Scenes/SampleScene.unity
+  templateDefaultScene: Assets/_Project/Examples/Map2D/Scenes/MapEditorExample.unity
   useCustomMainManifest: 0
   useCustomLauncherManifest: 0
   useCustomMainGradleTemplate: 0
@@ -843,7 +843,8 @@ PlayerSettings:
     Standalone: ODIN_INSPECTOR;ODIN_INSPECTOR_3;ODIN_INSPECTOR_3_1
   additionalCompilerArguments: {}
   platformArchitecture: {}
-  scriptingBackend: {}
+  scriptingBackend:
+    Standalone: 1
   il2cppCompilerConfiguration: {}
   il2cppCodeGeneration: {}
   managedStrippingLevel:
@@ -863,13 +864,14 @@ PlayerSettings:
     tvOS: 1
   incrementalIl2cppBuild: {}
   suppressCommonWarnings: 1
-  allowUnsafeCode: 0
+  allowUnsafeCode: 1
   useDeterministicCompilation: 1
   additionalIl2CppArgs: 
   scriptingRuntimeVersion: 1
   gcIncremental: 1
   gcWBarrierValidation: 0
-  apiCompatibilityLevelPerPlatform: {}
+  apiCompatibilityLevelPerPlatform:
+    Standalone: 3
   m_RenderingPath: 1
   m_MobileRenderingPath: 1
   metroPackageName: Template_3D

@@ -1,0 +1,164 @@
+{
+    "format": 1,
+    "baseId": "bw-aa0d0c18e3294cd2997a6753e6103f5e",
+    "version": "base-20260929-072950-715",
+    "platform": "StandaloneWindows64",
+    "entryScene": "Assets/_Project/Game/Scenes/BorderTrial.unity",
+    "sceneBundle": "hotupdate/scenes.assetbundle",
+    "files": [
+        {
+            "path": "VersionFile.bytes",
+            "sha256": "aaea87b4e753f48a62af2480fd342a83bfd639f86d82f09c1f05734976717ac0",
+            "kind": "content",
+            "assembly": "",
+            "size": 273
+        },
+        {
+            "path": "AssetInfo.bytes",
+            "sha256": "2733bdf59b9342623fdabc292fd0adc3fb0b3d47a48ecb4238e132c046b1500f",
+            "kind": "content",
+            "assembly": "",
+            "size": 3604
+        },
+        {
+            "path": "download/datatable.assetbundle",
+            "sha256": "337167739599e9c3d0b67d54ed61db456e7a24b39f8428118528eaea693074a4",
+            "kind": "content",
+            "assembly": "",
+            "size": 13786
+        },
+        {
+            "path": "download/audio.assetbundle",
+            "sha256": "7a2b6a0406e0461b3a4323d12094778643c91c0703d8df97db14ef66893ea04f",
+            "kind": "content",
+            "assembly": "",
+            "size": 21747302
+        },
+        {
+            "path": "download/ui.assetbundle",
+            "sha256": "e425d261e86b04e5ab7c21caf2286210a290538b5327804420a2a7e01e2e563a",
+            "kind": "content",
+            "assembly": "",
+            "size": 10884661
+        },
+        {
+            "path": "download/reporter.assetbundle",
+            "sha256": "d9fc504c92a265b82cfba075f52c6603fb586c5087dea855444acd9e8b980ba6",
+            "kind": "content",
+            "assembly": "",
+            "size": 69132
+        },
+        {
+            "path": "youyou2d/project.assetbundle",
+            "sha256": "38d57c06ff2515b71ea1c66f2522800e5ada36c2b23bf21b8ba63f84e01c8011",
+            "kind": "content",
+            "assembly": "",
+            "size": 14764121
+        },
+        {
+            "path": "hotupdate/scenes.assetbundle",
+            "sha256": "54ee47bd9b05ddf179580b8b52f2d8bb751a2f46249a081ce89415ca712fb9f4",
+            "kind": "content",
+            "assembly": "",
+            "size": 138238
+        },
+        {
+            "path": "hotupdate/aot/Cinemachine.dll.bytes",
+            "sha256": "3596a848d213c22f90d0569e5717cbd7fef3a85147227f816667ccee7262d6b5",
+            "kind": "aot",
+            "assembly": "Cinemachine",
+            "size": 308736
+        },
+        {
+            "path": "hotupdate/aot/DOTween.dll.bytes",
+            "sha256": "0b168fc10fcbff644d338498b62e8a1f36d30d0507a4b8919f7fdb8c09fa5cac",
+            "kind": "aot",
+            "assembly": "DOTween",
+            "size": 133120
+        },
+        {
+            "path": "hotupdate/aot/Google.Protobuf.dll.bytes",
+            "sha256": "1db887041050aafb1e276c9bb34a054e072e43db01e3b16a65680afe6508a5e6",
+            "kind": "aot",
+            "assembly": "Google.Protobuf",
+            "size": 365568
+        },
+        {
+            "path": "hotupdate/aot/LitJson.dll.bytes",
+            "sha256": "fd624683496cf76eab7496a60f4fbfbd10548ba713068c8c8c4a573e77df0834",
+            "kind": "aot",
+            "assembly": "LitJson",
+            "size": 48640
+        },
+        {
+            "path": "hotupdate/aot/mscorlib.dll.bytes",
+            "sha256": "bd8164925dcc25b50e8115dfb2ce759747b0ce200d1af72ec264c2b0e3b7da61",
+            "kind": "aot",
+            "assembly": "mscorlib",
+            "size": 2418176
+        },
+        {
+            "path": "hotupdate/aot/System.Core.dll.bytes",
+            "sha256": "c2134baa266d14b70556259c9b4f0dfc27cb37958f6cffe02618bf240a1995f3",
+            "kind": "aot",
+            "assembly": "System.Core",
+            "size": 117760
+        },
+        {
+            "path": "hotupdate/aot/System.dll.bytes",
+            "sha256": "f642fcf4d2318a517ec146884460bd81763988b2c47695ffbac1c6946f79de36",
+            "kind": "aot",
+            "assembly": "System",
+            "size": 333312
+        },
+        {
+            "path": "hotupdate/aot/Unity.TextMeshPro.dll.bytes",
+            "sha256": "eafe980550524a0187e85e3e5172b9c59d11f6c4d89d5cfc3799d1d30573b3a2",
+            "kind": "aot",
+            "assembly": "Unity.TextMeshPro",
+            "size": 378880
+        },
+        {
+            "path": "hotupdate/aot/UnityEngine.AssetBundleModule.dll.bytes",
+            "sha256": "678b8af205c566e90eebb776f536677eaaf51b14cc2fe18fe84f0e859c494a93",
+            "kind": "aot",
+            "assembly": "UnityEngine.AssetBundleModule",
+            "size": 20480
+        },
+        {
+            "path": "hotupdate/aot/UnityEngine.CoreModule.dll.bytes",
+            "sha256": "f7ff42d5c7abe8fc862e794e782aed80e0205ff77793237db6f07e808171a02f",
+            "kind": "aot",
+            "assembly": "UnityEngine.CoreModule",
+            "size": 864256
+        },
+        {
+            "path": "hotupdate/aot/UnityEngine.JSONSerializeModule.dll.bytes",
+            "sha256": "69c0b07eb576461f06818fd2803b3467941de8d14dc223212b53267cd89d65c9",
+            "kind": "aot",
+            "assembly": "UnityEngine.JSONSerializeModule",
+            "size": 11264
+        },
+        {
+            "path": "hotupdate/aot/UnityEngine.TilemapModule.dll.bytes",
+            "sha256": "0a6d63bb9b33edeb2e0b123389166ebd0b89f2a9f44b869332e060d61f5d0ded",
+            "kind": "aot",
+            "assembly": "UnityEngine.TilemapModule",
+            "size": 32256
+        },
+        {
+            "path": "hotupdate/assemblies/SkillEditorKit.Runtime.dll.bytes",
+            "sha256": "418646447c85c6cb8376aaa03cbe0cae4fab0cf427bc6fefc6bca1b0d9116c5b",
+            "kind": "assembly",
+            "assembly": "SkillEditorKit.Runtime",
+            "size": 89088
+        },
+        {
+            "path": "hotupdate/assemblies/Assembly-CSharp.dll.bytes",
+            "sha256": "8e2403546c81ef2c3f77b6b04d1a6b3dc6f137c3a9d492d8b241c4b47c40fcd9",
+            "kind": "assembly",
+            "assembly": "Assembly-CSharp",
+            "size": 1016320
+        }
+    ]
+}

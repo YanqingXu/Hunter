@@ -1,6 +1,6 @@
 # 边境试炼：可通关的横版关卡
 
-入口：**Tools → BigWorld → 正式关卡 → 打开边境试炼**。正式场景位于 `Assets/_Game/Scenes/BorderTrial.unity`，已设置为 Windows 打包入口。原框架整合示例保留在 `_Examples`。
+入口：**Tools → BigWorld → 正式关卡 → 打开边境试炼**。正式场景位于 `Assets/_Project/Game/Scenes/BorderTrial.unity`，已设置为 Windows 打包入口。原框架整合示例保留在 `_Project/Examples`。
 
 ## 操作与目标
 
@@ -18,20 +18,22 @@
 
 | 内容 | 位置 / 组件 | 常调参数 |
 | --- | --- | --- |
-| 玩家 | `_Game/Prefabs/Player.prefab` / PlayerController2D | 移速 6、跳速 11、加速度、短跳系数、跳跃容错 / 缓冲时间 |
+| 玩家 | `_Project/Game/Prefabs/Player.prefab` / PlayerController2D | 移速 6、跳速 11、加速度、短跳系数、跳跃容错 / 缓冲时间 |
 | 战斗 | 同预制体 / SkillActor2D | 最大血量 100、基础攻击 25、受伤无敌 0.65 秒 |
 | 角色表现 | 同预制体 / PlayerVisual2D | 跑跳姿态、受伤闪色、无敌闪烁；使用原有精灵，未新增逐帧跑步素材 |
-| 守卫 | `_Game/Prefabs/PatrolGuard.prefab` / PatrolEnemy2D | 巡逻速度 2、追击 3、视距 7、攻击距离 1.3、前摇 0.4 秒、伤害 12 |
-| 守卫生命与生成 | `_Game/Data/Maps/BorderTrial.asset` 的 Spawns | 生命 50；本轮击败后不刷新 |
-| 技能 | `_Game/Data/Skills/Shoot2D.asset` / Melee2D.asset | 使用现有技能编辑器改时间轴、伤害倍率、命中范围 |
+| 守卫 | `_Project/Game/Prefabs/PatrolGuard.prefab` / PatrolEnemy2D | 巡逻速度 2、追击 3、视距 7、攻击距离 1.3、前摇 0.4 秒、伤害 12 |
+| 守卫生命与生成 | `_Project/Game/Data/Maps/BorderTrial.asset` 的 Spawns | 生命 50；本轮击败后不刷新 |
+| 技能 | `_Project/Game/Data/Skills/Shoot2D.asset` / Melee2D.asset | 使用现有技能编辑器改时间轴、伤害倍率、命中范围 |
 | 关卡流程 | 场景中的 Level Session / LevelSession2D | RequiredKills、出生点、终点、掉落死亡线 |
 | 检查点 | 场景中的 Checkpoint / Checkpoint2D | Order、DisplayName、SpawnPoint；出生点需位于可站立地形 |
 | 相机 | Main Camera / CameraFollow2D | 正交大小、前视、阻尼、垂直缓冲和地图边界 |
-| 界面 | `_Game/Prefabs/GameHud.prefab` / GameHud2D | 由框架 UIManager 加载，运行时构建 UGUI 并适配画面大小 |
+| 界面 | `_Project/Game/Prefabs/GameHud.prefab` / GameHud2D | 由框架 UIManager 加载，运行时构建 UGUI 并适配画面大小 |
 
 `LevelSession2D` 管理 Loading → Ready → Playing → Paused / Dead / Won；复活进入 Respawning，先禁用物理，移动玩家并等待目标及脚下区块加载，之后恢复满血、给予 1.5 秒保护并开启控制。重复重试请求不会启动多个复活流程。
 
 守卫沿用地图对象池的稳定实体 ID 与生命状态；停用和回池会清理目标、速度、攻击计时与战斗驻留标记。角色的受伤、死亡事件由 `SkillActor2D` 提供；原整合示例不设置无敌时间，保留其原有受击规则。
+
+地面的 Solid Tilemap 使用静态 `CompositeCollider2D` 合并相邻格子，处理玩家和守卫开启连续碰撞检测时被内部格子接缝卡住的问题。区块或格子变化后同步更新碰撞几何；OneWay 单向平台仍保持原 `TilemapCollider2D + PlatformEffector2D` 规则。此修复不改变关卡布局、巡逻速度或攻击参数，细节见 [地图碰撞说明](../Assets/_Project/Modules/Map2D/README.md#碰撞与预览)。
 
 **创建缺失资源并设为打包入口** 菜单只补建缺失资源，不覆盖已调整的关卡、预制体和技能。正常修改直接保存对应资产；不必重新生成。
 

@@ -46,7 +46,11 @@ public static class GridMapPhysicsVerification
         public List<Result> results = new List<Result>();
     }
 
-    public static void RunBatch()
+    public static void RunBatch() => Run(false);
+
+    public static void RunSolidRegressionBatch() => Run(true);
+
+    private static void Run(bool solidOnly)
     {
         Report report = new Report { generatedUtc = DateTime.UtcNow.ToString("O"), unityVersion = Application.unityVersion };
         Vector2 previousGravity = Physics2D.gravity;
@@ -56,20 +60,28 @@ public static class GridMapPhysicsVerification
             Physics2D.gravity = new Vector2(0f, -9.81f);
             Physics2D.simulationMode = SimulationMode2D.Script;
             RunCase(report, "Solid tiles stop a falling rigidbody", MapTileCollisionMode.Solid);
-            RunCase(report, "One-way tiles allow upward passage then support landing", MapTileCollisionMode.OneWay);
-            RunCase(report, "One-way tiles with discrete collision detection", MapTileCollisionMode.OneWay, CollisionDetectionMode2D.Discrete);
-            RunCase(report, "One-way tiles with explicit static Rigidbody and continuous detection", MapTileCollisionMode.OneWay,
-                CollisionDetectionMode2D.Continuous, true);
-            RunCase(report, "One-way tiles with explicit static Rigidbody and discrete detection", MapTileCollisionMode.OneWay,
-                CollisionDetectionMode2D.Discrete, true);
-            RunCase(report, "Plain BoxCollider one-way platform with continuous detection", MapTileCollisionMode.OneWay,
-                CollisionDetectionMode2D.Continuous, false, true);
-            RunCase(report, "Plain BoxCollider one-way platform with discrete detection", MapTileCollisionMode.OneWay,
-                CollisionDetectionMode2D.Discrete, false, true);
-            RunCase(report, "Composite Tilemap one-way platform with continuous detection", MapTileCollisionMode.OneWay,
-                CollisionDetectionMode2D.Continuous, true, false, true);
-            RunCase(report, "Composite Tilemap one-way platform with discrete detection", MapTileCollisionMode.OneWay,
-                CollisionDetectionMode2D.Discrete, true, false, true);
+            if (!solidOnly)
+            {
+                RunCase(report, "One-way tiles allow upward passage then support landing", MapTileCollisionMode.OneWay);
+                RunCase(report, "One-way tiles with discrete collision detection", MapTileCollisionMode.OneWay, CollisionDetectionMode2D.Discrete);
+                RunCase(report, "One-way tiles with explicit static Rigidbody and continuous detection", MapTileCollisionMode.OneWay,
+                    CollisionDetectionMode2D.Continuous, true);
+                RunCase(report, "One-way tiles with explicit static Rigidbody and discrete detection", MapTileCollisionMode.OneWay,
+                    CollisionDetectionMode2D.Discrete, true);
+                RunCase(report, "Plain BoxCollider one-way platform with continuous detection", MapTileCollisionMode.OneWay,
+                    CollisionDetectionMode2D.Continuous, false, true);
+                RunCase(report, "Plain BoxCollider one-way platform with discrete detection", MapTileCollisionMode.OneWay,
+                    CollisionDetectionMode2D.Discrete, false, true);
+                RunCase(report, "Composite Tilemap one-way platform with continuous detection", MapTileCollisionMode.OneWay,
+                    CollisionDetectionMode2D.Continuous, true, false, true);
+                RunCase(report, "Composite Tilemap one-way platform with discrete detection", MapTileCollisionMode.OneWay,
+                    CollisionDetectionMode2D.Discrete, true, false, true);
+            }
+            else
+            {
+                RunSolidTraversalCase(report, -1);
+                RunSolidTraversalCase(report, 1);
+            }
         }
         finally
         {
@@ -126,9 +138,17 @@ public static class GridMapPhysicsVerification
             TilemapCollider2D mapCollider = tilemap.GetComponent<TilemapCollider2D>();
             Require(mapCollider != null && mapCollider.enabled, "The collision layer must contain an enabled TilemapCollider2D.");
             mapCollider.ProcessTilemapChanges();
-            Require(mapCollider.shapeCount > 0, "TilemapCollider2D must contain actual collision shapes.");
-
-            Collider2D platformCollider = mapCollider;
+            var generatedComposite = tilemap.GetComponent<CompositeCollider2D>();
+            if (mapCollider.usedByComposite && generatedComposite != null) generatedComposite.GenerateGeometry();
+            Collider2D platformCollider = mapCollider.usedByComposite ? (Collider2D)generatedComposite : mapCollider;
+            Require(platformCollider != null && platformCollider.shapeCount > 0, "The generated ground must contain actual collision shapes.");
+            if (mode == MapTileCollisionMode.Solid)
+            {
+                Require(generatedComposite != null && generatedComposite.attachedRigidbody.bodyType == RigidbodyType2D.Static,
+                    "Solid terrain must merge its cells into a static composite.");
+                result.platformKind = "CompositeCollider2D";
+                result.explicitStaticBody = true;
+            }
             PlatformEffector2D platformEffector = tilemap.GetComponent<PlatformEffector2D>();
             if (compositePlatform)
             {
@@ -228,6 +248,73 @@ public static class GridMapPhysicsVerification
             if (scene.IsValid() && scene.isLoaded) EditorSceneManager.ClosePreviewScene(scene);
             if (map != null) Object.DestroyImmediate(map);
             if (tile != null) Object.DestroyImmediate(tile);
+        }
+    }
+
+    private static void RunSolidTraversalCase(Report report, int direction)
+    {
+        var result = new Result
+        {
+            name = "A continuous actor crosses solid tile seams " + (direction < 0 ? "left" : "right") + " and loses support after clearing",
+            collisionDetection = CollisionDetectionMode2D.Continuous.ToString(),
+            platformKind = "CompositeCollider2D", explicitStaticBody = true
+        };
+        report.results.Add(result);
+        Scene previous = SceneManager.GetActiveScene();
+        Scene scene = default(Scene);
+        GridMapAsset map = null;
+        MapTileType tile = null;
+        PhysicsMaterial2D material = null;
+        try
+        {
+            scene = EditorSceneManager.NewPreviewScene();
+            var physics = scene.GetPhysicsScene2D();
+            Require(physics.IsValid() && !physics.Equals(Physics2D.defaultPhysicsScene), "Traversal must use an isolated physics scene.");
+            map = ScriptableObject.CreateInstance<GridMapAsset>(); map.Initialize(16, 10);
+            tile = ScriptableObject.CreateInstance<MapTileType>(); tile.Collision = MapTileCollisionMode.Solid; tile.Walkable = false;
+            for (int x = 0; x < map.Width; x++) map.SetCell(x, 3, tile);
+            var mapObject = new GameObject("Solid seam regression map"); SceneManager.MoveGameObjectToScene(mapObject, scene);
+            var renderer = mapObject.AddComponent<GridMapRenderer>(); renderer.Map = map;
+            var solid = renderer.GetTilemap(MapLayer.Terrain, MapTileCollisionMode.Solid);
+            var composite = solid.GetComponent<CompositeCollider2D>();
+            Require(composite != null && composite.shapeCount > 0, "Solid cells need committed composite geometry.");
+            var actorObject = new GameObject("Continuous guard-shaped actor"); SceneManager.MoveGameObjectToScene(actorObject, scene);
+            actorObject.transform.position = new Vector3(direction < 0 ? 12.5f : 3.5f, 4.05f, 0);
+            var body = actorObject.AddComponent<Rigidbody2D>(); body.gravityScale = 2.5f;
+            body.constraints = RigidbodyConstraints2D.FreezeRotation; body.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
+            var shape = actorObject.AddComponent<BoxCollider2D>(); shape.size = new Vector2(.65f, 1.45f); shape.offset = new Vector2(0, .75f);
+            material = new PhysicsMaterial2D("Solid seam regression friction") { friction = 0, bounciness = 0 }; shape.sharedMaterial = material;
+            Physics2D.SyncTransforms();
+            for (int i = 0; i < 60; i++) Require(physics.Simulate(.02f), "Settling simulation failed.");
+            float startX = body.position.x;
+            for (int i = 0; i < 150; i++)
+            {
+                body.velocity = new Vector2(direction * 2, body.velocity.y);
+                Require(physics.Simulate(.02f), "Traversal simulation failed.");
+            }
+            result.finalHeight = body.position.y; result.finalVerticalSpeed = body.velocity.y;
+            result.expectedRestingHeight = 4f - .025f;
+            Require((body.position.x - startX) * direction > 5.8f,
+                "Internal tile edges stopped horizontal movement: start=" + startX + ", final=" + body.position + ", velocity=" + body.velocity);
+            Require(Mathf.Abs(body.position.y - result.expectedRestingHeight) < .08f, "The actor lost support during traversal.");
+            renderer.ClearPreview();
+            Physics2D.SyncTransforms();
+            Require(composite.shapeCount == 0, "Clearing generated tiles left stale composite geometry.");
+            for (int i = 0; i < 30; i++) Require(physics.Simulate(.02f), "Cleared-ground simulation failed.");
+            Require(body.position.y < result.finalHeight - .5f, "The cleared collision geometry still supports the actor.");
+            result.passed = true; report.passed++;
+        }
+        catch (Exception exception)
+        {
+            result.error = exception.ToString(); report.failed++; Debug.LogError(result.name + "\n" + exception);
+        }
+        finally
+        {
+            if (previous.IsValid() && previous.isLoaded) SceneManager.SetActiveScene(previous);
+            if (scene.IsValid() && scene.isLoaded) EditorSceneManager.ClosePreviewScene(scene);
+            if (map != null) Object.DestroyImmediate(map);
+            if (tile != null) Object.DestroyImmediate(tile);
+            if (material != null) Object.DestroyImmediate(material);
         }
     }
 

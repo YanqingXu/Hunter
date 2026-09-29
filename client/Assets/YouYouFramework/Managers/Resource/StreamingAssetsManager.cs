@@ -1,0 +1,61 @@
+//===================================================
+//作    者：边涯  http://www.u3dol.com
+//创建时间：
+//备    注：
+//===================================================
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using System;
+using System.Text;
+using System.IO;
+using UnityEngine.Networking;
+
+namespace YouYou
+{
+    /// <summary>
+    /// StreamingAssets管理器
+    /// </summary>
+    public class StreamingAssetsManager
+    {
+        /// <summary>Optional verified release root. The original StreamingAssets behavior remains the default.</summary>
+        public string ContentRoot { get; set; }
+        #region ReadStreamingAsset 读取StreamingAssets下的资源
+        /// <summary>
+        /// 读取StreamingAssets下的资源
+        /// </summary>
+        /// <param name="url">资源路径</param>
+        /// <param name="onComplete"></param>
+        /// <returns></returns>
+        private IEnumerator ReadStreamingAsset(string url, BaseAction<byte[]> onComplete)
+        {
+            var uri = new System.Uri(Path.Combine(string.IsNullOrEmpty(ContentRoot) ? Application.streamingAssetsPath : ContentRoot, url));
+            using (UnityWebRequest request = UnityWebRequest.Get(uri.AbsoluteUri))
+            {
+                yield return request.SendWebRequest();
+
+                if (request.isNetworkError || request.isHttpError)
+                {
+                    onComplete?.Invoke(null);
+                }
+                else
+                {
+                    onComplete?.Invoke(request.downloadHandler.data);
+                }
+            }
+        }
+        #endregion
+
+        #region ReadAssetBundle 读取只读区资源包
+        /// <summary>
+        /// 读取只读区资源包
+        /// </summary>
+        /// <param name="fileUrl">资源路径</param>
+        /// <param name="onComplete"></param>
+        public void ReadAssetBundle(string fileUrl, BaseAction<byte[]> onComplete)
+        {
+            GameEntry.Instance.StartCoroutine(ReadStreamingAsset(fileUrl, onComplete));
+        }
+        #endregion
+    }
+}

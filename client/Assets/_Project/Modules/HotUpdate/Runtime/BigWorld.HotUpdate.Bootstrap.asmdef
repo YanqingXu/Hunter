@@ -1,0 +1,6 @@
+{
+  "name": "BigWorld.HotUpdate.Bootstrap",
+  "rootNamespace": "BigWorld.HotUpdate",
+  "references": ["HybridCLR.Runtime"],
+  "autoReferenced": true
+}

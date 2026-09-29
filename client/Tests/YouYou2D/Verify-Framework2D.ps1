@@ -4,9 +4,9 @@ $taskProject = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 $taskTemporary = [IO.Path]::GetFullPath((Join-Path $taskProject 'Assets\__Framework2DChecks'))
 $taskExpected = Join-Path $taskProject 'Assets\__Framework2DChecks'
 if ($taskTemporary -ne $taskExpected -or -not $taskTemporary.StartsWith($taskProject + '\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Invalid validation directory.' }
-if (Test-Path -LiteralPath $taskTemporary) { throw 'Validation directory already exists. Inspect it before rerunning.' }
+if ((Test-Path -LiteralPath $taskTemporary) -or (Test-Path -LiteralPath ($taskTemporary + '.meta'))) { throw 'Validation directory already exists. Inspect it before rerunning.' }
 if (-not (Test-Path -LiteralPath $UnityPath -PathType Leaf)) { throw 'Unity executable not found.' }
-$taskReport = Join-Path $taskProject 'TestResults\YouYouFramework\Adaptation2D'
+$taskReport = [IO.Path]::GetFullPath((Join-Path $taskProject 'TestResults\YouYouFramework\Adaptation2D'))
 $taskLog = Join-Path $taskReport 'play-checks-latest.log'
 $taskProcess = $null
 try {
@@ -16,7 +16,7 @@ try {
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Editor\Framework2DValidation.cs') -Destination (Join-Path $taskTemporary 'Editor')
     $taskArguments = @('-batchmode', '-projectPath', ('"' + $taskProject + '"'), '-executeMethod', 'Framework2DValidation.Run', '-logFile', ('"' + $taskLog + '"'))
     $taskProcess = Start-Process -FilePath $UnityPath -ArgumentList $taskArguments -WindowStyle Hidden -PassThru
-    $taskDeadline = [DateTime]::UtcNow.AddMinutes(5)
+    $taskDeadline = [DateTime]::UtcNow.AddMinutes(20)
     while (-not $taskProcess.WaitForExit(1000)) {
         if ([DateTime]::UtcNow -gt $taskDeadline) { $taskProcess.Kill(); $taskProcess.WaitForExit(); throw "Validation timed out. See $taskLog" }
     }

@@ -1,0 +1,15 @@
+<linker>
+  <!-- HybridCLR loads gameplay and prefab/table types at runtime.
+       Keep the complete migrated assemblies until a separately tested stripping profile exists. -->
+  <assembly fullname="Assembly-CSharp" preserve="all" ignoreIfMissing="1" />
+  <assembly fullname="Assembly-CSharp-firstpass" preserve="all" ignoreIfMissing="1" />
+  <assembly fullname="LitJson" preserve="all" />
+  <assembly fullname="Google.Protobuf" preserve="all" />
+  <assembly fullname="zlib.net" preserve="all" />
+  <assembly fullname="SkillEditorKit.Runtime" preserve="all" ignoreIfMissing="1" />
+  <assembly fullname="UnityEngine.UI" preserve="all" ignoreIfMissing="1" />
+  <assembly fullname="Unity.TextMeshPro" preserve="all" ignoreIfMissing="1" />
+  <assembly fullname="Unity.Timeline" preserve="all" ignoreIfMissing="1" />
+  <!-- Future 2D gameplay patches and collision diagnostics need these native-backed APIs in the main Player. -->
+  <assembly fullname="UnityEngine.Physics2DModule" preserve="all" />
+</linker>
