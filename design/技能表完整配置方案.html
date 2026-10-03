@@ -1,0 +1,1593 @@
+<!doctype html>
+<!-- 技能配置设计手册：内容、样式和交互内嵌，支持离线浏览及 TSV 导出。 -->
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Hunter技能配置方案：25个字段的设计理由，15项技能、16项属性及16条效果的完整参数。">
+<title>技能表完整配置方案 · Hunter</title><style>
+:root{color-scheme:light;--paper:#f5f5f1;--surface:#fff;--text:#243330;--muted:#61716c;--line:#dfe5df;--accent:#28634f;--accent-light:#edf5ef;--amber:#916020;--amber-light:#fff5e4;--ink:#172d28;--sidebar:246px}
+*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:28px}body{margin:0;background:var(--paper);color:var(--text);font-family:"Segoe UI","Microsoft YaHei",sans-serif;font-size:15px;line-height:1.85}button,input,select{font:inherit}button,a,input,select,summary{outline-offset:4px}a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}button{cursor:pointer;border:1px solid var(--line);background:var(--surface);color:var(--text);border-radius:7px;padding:6px 13px;line-height:1.6}button:hover{background:var(--accent-light);border-color:#b5cabe}button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible,a:focus-visible{outline:2px solid var(--accent)}[hidden]{display:none!important}.js-only{display:none}.js .js-only{display:flex}.skip-link{position:fixed;left:10px;top:-100px;z-index:100;background:#fff;padding:12px}.skip-link:focus{top:10px}.reading-progress{position:fixed;top:0;left:var(--sidebar);height:3px;background:var(--accent);z-index:30;width:0}
+.sidebar{position:fixed;inset:0 auto 0 0;width:var(--sidebar);background:var(--ink);color:#d5e2db;padding:34px 22px 22px;display:flex;flex-direction:column;z-index:20}.brand{color:#fff;font-size:26px;font-weight:650;letter-spacing:2px;line-height:1.3}.brand-caption{font-size:12px;color:#9eb8ad;margin:8px 0 27px;letter-spacing:1px}.sidebar nav{overflow:auto;flex:1;scrollbar-width:thin}.nav-heading{font-size:11px;letter-spacing:1.2px;color:#92a99e;margin:12px 10px 8px}.sidebar nav a{display:block;color:#b9cec3;font-size:13px;padding:8px 11px;border-radius:6px;margin:2px 0;line-height:1.45}.sidebar nav a:hover{text-decoration:none;color:#fff;background:#244137}.sidebar nav a.active{color:#fff;background:#315346}.sidebar nav .nav-number{color:#8ba899;display:inline-block;width:25px;font-size:11px}.sidebar-footer{border-top:1px solid #345145;padding-top:18px;margin-top:18px;font-size:12px;color:#9eb8ad}.sidebar-footer a{color:#d8e8df}.mobile-nav{display:none}.main{margin-left:var(--sidebar);max-width:calc(1180px + var(--sidebar));padding:48px 62px 70px}.document-head{padding:0 0 25px;border-bottom:1px solid var(--line);margin-bottom:36px}.eyebrow{font-size:12px;letter-spacing:1.5px;color:var(--accent);font-weight:650;margin:0 0 10px}.document-head h1{font-size:36px;letter-spacing:-.5px;font-weight:650;line-height:1.3;margin:0 0 18px}.lead{max-width:820px;color:var(--muted);margin:0 0 15px;font-size:15px}.doc-meta{display:flex;gap:10px 22px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin:22px 0}.facts{display:grid;grid-template-columns:repeat(4,1fr);gap:20px;margin:26px 0 22px}.fact{border-left:2px solid #c4d6c8;padding-left:14px}.fact strong{font-size:28px;line-height:1.2;font-weight:650;color:var(--ink);display:block}.fact span{font-size:12px;color:var(--muted)}.head-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px}.head-actions a{background:var(--accent);color:#fff;padding:7px 16px;border-radius:6px;font-size:13px}.head-actions a.secondary{background:var(--surface);color:var(--accent);border:1px solid var(--line)}.head-actions a:hover{text-decoration:none;filter:brightness(.98)}.scope-note{border-left:3px solid #b38a4b;background:var(--amber-light);padding:14px 18px;margin:20px 0;color:#6e542d;font-size:13px}.scope-note strong{color:#735021}.chapter{margin:44px 0 58px;scroll-margin-top:28px}.chapter-heading{display:flex;gap:13px;align-items:baseline;border-bottom:1px solid var(--line);padding-bottom:13px;margin-bottom:20px}.chapter-number{color:var(--accent);font-family:Consolas,monospace;font-size:13px;min-width:29px}.chapter h2{font-size:23px;line-height:1.5;margin:0;font-weight:650}.chapter h3{font-size:18px;line-height:1.6;margin:28px 0 13px;font-weight:650}.chapter h4{font-size:15px;margin:18px 0 8px;font-weight:650}.chapter p{margin:12px 0}.chapter li{margin:7px 0}.chapter ol,.chapter ul{padding-left:24px}.section-intro{color:var(--muted)}code{font-family:Consolas,"Microsoft YaHei",monospace;font-size:.88em;background:#edf0eb;padding:2px 5px;border-radius:4px;overflow-wrap:anywhere;color:#294b3b}pre{border:1px solid var(--line);background:#f0f3ee;padding:18px;border-radius:8px;overflow:auto;line-height:1.8;font-size:13px}pre code{background:none;padding:0;font-size:inherit;border-radius:0;white-space:pre;overflow-wrap:normal;color:#30443a}.table-scroll{overflow:auto;max-width:100%;margin:18px 0 24px;border:1px solid var(--line);border-radius:8px;background:#fff;scrollbar-width:thin}.table-scroll:focus-visible{outline:2px solid var(--accent);outline-offset:3px}table{border-collapse:collapse;min-width:100%;font-size:13px;line-height:1.75}thead{background:#edf3ee}th{color:#335245;font-weight:600;text-align:left;white-space:nowrap;border-bottom:1px solid #d6e1d8}th,td{padding:12px 14px;vertical-align:top;border-bottom:1px solid #edf0eb}tbody tr:last-child td{border-bottom:0}tbody tr:hover{background:#f8fbf7}td{min-width:110px;max-width:440px;overflow-wrap:anywhere}td:first-child{min-width:100px;font-weight:500}td code{font-size:12px;white-space:normal}.tsv-block{margin:23px 0;background:#fff;border:1px solid var(--line);border-radius:8px;overflow:hidden}.tsv-block figcaption{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:12px 16px;font-size:13px;color:#385446;background:#edf3ee}.tsv-block figcaption div{gap:8px}.tsv-block pre{margin:0;background:#f8faf6;border:0;border-radius:0;max-height:410px;font-size:12px}.tsv-block button{font-size:12px;padding:4px 9px}.filter-bar{background:#fff;border:1px solid var(--line);border-radius:8px;padding:18px;flex-wrap:wrap;align-items:center;gap:14px;margin:22px 0}.search-label{font-size:12px;display:flex;flex-direction:column;gap:4px;min-width:210px;flex:1;color:var(--muted)}input,select{border:1px solid #cfd8cf;background:#fff;color:var(--text);padding:9px 11px;border-radius:5px;min-width:0;width:100%;line-height:1.5;font-size:14px}.search-label input{max-width:100%}.filter-options{display:flex;flex-wrap:wrap;gap:6px}.filter-options button{font-size:12px;padding:6px 10px}.filter-options button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}.filter-actions{width:100%;display:flex;align-items:center;gap:8px;border-top:1px solid #ecf0e9;padding-top:12px}.filter-actions span{margin-right:auto;font-size:12px;color:var(--muted)}.filter-actions button{font-size:12px}#skill-count{font-size:12px;color:var(--muted)}.empty-state{padding:20px;border:1px dashed #c9d7ca;color:var(--muted);border-radius:6px}.group-count{margin-left:12px;font-size:12px;font-weight:400;color:var(--muted)}.field-card,.skill-detail{border:1px solid var(--line);border-radius:8px;background:#fff;margin:11px 0;overflow:hidden;scroll-margin-top:26px}.field-card:target,.skill-detail:target{border-color:var(--accent);box-shadow:0 0 0 2px #dcecdf}.field-card summary,.skill-detail summary{cursor:pointer;display:flex;align-items:center;gap:15px;list-style:none;padding:17px 20px;position:relative;line-height:1.5}.field-card summary::-webkit-details-marker,.skill-detail summary::-webkit-details-marker{display:none}.field-card summary:after,.skill-detail summary:after{content:'＋';color:var(--accent);font-size:18px;margin-left:12px}.field-card[open] summary:after,.skill-detail[open] summary:after{content:'−'}.field-card summary:hover,.skill-detail summary:hover{background:#f6faf4}.field-card[open] summary,.skill-detail[open] summary{background:#edf5ed;border-bottom:1px solid var(--line)}.field-index,.skill-number{font-family:Consolas,monospace;font-size:12px;color:#71907c;min-width:23px}.field-label{display:flex;align-items:center;gap:13px;flex:1;flex-wrap:wrap}.field-label code{background:none;padding:0;font-size:15px;font-weight:600}.field-label span{font-size:13px;color:var(--muted)}.field-tags{display:flex;flex-wrap:wrap;gap:5px;align-items:center;justify-content:flex-end}.field-tags span{font-size:11px;border-radius:4px;background:#f0f3ec;color:#59715d;padding:3px 7px}.field-tags .export-tag{font-family:Consolas,monospace}.field-purpose{color:#385443;font-size:14px;margin:0!important;padding:18px 23px 0}.field-card dl,.skill-detail dl{padding:0 23px 12px;margin:0}.explanation{display:grid;grid-template-columns:160px minmax(0,1fr);gap:20px;border-top:1px solid #edf1e8;padding:16px 0}.explanation:first-child{border-top:0}.explanation dt{color:#4c6855;font-size:12px;font-weight:600}.explanation dd{margin:0;font-size:14px;color:#36473b;line-height:1.9;overflow-wrap:anywhere}.field-card .explanation:first-child{display:none}.skill-name{font-weight:600;font-size:16px;flex:1}.status{font-size:11px;padding:3px 8px;border-radius:4px;white-space:nowrap;line-height:1.6}.status.ready{background:#e9f3e9;color:#316149}.status.pending{background:var(--amber-light);color:#8a642f}.skill-parameters{padding:18px 23px 8px;display:flex;gap:8px;flex-wrap:wrap}.skill-parameters code{font-size:12px}.acceptance{padding:0 23px 18px}.acceptance h4{margin-top:0}.acceptance ul{font-size:13px;color:var(--muted);margin-bottom:0}.skill-deepdives{margin-top:32px}.calculator{background:#fff;border:1px solid var(--line);border-radius:9px;overflow:hidden;align-items:stretch;margin:24px 0}.calc-controls{flex:1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;padding:26px;min-width:0}.calc-controls label{font-size:12px;color:var(--muted);display:flex;flex-direction:column;gap:7px}.wide{grid-column:1/-1}.calc-helper{font-size:12px;line-height:1.8;margin:0!important;color:var(--muted)}.calc-result{width:34%;min-width:245px;background:#edf5ed;padding:27px 25px;display:flex;flex-direction:column;align-items:flex-start}.result-label{font-size:12px;color:#58735f}.calc-result output{font-size:46px;line-height:1.2;font-weight:650;color:#254e36;letter-spacing:-1px;margin:14px 0 5px;overflow-wrap:anywhere;max-width:100%}#calc-unit{font-size:13px;color:#55725c}#calc-equation{font-family:Consolas,monospace;font-size:12px;overflow-wrap:anywhere;margin-top:18px}.calc-status{font-size:12px;padding:5px 9px;border-radius:4px;background:#dcebdc;color:#315b3e}.calc-status.invalid{background:#fce8de;color:#8b4734}#calc-note{font-size:12px;color:#59715f}.calc-bars{width:100%;margin-top:auto;padding-top:10px}.calc-bars>div{display:flex;align-items:center;gap:10px;margin:9px 0;font-size:11px;color:#69816a}.calc-bars i{display:block;height:8px;background:#739b79;max-width:calc(100% - 36px);border-radius:2px;min-width:0}.calc-bars>div:last-child i{background:#2c6542}.formula-panel{padding:17px 20px;background:#edf2e9;border-radius:8px;font-size:13px}.formula-panel code{font-size:13px;background:none}.formula-panel p{font-size:12px;color:var(--muted)}.relation-diagram{display:flex;gap:15px;align-items:stretch;margin:24px 0}.relation-node{flex:1;border:1px solid #cbdaca;background:#fff;border-radius:8px;padding:18px;min-width:0}.relation-node strong{display:block;color:#325d41;font-size:15px}.relation-node p{font-size:12px;color:var(--muted);margin:8px 0 0!important}.relation-node code{font-size:11px}.relation-node.center{background:#edf5ed}.relation-arrow{display:flex;align-items:center;color:#7a9980;font-size:21px}.toast{position:fixed;bottom:25px;left:calc(var(--sidebar) + 28px);background:#203e2b;color:#fff;padding:12px 20px;border-radius:7px;box-shadow:0 5px 25px #20352820;z-index:50;font-size:13px;max-width:calc(100vw - var(--sidebar) - 65px)}.page-footer{border-top:1px solid var(--line);padding-top:23px;font-size:12px;color:var(--muted);display:flex;gap:12px;justify-content:space-between;flex-wrap:wrap}.back-top{font-size:12px}
+@media(max-width:1200px){.main{padding:38px 35px}.explanation{grid-template-columns:135px minmax(0,1fr);gap:15px}.sidebar{padding-left:17px;padding-right:17px}}
+@media(max-width:980px){:root{--sidebar:0px}.sidebar{position:sticky;top:0;width:100%;padding:12px 20px;display:block}.brand{font-size:20px;display:inline-block}.brand-caption{display:inline-block;margin:0 0 0 16px}.sidebar-footer{display:none}.mobile-nav{display:block;position:absolute;right:20px;top:10px;background:#244137;color:#d8e8df;border-color:#43634e;font-size:12px}.sidebar nav{display:none;max-height:60vh;margin-top:12px}.sidebar.open nav{display:block}.sidebar nav a{display:inline-block;max-width:100%;font-size:12px}.nav-heading{display:none}.main{margin:0;padding:30px 28px 50px;max-width:100%}.reading-progress{left:0}.toast{left:22px;max-width:calc(100vw - 44px)}html{scroll-padding-top:86px}.chapter{scroll-margin-top:86px}.document-head h1{font-size:30px}}
+@media(max-width:640px){body{font-size:14px}.main{padding:26px 18px 45px}.document-head h1{font-size:27px}.facts{grid-template-columns:repeat(2,1fr);gap:18px}.chapter h2{font-size:20px}.chapter h3{font-size:17px}.chapter-heading{gap:9px}.field-card summary,.skill-detail summary{padding:15px 13px;gap:9px}.field-label{display:block}.field-label code{display:block;font-size:13px}.field-label span{font-size:12px}.field-tags .export-tag{display:none}.field-tags span{font-size:10px}.field-card dl,.skill-detail dl{padding-left:16px;padding-right:16px}.field-purpose{padding-left:16px;padding-right:16px}.explanation{display:block;padding:13px 0}.explanation dt{margin-bottom:5px}.explanation dd{font-size:13px}.skill-name{font-size:14px}.status{font-size:10px;padding:3px 6px}.calculator{flex-direction:column}.calc-result{width:100%;min-width:0}.calc-controls{padding:20px;gap:13px}.calc-result output{font-size:40px}.relation-diagram{display:block}.relation-arrow{justify-content:center;height:28px;transform:rotate(90deg)}.filter-bar{padding:13px}.filter-options{gap:4px}.filter-options button{font-size:11px;padding:5px 8px}.filter-actions{flex-wrap:wrap}.filter-actions span{width:100%}.brand-caption{font-size:10px;margin-left:10px}.tsv-block figcaption{padding:10px 12px}.table-scroll{margin-left:0;margin-right:0}th,td{padding:10px;font-size:12px}.skill-parameters{padding:13px 16px}.acceptance{padding:0 16px 16px}.acceptance ul{font-size:12px}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+@media print{@page{size:A4;margin:16mm}body{background:#fff;color:#111;font-size:10pt;line-height:1.6}.sidebar,.reading-progress,.head-actions,.filter-bar,.toast,.back-top,.js-only{display:none!important}.main{margin:0;padding:0;max-width:none}.document-head h1{font-size:25pt}.facts{grid-template-columns:repeat(4,1fr)}.chapter{margin:25pt 0;break-before:auto}.chapter h2{font-size:17pt}.chapter h3{font-size:13pt}.chapter-heading{break-after:avoid}.field-card,.skill-detail{break-inside:avoid;box-shadow:none}.field-card summary,.skill-detail summary{padding:10pt}.field-card summary:after,.skill-detail summary:after{display:none}.explanation{padding:7pt 0;grid-template-columns:105pt minmax(0,1fr);gap:10pt}.explanation dt{font-size:9pt}.explanation dd,.field-purpose{font-size:10pt}.table-scroll{overflow:visible;break-inside:auto}thead{display:table-header-group}tr{break-inside:avoid}th,td{font-size:8pt;min-width:0;padding:6pt;overflow-wrap:anywhere}table{width:100%;min-width:0}pre,.tsv-block pre{white-space:pre-wrap;overflow:visible;max-height:none;font-size:7pt}pre code{white-space:pre-wrap;overflow-wrap:anywhere}.skill-parameters code{font-size:8pt}.scope-note{background:#f9f6ef}.page-footer{font-size:8pt}a{color:#222}.chapter p{orphans:3;widows:3}}
+</style></head><body id="top">
+<a class="skip-link" href="#document-content">跳到正文</a><div class="reading-progress" aria-hidden="true"></div>
+<aside class="sidebar"><div class="brand">HUNTER</div><p class="brand-caption">设计与配置手册</p>
+<button id="mobile-nav" class="mobile-nav" aria-expanded="false" aria-controls="document-nav">目录</button>
+<nav id="document-nav" aria-label="文档目录"><p class="nav-heading">技能配置 · 完整方案</p><a href="#section-1" title="三张表怎样分工"><span class="nav-number">01</span>三张表怎样分工</a><a href="#section-2" title="与现有字段相比如何调整"><span class="nav-number">02</span>与现有字段相比如何调整</a><a href="#field-reasons"><span class="nav-number">详</span>全部字段的设计理由</a><a href="#section-3" title="Excel 表头与导出约定"><span class="nav-number">03</span>Excel 表头与导出约定</a><a href="#section-4" title="技能表 Skill"><span class="nav-number">04</span>技能表 Skill</a><a href="#section-5" title="属性表 Attribute"><span class="nav-number">05</span>属性表 Attribute</a><a href="#section-6" title="技能效果表 SkillEffect"><span class="nav-number">06</span>技能效果表 SkillEffect</a><a href="#calculator"><span class="nav-number">算</span>参数计算示例</a><a href="#section-7" title="全部技能的参数依据与结果示例"><span class="nav-number">07</span>全部技能的参数依据与结果示例</a><a href="#section-8" title="四项待扩展技能的完整规则建议"><span class="nav-number">08</span>四项待扩展技能的完整规则建议</a><a href="#section-9" title="现有技能还需固定的行为边界"><span class="nav-number">09</span>现有技能还需固定的行为边界</a><a href="#section-10" title="三表必须执行的校验"><span class="nav-number">10</span>三表必须执行的校验</a><a href="#section-11" title="代码与导出如何迁移"><span class="nav-number">11</span>代码与导出如何迁移</a><a href="#section-12" title="分阶段接入与验收清单"><span class="nav-number">12</span>分阶段接入与验收清单</a></nav>
+<div class="sidebar-footer">2026.10.03 · HTML 扩充版<br><a href="技能表完整配置方案.md">查看 Markdown 原稿</a><br><a href="技能表.xlsx">查看源工作簿</a></div></aside>
+<main class="main" id="document-content"><header class="document-head"><p class="eyebrow">HUNTER / SKILL CONFIGURATION</p>
+<h1>技能表完整配置方案</h1><p class="lead">从字段为什么存在，到参数怎样影响游戏行为。三张表统一技能身份、属性字典与效果关联，保留可直接复制的完整配置，并逐项解释设计取舍。</p>
+<div class="doc-meta"><span>编制：2026-10-03</span><span>适用：技能表.xlsx</span><span>格式：离线单文件 HTML</span></div>
+<div class="facts"><div class="fact"><strong>25</strong><span>字段 · 逐项理由</span></div><div class="fact"><strong>15</strong><span>技能 · 参数与验收</span></div><div class="fact"><strong>16</strong><span>属性 · 单位与语义</span></div><div class="fact"><strong>16</strong><span>效果 · 完整数据</span></div></div>
+<p class="scope-note"><strong>本版范围</strong>　医疗减半、治疗翻倍、复活满血及开箱额外1个来自已有描述，其余为建议初值。现有11项机制继续复用，3/6/14/15需扩展；新字段解析尚待接入，工作簿未修改。货运骡子按已确认的每种非消耗品携带数量／可用次数增加设计。</p>
+<div class="head-actions"><a href="#field-reasons">阅读字段理由</a><a class="secondary" href="#section-7">查阅技能参数</a><button id="print-document" class="js-only">打印 / 保存 PDF</button></div></header>
+<section class="chapter" id="section-1"><div class="chapter-heading"><span class="chapter-number">01</span><h2>三张表怎样分工</h2></div><div class="table-scroll" tabindex="0"><table>
+<thead>
+<tr>
+<th>工作表</th>
+<th>保存内容</th>
+<th>与其他表的关系</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>技能|Skill</code></td>
+<td>技能 ID、名称、技能点成本、作用对象、生命周期、启用状态和展示资源</td>
+<td>一项技能对应一条 <code>Skill</code> 记录和一至八条效果记录</td>
+</tr>
+<tr>
+<td><code>属性|Attribute</code></td>
+<td>稳定属性代码、名称、作用对象、单位、可用运算和参数语义</td>
+<td>一个属性可被多个技能引用，属性代码只在这里维护</td>
+</tr>
+<tr>
+<td><code>技能效果|SkillEffect</code></td>
+<td>哪个技能修改哪个属性、使用什么运算、参数是多少</td>
+<td><code>SkillIdx</code> 引用技能表，<code>AttributeId</code> 引用属性表</td>
+</tr>
+</tbody>
+</table></div>
+<p>例如“灵缇”由技能表定义名称及成本，属性表定义 <code>run_speed</code> 的单位是毫米/Tick，效果表配置 <code>mul_bp=12000</code>。奔跑速度基础值仍来自角色表 <code>Run</code>，无需在技能表重复填写。</p>
+<p>基础属性仍归属角色、武器、工具等原始配置。动作触发位置、适用道具筛选和技术边界由对应属性处理器实现，属性表中的代码不能作为脚本执行。</p><div class="relation-diagram" aria-label="技能效果通过两个外键关联技能与属性字典">
+              <div class="relation-node"><strong>Skill · 技能身份</strong><p><code>SkillIdx</code><br>名称、成本、生命周期、展示</p></div>
+              <span class="relation-arrow" aria-hidden="true">←</span><div class="relation-node center"><strong>SkillEffect · 参数关联</strong><p><code>SkillIdx + AttributeId</code><br>运算、整数参数；一项技能多条效果</p></div>
+              <span class="relation-arrow" aria-hidden="true">→</span><div class="relation-node"><strong>Attribute · 属性字典</strong><p><code>AttributeId → Stat</code><br>单位、合法运算、参数语义</p></div></div></section><section class="chapter" id="section-2"><div class="chapter-heading"><span class="chapter-number">02</span><h2>与现有字段相比如何调整</h2></div><div class="table-scroll" tabindex="0"><table>
+<thead>
+<tr>
+<th>表</th>
+<th>现有字段</th>
+<th>推荐调整</th>
+<th>原因</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Skill</td>
+<td><code>SkillIdx</code>、<code>Name</code>、<code>Desc</code>、<code>Cost</code></td>
+<td>保留</td>
+<td>保持原技能 ID、名称和成本，方便旧引用迁移</td>
+</tr>
+<tr>
+<td>Skill</td>
+<td><code>SkillType</code></td>
+<td>删除</td>
+<td>当前没有明确执行语义，容易与类别、生命周期混淆</td>
+</tr>
+<tr>
+<td>Skill</td>
+<td><code>SkillAttribute</code></td>
+<td>删除</td>
+<td>技能的属性关联统一放到效果表，一项技能可有多条效果</td>
+</tr>
+<tr>
+<td>Skill</td>
+<td><code>EffectDesc</code></td>
+<td>保留为客户端展示字段</td>
+<td>展示实际效果，不参与运行计算</td>
+</tr>
+<tr>
+<td>Skill</td>
+<td><code>Target</code>、<code>Category</code>、<code>Lifetime</code></td>
+<td>保留并固定枚举</td>
+<td>明确作用对象、数值/机制类别和消费时机</td>
+</tr>
+<tr>
+<td>Skill</td>
+<td><code>IconId</code>、<code>AnimId</code>、<code>EffectId</code>、<code>SoundId</code></td>
+<td>保留为客户端资源字段</td>
+<td>资源尚未交付时可以留空</td>
+</tr>
+<tr>
+<td>Skill</td>
+<td>无</td>
+<td>新增 <code>Enabled</code>，<code>int32</code>，只允许 0/1</td>
+<td>允许完整保留未实现技能，避免误加入可选择内容</td>
+</tr>
+<tr>
+<td>Attribute</td>
+<td><code>AttributeId</code>、<code>Name</code></td>
+<td>保留，原 1～10 ID 不变</td>
+<td>保持属性身份稳定</td>
+</tr>
+<tr>
+<td>Attribute</td>
+<td><code>AttributeType</code></td>
+<td>删除，新增 <code>Target</code></td>
+<td>用 <code>player/weapon/tool</code> 代替含义不清的数字分类</td>
+</tr>
+<tr>
+<td>Attribute</td>
+<td>无</td>
+<td>新增 <code>Stat</code>、<code>Unit</code>、<code>AllowedOps</code>、<code>ValueMode</code></td>
+<td>建立可校验的属性字典</td>
+</tr>
+<tr>
+<td>SkillEffect</td>
+<td><code>EffectIdx</code>、<code>SkillIdx</code>、<code>Op</code>、<code>Value</code></td>
+<td>保留</td>
+<td>继续采用一行一个效果和整数运算</td>
+</tr>
+<tr>
+<td>SkillEffect</td>
+<td><code>Stat</code></td>
+<td>改为 <code>AttributeId</code>，类型改为 <code>int32</code></td>
+<td>通过属性外键避免属性代码拼写错误及重复维护</td>
+</tr>
+</tbody>
+</table></div>
+<p>推荐目标结构中，效果表只填 <code>AttributeId</code>，不同时保留一个可编辑的 <code>Stat</code>。解析时从属性表查出 <code>Stat</code>，仍投影为现有运行结构 <code>{stat, op, value}</code>。</p>
+<p>本次不增加技能等级、技能依赖、冷却公式或复杂条件表达式。一个技能 ID 本局最多持有一次，常驻属性不需要各自填写动作冷却。</p></section><section id="field-reasons" class="chapter extra-chapter">
+      <div class="chapter-heading"><span class="chapter-number">详解</span>
+      <h2>25 个字段，逐项说明设计理由</h2></div>
+      <p class="section-intro">先理解字段的分工，再填写参数。点开一项即可查看类型、导出侧、合法值、示例和错误后果。</p>
+      <div class="filter-bar js-only"><label class="search-label">查找字段
+      <input id="field-search" type="search" placeholder="输入字段名、中文含义或关键词" autocomplete="off"></label>
+      <div class="filter-options" aria-label="筛选字段所属表">
+      <button data-field-filter="all" aria-pressed="true">全部</button>
+      <button data-field-filter="Skill" aria-pressed="false">Skill · 13</button>
+      <button data-field-filter="Attribute" aria-pressed="false">Attribute · 7</button>
+      <button data-field-filter="SkillEffect" aria-pressed="false">SkillEffect · 5</button></div>
+      <div class="filter-actions"><span id="field-count" role="status">25 个字段</span>
+      <button id="fields-expand">展开当前结果</button><button id="fields-collapse">收起当前结果</button></div></div>
+      <p id="field-empty" class="empty-state" hidden>没有匹配的字段。可清空关键词，或切换到全部表。</p>
+      <div class="field-groups"><div class="field-group" data-table="Skill"><h3>Skill<span class="group-count">13 个字段</span></h3><details class="field-card" id="field-Skill-SkillIdx"
+                data-table="Skill" data-search="Skill SkillIdx 技能 ID 给一项技能提供稳定身份，连接效果记录、技能物品、配装和局内持有列表。 技能名称会随文案调整，Excel 行位置也会因排序改变，二者都不能承担身份。现有 skill.lua 的 supported 按技能 ID 判断支持范围，cfg_build.lua 又把 ID 转成字符串作为 content.skills 的键；因此继续沿用 1～15，才能保住旧物品引用、配装记录和技能消费记录之间的对应关系。更改 ID 是身份迁移，不应作为整理表格的操作。 int32 与现有主键导出和外键读取一致；正整数可稳定比较和排序，不引入名称大小写、前导零或字符串别名。表中填写数字 5，运行模型可以转为键 &quot;5&quot;，两者是同一身份。 server 用它识别配置和核验持有技能；client 用它绑定技能卡、选择项和权威状态。key 标记告诉导表工具这是唯一主键；三者必须同时存在，不能只给客户端一个显示序号。 必填、全表唯一、1～2147483647 的整数；本版保留 1～15。不能用 0 表示空技能，不能填公式或重复已有 ID；删除记录前需检查全部 SkillEffect、物品及默认配装引用。 灵缇填写 5；其效果 501 的 SkillIdx 也填写 5。 把技能按名称排序后重编号，会让旧 ID=5 的配装指向其他技能；把 EffectIdx=501 当成技能 ID，会查不到 content.skills[&quot;501&quot;]。 SkillIdx 只管身份，不表达类别、等级或效果顺序；这些分别由 Category、未来独立等级结构及效果关系承担。新增技能继续分配新 ID，避免为了连续编号复用已废弃 ID。">
+              <summary><span class="field-index">01</span>
+                <span class="field-label"><code>SkillIdx</code><span>技能 ID</span></span>
+                <span class="field-tags"><span>int32</span>
+                <span class="export-tag">server/client/key</span></span></summary>
+              <p class="field-purpose">给一项技能提供稳定身份，连接效果记录、技能物品、配装和局内持有列表。</p><dl><div class="explanation"><dt>字段职责</dt><dd>给一项技能提供稳定身份，连接效果记录、技能物品、配装和局内持有列表。</dd></div><div class="explanation"><dt>为什么需要这个字段</dt><dd>技能名称会随文案调整，Excel 行位置也会因排序改变，二者都不能承担身份。现有 skill.lua 的 supported 按技能 ID 判断支持范围，cfg_build.lua 又把 ID 转成字符串作为 content.skills 的键；因此继续沿用 1～15，才能保住旧物品引用、配装记录和技能消费记录之间的对应关系。更改 ID 是身份迁移，不应作为整理表格的操作。</dd></div><div class="explanation"><dt>为什么使用这个类型</dt><dd>int32 与现有主键导出和外键读取一致；正整数可稳定比较和排序，不引入名称大小写、前导零或字符串别名。表中填写数字 5，运行模型可以转为键 &quot;5&quot;，两者是同一身份。</dd></div><div class="explanation"><dt>为什么这样导出</dt><dd>server 用它识别配置和核验持有技能；client 用它绑定技能卡、选择项和权威状态。key 标记告诉导表工具这是唯一主键；三者必须同时存在，不能只给客户端一个显示序号。</dd></div><div class="explanation"><dt>合法值与填写规则</dt><dd>必填、全表唯一、1～2147483647 的整数；本版保留 1～15。不能用 0 表示空技能，不能填公式或重复已有 ID；删除记录前需检查全部 SkillEffect、物品及默认配装引用。</dd></div><div class="explanation"><dt>正确填写示例</dt><dd>灵缇填写 5；其效果 501 的 SkillIdx 也填写 5。</dd></div><div class="explanation"><dt>常见错误与后果</dt><dd>把技能按名称排序后重编号，会让旧 ID=5 的配装指向其他技能；把 EffectIdx=501 当成技能 ID，会查不到 content.skills[&quot;501&quot;]。</dd></div><div class="explanation"><dt>与其他字段的分工及取舍</dt><dd>SkillIdx 只管身份，不表达类别、等级或效果顺序；这些分别由 Category、未来独立等级结构及效果关系承担。新增技能继续分配新 ID，避免为了连续编号复用已废弃 ID。</dd></div></dl>
+            </details><details class="field-card" id="field-Skill-Name"
+                data-table="Skill" data-search="Skill Name 技能名称 提供策划、调试和技能界面共同使用的可读名称。 服务端已有技能配置校验要求 name 是非空字符串，说明名称不仅是美术资源旁的一行字，也承担配置排错时的可读性。例如看到技能 10 的名称稳定瞄准，评审能直接联系其原策划条目，再结合效果确认它实际修改的是射击间隔。保留名称但不拿名称匹配效果，可以让后续改名不影响玩家已有技能和运行计算。 string 能保留中文名称，不用数值枚举限制命名；当前工具只支持 int32/string，直接保存文本最清楚。名字不是 ID，不应改为与 SkillIdx 重复的一列数字。 server 保留名称以满足现有共享技能模型的 name 字段和校验；client 显示技能卡及持有列表。双方名称一致便于联调定位，但运行身份仍以 SkillIdx 为准。 必填非空 string；建议去掉前后空格和换行。本版采用现有 15 项名称；可以改名但必须保留 SkillIdx，不以重名来判断两个技能是否相同。 SkillIdx=5 的 Name 填写灵缇。 只填 IconId 后把 Name 留空，会违反现有 name 非空门禁；把 Name 填成 run_speed，会把玩家名称与处理器代码混在一起。 Name 描述这是什么技能；Desc 解释设计意图，EffectDesc 解释具体效果，Stat 指向执行规则。未来做多语言可增加文本键或本地化表，不能用翻译后的名称替代稳定 ID。">
+              <summary><span class="field-index">02</span>
+                <span class="field-label"><code>Name</code><span>技能名称</span></span>
+                <span class="field-tags"><span>string</span>
+                <span class="export-tag">server/client</span></span></summary>
+              <p class="field-purpose">提供策划、调试和技能界面共同使用的可读名称。</p><dl><div class="explanation"><dt>字段职责</dt><dd>提供策划、调试和技能界面共同使用的可读名称。</dd></div><div class="explanation"><dt>为什么需要这个字段</dt><dd>服务端已有技能配置校验要求 name 是非空字符串，说明名称不仅是美术资源旁的一行字，也承担配置排错时的可读性。例如看到技能 10 的名称稳定瞄准，评审能直接联系其原策划条目，再结合效果确认它实际修改的是射击间隔。保留名称但不拿名称匹配效果，可以让后续改名不影响玩家已有技能和运行计算。</dd></div><div class="explanation"><dt>为什么使用这个类型</dt><dd>string 能保留中文名称，不用数值枚举限制命名；当前工具只支持 int32/string，直接保存文本最清楚。名字不是 ID，不应改为与 SkillIdx 重复的一列数字。</dd></div><div class="explanation"><dt>为什么这样导出</dt><dd>server 保留名称以满足现有共享技能模型的 name 字段和校验；client 显示技能卡及持有列表。双方名称一致便于联调定位，但运行身份仍以 SkillIdx 为准。</dd></div><div class="explanation"><dt>合法值与填写规则</dt><dd>必填非空 string；建议去掉前后空格和换行。本版采用现有 15 项名称；可以改名但必须保留 SkillIdx，不以重名来判断两个技能是否相同。</dd></div><div class="explanation"><dt>正确填写示例</dt><dd>SkillIdx=5 的 Name 填写灵缇。</dd></div><div class="explanation"><dt>常见错误与后果</dt><dd>只填 IconId 后把 Name 留空，会违反现有 name 非空门禁；把 Name 填成 run_speed，会把玩家名称与处理器代码混在一起。</dd></div><div class="explanation"><dt>与其他字段的分工及取舍</dt><dd>Name 描述这是什么技能；Desc 解释设计意图，EffectDesc 解释具体效果，Stat 指向执行规则。未来做多语言可增加文本键或本地化表，不能用翻译后的名称替代稳定 ID。</dd></div></dl>
+            </details><details class="field-card" id="field-Skill-Desc"
+                data-table="Skill" data-search="Skill Desc 技能说明 保留技能的设计意图和原始概念，便于技能卡与策划评审理解。 原描述如提升一定奔跑速度、非消耗品道具额外增加携带量，能够表达方向，却不能唯一决定倍率、工具筛选或状态变化。单独保留 Desc，可以追溯最初意图，同时把本版具体约定写在 EffectDesc 和数值表中；尤其货运骡子已经澄清为每种工具的携带次数，后续不会再因为一句概念说明而误实现成增加背包格。 string 适合自然语言，可以包含必要的中文标点；采用 int32 无法保存完整语义。该文本不会被拆词执行，所以不需要塞入公式或代码。 仅 client：用于技能介绍或说明面板。server 的 cfg_build.lua 当前不读取 Desc，技能实际效果取自 effects；不让说明参与服务器计算，可以避免改文案影响技能数值。 允许空字符串，但完整配置建议填写简短、明确的设计描述；不能以文本中出现的百分比代替效果行，不得声称尚未实现的规则已经运行。 精力充沛填写降低奔跑时体力消耗；实际建议倍率另在效果 301 中填写 7000。 只把 Desc 改为奔跑消耗降低 30%，却不增加或调整 SkillEffect，服务端不会从这句话解析出 7000。 Desc 相对稳定，EffectDesc 随参数变动；两列允许内容接近，但目的不同。未来可接本地化文本管理，本版不引入脚本表达式或条件 DSL。">
+              <summary><span class="field-index">03</span>
+                <span class="field-label"><code>Desc</code><span>技能说明</span></span>
+                <span class="field-tags"><span>string</span>
+                <span class="export-tag">client</span></span></summary>
+              <p class="field-purpose">保留技能的设计意图和原始概念，便于技能卡与策划评审理解。</p><dl><div class="explanation"><dt>字段职责</dt><dd>保留技能的设计意图和原始概念，便于技能卡与策划评审理解。</dd></div><div class="explanation"><dt>为什么需要这个字段</dt><dd>原描述如提升一定奔跑速度、非消耗品道具额外增加携带量，能够表达方向，却不能唯一决定倍率、工具筛选或状态变化。单独保留 Desc，可以追溯最初意图，同时把本版具体约定写在 EffectDesc 和数值表中；尤其货运骡子已经澄清为每种工具的携带次数，后续不会再因为一句概念说明而误实现成增加背包格。</dd></div><div class="explanation"><dt>为什么使用这个类型</dt><dd>string 适合自然语言，可以包含必要的中文标点；采用 int32 无法保存完整语义。该文本不会被拆词执行，所以不需要塞入公式或代码。</dd></div><div class="explanation"><dt>为什么这样导出</dt><dd>仅 client：用于技能介绍或说明面板。server 的 cfg_build.lua 当前不读取 Desc，技能实际效果取自 effects；不让说明参与服务器计算，可以避免改文案影响技能数值。</dd></div><div class="explanation"><dt>合法值与填写规则</dt><dd>允许空字符串，但完整配置建议填写简短、明确的设计描述；不能以文本中出现的百分比代替效果行，不得声称尚未实现的规则已经运行。</dd></div><div class="explanation"><dt>正确填写示例</dt><dd>精力充沛填写降低奔跑时体力消耗；实际建议倍率另在效果 301 中填写 7000。</dd></div><div class="explanation"><dt>常见错误与后果</dt><dd>只把 Desc 改为奔跑消耗降低 30%，却不增加或调整 SkillEffect，服务端不会从这句话解析出 7000。</dd></div><div class="explanation"><dt>与其他字段的分工及取舍</dt><dd>Desc 相对稳定，EffectDesc 随参数变动；两列允许内容接近，但目的不同。未来可接本地化文本管理，本版不引入脚本表达式或条件 DSL。</dd></div></dl>
+            </details><details class="field-card" id="field-Skill-Cost"
+                data-table="Skill" data-search="Skill Cost 消耗技能点 规定选择该技能时占用多少角色技能点。 现有 skill.check 会累加所选技能 cost，并在非已有持有校验时与角色 skill_points 比较；因此成本是配装合法性的一部分，不能仅在界面上显示。将成本集中在 Skill 中，让死灵法师的两条效果仍只收取一次技能点，也能避免未来复合技能因为效果条数增加而意外变贵。本版沿用所有技能成本 1，不把建议效果强弱直接推导为新价格。 int32 与现有整点预算相匹配，避免 0.5 点等需要新计量契约的数值。零是合法免费成本，必须显式写 0，空值不能当作免费。 server 校验技能点预算，client 显示成本并计算选择预览；客户端预算用于交互提示，最终选择仍受服务端校验。 必填整数，0～10000；本版 15 行均为 1。不能写 1点、百分号、公式或负值；免费技能写 0 并确认其发放渠道。 军需官 Cost=1；选择两个成本均为 1 的技能，合计占用 2 点。 把 Cost 放在两条复活效果上，会造成重复计费；留空并期待导出补成 0，会把配置缺失掩盖成免费技能。 Cost 是技能点成本，不是货币价格、道具数量或局内次数；Lifetime 控制成功触发后的消费，物品和永久资产交易仍由其各自配置负责。未来分等级成本应跟随等级记录扩展。">
+              <summary><span class="field-index">04</span>
+                <span class="field-label"><code>Cost</code><span>消耗技能点</span></span>
+                <span class="field-tags"><span>int32</span>
+                <span class="export-tag">server/client</span></span></summary>
+              <p class="field-purpose">规定选择该技能时占用多少角色技能点。</p><dl><div class="explanation"><dt>字段职责</dt><dd>规定选择该技能时占用多少角色技能点。</dd></div><div class="explanation"><dt>为什么需要这个字段</dt><dd>现有 skill.check 会累加所选技能 cost，并在非已有持有校验时与角色 skill_points 比较；因此成本是配装合法性的一部分，不能仅在界面上显示。将成本集中在 Skill 中，让死灵法师的两条效果仍只收取一次技能点，也能避免未来复合技能因为效果条数增加而意外变贵。本版沿用所有技能成本 1，不把建议效果强弱直接推导为新价格。</dd></div><div class="explanation"><dt>为什么使用这个类型</dt><dd>int32 与现有整点预算相匹配，避免 0.5 点等需要新计量契约的数值。零是合法免费成本，必须显式写 0，空值不能当作免费。</dd></div><div class="explanation"><dt>为什么这样导出</dt><dd>server 校验技能点预算，client 显示成本并计算选择预览；客户端预算用于交互提示，最终选择仍受服务端校验。</dd></div><div class="explanation"><dt>合法值与填写规则</dt><dd>必填整数，0～10000；本版 15 行均为 1。不能写 1点、百分号、公式或负值；免费技能写 0 并确认其发放渠道。</dd></div><div class="explanation"><dt>正确填写示例</dt><dd>军需官 Cost=1；选择两个成本均为 1 的技能，合计占用 2 点。</dd></div><div class="explanation"><dt>常见错误与后果</dt><dd>把 Cost 放在两条复活效果上，会造成重复计费；留空并期待导出补成 0，会把配置缺失掩盖成免费技能。</dd></div><div class="explanation"><dt>与其他字段的分工及取舍</dt><dd>Cost 是技能点成本，不是货币价格、道具数量或局内次数；Lifetime 控制成功触发后的消费，物品和永久资产交易仍由其各自配置负责。未来分等级成本应跟随等级记录扩展。</dd></div></dl>
+            </details><details class="field-card" id="field-Skill-Target"
+                data-table="Skill" data-search="Skill Target 作用对象 声明技能修改猎人、已配装枪械，还是符合条件的工具。 三个对象的基础值和应用位置不同：奔跑速度来自 Player.Run，枪械初始备弹来自 Weapon.InitialReserve，医疗包治疗量来自 Tool.Value。显式 Target 能在构建时阻止把医疗包效果错误挂到 weapon 技能，也能帮助客户端解释作用范围。开箱大师应归 player，因为它改变猎人在箱子交互中的奖励能力，箱子本身不是当前三类目标中的一种。 string 用 player/weapon/tool 三个可读枚举，避免原数字分类需要猜含义；大小写固定可直接与 Attribute.Target 比较，不依赖展示名称或任意对象路径。 server 当前读取 target 并检查三类合法值；目标与属性一致的更完整校验仍需在迁移中补齐。client 可按对象说明能力范围，但不能据此自行发放效果。 必填且严格为 player、weapon、tool 之一；每条引用属性的 Target 必须一致。复活两项和开箱大师为 player，货运骡子为 tool。 枪斗术 Target=weapon，引用 AttributeId=5；灵丹妙药 Target=tool，引用 AttributeId=9。 把开箱大师填成 tool，会错误暗示它只增强某个配装工具；把 skill 的 tool 与属性的 weapon 混用，会形成跨对象不一致配置。 Target 定义对象大类，具体 medkit/bomb/非消耗品工具筛选由登记处理器决定；本版不增加自由填写的过滤条件。未来新增怪物或队伍目标时，应同步新增处理器及校验枚举。">
+              <summary><span class="field-index">05</span>
+                <span class="field-label"><code>Target</code><span>作用对象</span></span>
+                <span class="field-tags"><span>string</span>
+                <span class="export-tag">server/client</span></span></summary>
+              <p class="field-purpose">声明技能修改猎人、已配装枪械，还是符合条件的工具。</p><dl><div class="explanation"><dt>字段职责</dt><dd>声明技能修改猎人、已配装枪械，还是符合条件的工具。</dd></div><div class="explanation"><dt>为什么需要这个字段</dt><dd>三个对象的基础值和应用位置不同：奔跑速度来自 Player.Run，枪械初始备弹来自 Weapon.InitialReserve，医疗包治疗量来自 Tool.Value。显式 Target 能在构建时阻止把医疗包效果错误挂到 weapon 技能，也能帮助客户端解释作用范围。开箱大师应归 player，因为它改变猎人在箱子交互中的奖励能力，箱子本身不是当前三类目标中的一种。</dd></div><div class="explanation"><dt>为什么使用这个类型</dt><dd>string 用 player/weapon/tool 三个可读枚举，避免原数字分类需要猜含义；大小写固定可直接与 Attribute.Target 比较，不依赖展示名称或任意对象路径。</dd></div><div class="explanation"><dt>为什么这样导出</dt><dd>server 当前读取 target 并检查三类合法值；目标与属性一致的更完整校验仍需在迁移中补齐。client 可按对象说明能力范围，但不能据此自行发放效果。</dd></div><div class="explanation"><dt>合法值与填写规则</dt><dd>必填且严格为 player、weapon、tool 之一；每条引用属性的 Target 必须一致。复活两项和开箱大师为 player，货运骡子为 tool。</dd></div><div class="explanation"><dt>正确填写示例</dt><dd>枪斗术 Target=weapon，引用 AttributeId=5；灵丹妙药 Target=tool，引用 AttributeId=9。</dd></div><div class="explanation"><dt>常见错误与后果</dt><dd>把开箱大师填成 tool，会错误暗示它只增强某个配装工具；把 skill 的 tool 与属性的 weapon 混用，会形成跨对象不一致配置。</dd></div><div class="explanation"><dt>与其他字段的分工及取舍</dt><dd>Target 定义对象大类，具体 medkit/bomb/非消耗品工具筛选由登记处理器决定；本版不增加自由填写的过滤条件。未来新增怪物或队伍目标时，应同步新增处理器及校验枚举。</dd></div></dl>
+            </details><details class="field-card" id="field-Skill-Category"
+                data-table="Skill" data-search="Skill Category 效果类别 区分基础数值修改与改变行为结果的机制技能。 同样使用整数参数，负重 add=1 是修改装备上限，满血复活 add=1 却是开启结果覆盖规则，二者不能仅凭 Value 的大小区分。Category 让技能层明确 numeric 或 mechanic，方便构建门禁和界面分类；现有复活校验也要求 mechanic。开箱大师的额外道具数量虽然是数字，它仍需要成功交互和奖励原子提交，所以归机制类更符合实际执行。 string 保存 numeric/mechanic 的语义枚举，比未经说明的 1/2 更易评审；这不是代码类名，不允许填任意新字符串绕过处理器能力校验。 server 当前读取 category，并在复活成对效果中要求 mechanic；client 可使用同一类别展示。类别本身不会让未实现的奖励箱或容量规则自动生效。 必填 numeric 或 mechanic；技能 1、2、14 为 mechanic，其余为 numeric。新效果需要按已登记机制契约确定类别，而不能只看 add 或 mul_bp。 死灵法师 Category=mechanic，虽然 revive_hp 的 Value=25；灵缇 Category=numeric。 把复活写为 numeric 会违背现有 revive 的类别门禁；将开箱写 numeric 并期待复用属性乘法就生成道具，会缺失交互提交规则。 Category 表达技能层行为类别；ValueMode 表达单条属性参数语义，Lifetime 表达消费时机。mechanic 可以常驻，不能把它等同于 once；未来复杂技能可有额外标签，但不应挤进本列。">
+              <summary><span class="field-index">06</span>
+                <span class="field-label"><code>Category</code><span>效果类别</span></span>
+                <span class="field-tags"><span>string</span>
+                <span class="export-tag">server/client</span></span></summary>
+              <p class="field-purpose">区分基础数值修改与改变行为结果的机制技能。</p><dl><div class="explanation"><dt>字段职责</dt><dd>区分基础数值修改与改变行为结果的机制技能。</dd></div><div class="explanation"><dt>为什么需要这个字段</dt><dd>同样使用整数参数，负重 add=1 是修改装备上限，满血复活 add=1 却是开启结果覆盖规则，二者不能仅凭 Value 的大小区分。Category 让技能层明确 numeric 或 mechanic，方便构建门禁和界面分类；现有复活校验也要求 mechanic。开箱大师的额外道具数量虽然是数字，它仍需要成功交互和奖励原子提交，所以归机制类更符合实际执行。</dd></div><div class="explanation"><dt>为什么使用这个类型</dt><dd>string 保存 numeric/mechanic 的语义枚举，比未经说明的 1/2 更易评审；这不是代码类名，不允许填任意新字符串绕过处理器能力校验。</dd></div><div class="explanation"><dt>为什么这样导出</dt><dd>server 当前读取 category，并在复活成对效果中要求 mechanic；client 可使用同一类别展示。类别本身不会让未实现的奖励箱或容量规则自动生效。</dd></div><div class="explanation"><dt>合法值与填写规则</dt><dd>必填 numeric 或 mechanic；技能 1、2、14 为 mechanic，其余为 numeric。新效果需要按已登记机制契约确定类别，而不能只看 add 或 mul_bp。</dd></div><div class="explanation"><dt>正确填写示例</dt><dd>死灵法师 Category=mechanic，虽然 revive_hp 的 Value=25；灵缇 Category=numeric。</dd></div><div class="explanation"><dt>常见错误与后果</dt><dd>把复活写为 numeric 会违背现有 revive 的类别门禁；将开箱写 numeric 并期待复用属性乘法就生成道具，会缺失交互提交规则。</dd></div><div class="explanation"><dt>与其他字段的分工及取舍</dt><dd>Category 表达技能层行为类别；ValueMode 表达单条属性参数语义，Lifetime 表达消费时机。mechanic 可以常驻，不能把它等同于 once；未来复杂技能可有额外标签，但不应挤进本列。</dd></div></dl>
+            </details><details class="field-card" id="field-Skill-Lifetime"
+                data-table="Skill" data-search="Skill Lifetime 生命周期 声明技能在本局内持续生效或成功触发后消费的规则。 复活资格必须成功提交后才消费，否则玩家在体型放置失败或重复死亡请求中会无故丢失技能。现有 kind 字段接收 passive/once/death，本版保持其行为：死灵法师成功复活后消费，重振旗鼓也在成功复活提交时移除；death 不能照字面提前解释成死亡瞬间删除。明确这列可让配置、原生玩家状态和客户端消费表现使用同一时机。 string 使用现有三种可读枚举并投影到 kind，不需额外布尔组合。三个枚举是既有契约，不能填次数 1 或秒数来替代。 server 依据 kind 和原生玩家提交状态处理有效技能及消费；client 用同一生命周期提示本局使用限制，并等待权威消费结果。跨局永久资产的保留结算另有契约。 必填 passive、once、death；技能 1 用 once，技能 2 用 death，其他用 passive。death 按本版现有语义在成功复活提交时消费，失败或死亡瞬间不提前删。 死灵法师 Lifetime=once；重振旗鼓 Lifetime=death；开箱大师 Lifetime=passive，允许每个适用箱子各成功触发一次。 死亡回调刚发生便移除 death 技能，会让重振旗鼓无法参加复活计算；把开箱大师填 once，会误变为整局仅额外奖励一次。 Lifetime 管本局技能有效性，箱子一次性使用状态属于箱子，工具次数属于工具数量；它不表示动画长度、冷却时间或永久库存消费。未来新增限次技能应明确定义新契约。">
+              <summary><span class="field-index">07</span>
+                <span class="field-label"><code>Lifetime</code><span>生命周期</span></span>
+                <span class="field-tags"><span>string</span>
+                <span class="export-tag">server/client</span></span></summary>
+              <p class="field-purpose">声明技能在本局内持续生效或成功触发后消费的规则。</p><dl><div class="explanation"><dt>字段职责</dt><dd>声明技能在本局内持续生效或成功触发后消费的规则。</dd></div><div class="explanation"><dt>为什么需要这个字段</dt><dd>复活资格必须成功提交后才消费，否则玩家在体型放置失败或重复死亡请求中会无故丢失技能。现有 kind 字段接收 passive/once/death，本版保持其行为：死灵法师成功复活后消费，重振旗鼓也在成功复活提交时移除；death 不能照字面提前解释成死亡瞬间删除。明确这列可让配置、原生玩家状态和客户端消费表现使用同一时机。</dd></div><div class="explanation"><dt>为什么使用这个类型</dt><dd>string 使用现有三种可读枚举并投影到 kind，不需额外布尔组合。三个枚举是既有契约，不能填次数 1 或秒数来替代。</dd></div><div class="explanation"><dt>为什么这样导出</dt><dd>server 依据 kind 和原生玩家提交状态处理有效技能及消费；client 用同一生命周期提示本局使用限制，并等待权威消费结果。跨局永久资产的保留结算另有契约。</dd></div><div class="explanation"><dt>合法值与填写规则</dt><dd>必填 passive、once、death；技能 1 用 once，技能 2 用 death，其他用 passive。death 按本版现有语义在成功复活提交时消费，失败或死亡瞬间不提前删。</dd></div><div class="explanation"><dt>正确填写示例</dt><dd>死灵法师 Lifetime=once；重振旗鼓 Lifetime=death；开箱大师 Lifetime=passive，允许每个适用箱子各成功触发一次。</dd></div><div class="explanation"><dt>常见错误与后果</dt><dd>死亡回调刚发生便移除 death 技能，会让重振旗鼓无法参加复活计算；把开箱大师填 once，会误变为整局仅额外奖励一次。</dd></div><div class="explanation"><dt>与其他字段的分工及取舍</dt><dd>Lifetime 管本局技能有效性，箱子一次性使用状态属于箱子，工具次数属于工具数量；它不表示动画长度、冷却时间或永久库存消费。未来新增限次技能应明确定义新契约。</dd></div></dl>
+            </details><details class="field-card" id="field-Skill-EffectDesc"
+                data-table="Skill" data-search="Skill EffectDesc 效果展示说明 向玩家解释当前参数对应的收益、范围和限制。 本版有多个容易误读的效果：稳定瞄准修改射击间隔而非瞄准精度，弹药大师只增加初始备弹而不扩弹匣，猫步减少行动声传播半径而非必然隐身。EffectDesc 应写出当前精确百分比和这些边界，减少玩家根据名称产生的误判。它与效果参数共同维护，既能直接支撑界面，也能让评审快速发现数值改了而说明没有改的配置差异。 string 能同时表达数值、对象和条件；客户端不会把这句话转成运算。不能为了简化文本将精确数字独立抄成另一套运行参数。 仅 client，用于技能效果行或详情；server 仍通过 SkillEffect 的 op/value 运算。当前 cfg_build.lua 不读取本列，修改文案本身不会改变服务端能力。 允许空字符串，但本版完整配置建议非空；倍率解释必须与 Value 相符，7000 写减少 30%。必须写明关键范围，待实现技能使用建议规则，不宣称已上线。 弹药大师填写开局时枪械初始备弹翻倍，不增加弹匣容量，对应 reserve mul_bp=20000。 Value=8000 却写射击速度增加 20%，会把间隔减少 20% 和频率增加 25% 混淆；货运写自动获得 1 次，会误导实际容量规则。 EffectDesc 是参数的阅读解释，Desc 保存概念意图；实际能力由属性处理器决定。未来可用模板辅助生成比例文案，但仍须保留机制边界及人工审阅。">
+              <summary><span class="field-index">08</span>
+                <span class="field-label"><code>EffectDesc</code><span>效果展示说明</span></span>
+                <span class="field-tags"><span>string</span>
+                <span class="export-tag">client</span></span></summary>
+              <p class="field-purpose">向玩家解释当前参数对应的收益、范围和限制。</p><dl><div class="explanation"><dt>字段职责</dt><dd>向玩家解释当前参数对应的收益、范围和限制。</dd></div><div class="explanation"><dt>为什么需要这个字段</dt><dd>本版有多个容易误读的效果：稳定瞄准修改射击间隔而非瞄准精度，弹药大师只增加初始备弹而不扩弹匣，猫步减少行动声传播半径而非必然隐身。EffectDesc 应写出当前精确百分比和这些边界，减少玩家根据名称产生的误判。它与效果参数共同维护，既能直接支撑界面，也能让评审快速发现数值改了而说明没有改的配置差异。</dd></div><div class="explanation"><dt>为什么使用这个类型</dt><dd>string 能同时表达数值、对象和条件；客户端不会把这句话转成运算。不能为了简化文本将精确数字独立抄成另一套运行参数。</dd></div><div class="explanation"><dt>为什么这样导出</dt><dd>仅 client，用于技能效果行或详情；server 仍通过 SkillEffect 的 op/value 运算。当前 cfg_build.lua 不读取本列，修改文案本身不会改变服务端能力。</dd></div><div class="explanation"><dt>合法值与填写规则</dt><dd>允许空字符串，但本版完整配置建议非空；倍率解释必须与 Value 相符，7000 写减少 30%。必须写明关键范围，待实现技能使用建议规则，不宣称已上线。</dd></div><div class="explanation"><dt>正确填写示例</dt><dd>弹药大师填写开局时枪械初始备弹翻倍，不增加弹匣容量，对应 reserve mul_bp=20000。</dd></div><div class="explanation"><dt>常见错误与后果</dt><dd>Value=8000 却写射击速度增加 20%，会把间隔减少 20% 和频率增加 25% 混淆；货运写自动获得 1 次，会误导实际容量规则。</dd></div><div class="explanation"><dt>与其他字段的分工及取舍</dt><dd>EffectDesc 是参数的阅读解释，Desc 保存概念意图；实际能力由属性处理器决定。未来可用模板辅助生成比例文案，但仍须保留机制边界及人工审阅。</dd></div></dl>
+            </details><details class="field-card" id="field-Skill-IconId"
+                data-table="Skill" data-search="Skill IconId 技能图标 关联客户端技能卡与持有列表使用的图标资源。 图标使玩家快速识别已经选择的技能，但其名称和资源路径取决于客户端资源目录，不能在机制配置阶段凭空填一个看起来像真的资源。保留独立 IconId，使后续美术交付只调整展示引用而不重编号技能或修改效果；空值也让服务端先验证技能机制，并允许客户端按自己的明确策略处理暂缺图标。 string 可容纳项目真实资源 ID 的目录或名称格式；int32 会要求额外的资源编号表，本项目尚未给出这种登记契约，不能擅自创造。 仅 client，因为图标加载属于表现；server 不加载纹理，现有技能运行模型也不读取本列。导出给服务端会扩大无关配置并混淆资源缺失与玩法错误。 未交付资源时填写空字符串；交付后填可解析的真实资源 ID，大小写按资源系统约定。不能填待填、空、0或文件系统临时路径作为占位。 当前正确值为 &quot;&quot;。skill/icon/lingti 仅为资源命名格式样例，不是已交付资源，不可据此直接填表。 填写 skill/icon/lingti 并把格式例子误当已存在资产，会造成客户端找不到资源；填写待填会使加载器尝试读取名为待填的图标。 IconId 负责静态识别，AnimId/EffectId/SoundId 分别负责动态表现；四个资源字段都不改变效果。未来统一资源目录后可自动验证引用，但不应拿资源名替代 SkillIdx。">
+              <summary><span class="field-index">09</span>
+                <span class="field-label"><code>IconId</code><span>技能图标</span></span>
+                <span class="field-tags"><span>string</span>
+                <span class="export-tag">client</span></span></summary>
+              <p class="field-purpose">关联客户端技能卡与持有列表使用的图标资源。</p><dl><div class="explanation"><dt>字段职责</dt><dd>关联客户端技能卡与持有列表使用的图标资源。</dd></div><div class="explanation"><dt>为什么需要这个字段</dt><dd>图标使玩家快速识别已经选择的技能，但其名称和资源路径取决于客户端资源目录，不能在机制配置阶段凭空填一个看起来像真的资源。保留独立 IconId，使后续美术交付只调整展示引用而不重编号技能或修改效果；空值也让服务端先验证技能机制，并允许客户端按自己的明确策略处理暂缺图标。</dd></div><div class="explanation"><dt>为什么使用这个类型</dt><dd>string 可容纳项目真实资源 ID 的目录或名称格式；int32 会要求额外的资源编号表，本项目尚未给出这种登记契约，不能擅自创造。</dd></div><div class="explanation"><dt>为什么这样导出</dt><dd>仅 client，因为图标加载属于表现；server 不加载纹理，现有技能运行模型也不读取本列。导出给服务端会扩大无关配置并混淆资源缺失与玩法错误。</dd></div><div class="explanation"><dt>合法值与填写规则</dt><dd>未交付资源时填写空字符串；交付后填可解析的真实资源 ID，大小写按资源系统约定。不能填待填、空、0或文件系统临时路径作为占位。</dd></div><div class="explanation"><dt>正确填写示例</dt><dd>当前正确值为 &quot;&quot;。skill/icon/lingti 仅为资源命名格式样例，不是已交付资源，不可据此直接填表。</dd></div><div class="explanation"><dt>常见错误与后果</dt><dd>填写 skill/icon/lingti 并把格式例子误当已存在资产，会造成客户端找不到资源；填写待填会使加载器尝试读取名为待填的图标。</dd></div><div class="explanation"><dt>与其他字段的分工及取舍</dt><dd>IconId 负责静态识别，AnimId/EffectId/SoundId 分别负责动态表现；四个资源字段都不改变效果。未来统一资源目录后可自动验证引用，但不应拿资源名替代 SkillIdx。</dd></div></dl>
+            </details><details class="field-card" id="field-Skill-AnimId"
+                data-table="Skill" data-search="Skill AnimId 动画资源 为确有专属动作需求的技能预留客户端动画引用。 大部分本版技能是已有动作的被动参数修改：换弹变快仍沿用换弹动作，医疗变快仍沿用医疗读条，不必为每行技能硬配一段新动画。独立且可空的 AnimId 能把复活等可能需要的专属表现留给美术接入，同时避免把动画长度当作服务端时间。动画必须服从实际动作和权威结果，否则客户端演完仍未提交或提前表现治疗都会造成感受与状态错位。 string 用来引用真实动画资源或资源键；int32 无法自然表达当前未建立编号表的资产。留空代表没有专属动画，不需要一个虚构的编号 0。 仅 client，负责动作表现；server 的 reload_ticks、medkit_ticks 和复活提交控制行为。当前代码并未因填入 AnimId 自动播放动画，客户端接入仍是迁移工作。 允许空字符串；仅在确定触发位置、适用角色和已交付资源后填写真实 ID。被动技能可保持空，不能把时间值或 Lua 函数名填在这里。 当前正确值为 &quot;&quot;。skill/anim/revive 仅为资源命名格式样例，未证明有该动画，不能直接填入生产表。 将 AnimId 填 60 并以为表示 60 Tick，会把资源引用误当动作时长；给灵缇配动画并指望动画自动提高速度，服务端仍只读取效果参数。 AnimId 选择播放内容，属性里的 tick 参数控制玩法时长，Lifetime 控制消费。未来可增加明确触发表现绑定，本版不把资源 ID 解释成任意脚本或自动事件。">
+              <summary><span class="field-index">10</span>
+                <span class="field-label"><code>AnimId</code><span>动画资源</span></span>
+                <span class="field-tags"><span>string</span>
+                <span class="export-tag">client</span></span></summary>
+              <p class="field-purpose">为确有专属动作需求的技能预留客户端动画引用。</p><dl><div class="explanation"><dt>字段职责</dt><dd>为确有专属动作需求的技能预留客户端动画引用。</dd></div><div class="explanation"><dt>为什么需要这个字段</dt><dd>大部分本版技能是已有动作的被动参数修改：换弹变快仍沿用换弹动作，医疗变快仍沿用医疗读条，不必为每行技能硬配一段新动画。独立且可空的 AnimId 能把复活等可能需要的专属表现留给美术接入，同时避免把动画长度当作服务端时间。动画必须服从实际动作和权威结果，否则客户端演完仍未提交或提前表现治疗都会造成感受与状态错位。</dd></div><div class="explanation"><dt>为什么使用这个类型</dt><dd>string 用来引用真实动画资源或资源键；int32 无法自然表达当前未建立编号表的资产。留空代表没有专属动画，不需要一个虚构的编号 0。</dd></div><div class="explanation"><dt>为什么这样导出</dt><dd>仅 client，负责动作表现；server 的 reload_ticks、medkit_ticks 和复活提交控制行为。当前代码并未因填入 AnimId 自动播放动画，客户端接入仍是迁移工作。</dd></div><div class="explanation"><dt>合法值与填写规则</dt><dd>允许空字符串；仅在确定触发位置、适用角色和已交付资源后填写真实 ID。被动技能可保持空，不能把时间值或 Lua 函数名填在这里。</dd></div><div class="explanation"><dt>正确填写示例</dt><dd>当前正确值为 &quot;&quot;。skill/anim/revive 仅为资源命名格式样例，未证明有该动画，不能直接填入生产表。</dd></div><div class="explanation"><dt>常见错误与后果</dt><dd>将 AnimId 填 60 并以为表示 60 Tick，会把资源引用误当动作时长；给灵缇配动画并指望动画自动提高速度，服务端仍只读取效果参数。</dd></div><div class="explanation"><dt>与其他字段的分工及取舍</dt><dd>AnimId 选择播放内容，属性里的 tick 参数控制玩法时长，Lifetime 控制消费。未来可增加明确触发表现绑定，本版不把资源 ID 解释成任意脚本或自动事件。</dd></div></dl>
+            </details><details class="field-card" id="field-Skill-EffectId"
+                data-table="Skill" data-search="Skill EffectId 特效资源 关联客户端需要的视觉特效资产。 技能效果和视觉特效虽然中文都常称效果，职责却不同：SkillEffect 是修改生命、体力或装备参数的数值记录，EffectId 是可见粒子或提示资源。保留这一独立字段并解释其边界，可以防止把特效 ID 当成技能数值入口。复活特效等后续交付可单独补齐，空值则不妨碍验证 25 点生命和 40 点体力等服务端结果。 string 引用资源系统中的真实键，兼容目录式命名；不使用 int32，避免与 SkillEffect.EffectIdx 的整数身份混淆。 仅 client，视觉资产由客户端加载；server 不通过本列计算伤害、范围或复活。当前配置说明是目标资源字段，填值还需配套客户端触发绑定。 允许空字符串；仅填真实可加载的特效资源 ID。不能填 EffectIdx、属性 ID、奖励 ID或待填文字；交付后应检查播放位置和结束时机。 当前正确值为 &quot;&quot;。skill/vfx/revive_glow 只是资源格式样例，不是现成资产，不可作为已交付引用。 把 EffectId=101 当成死灵法师生命效果，会让客户端寻找名为 101 的资产；特效看起来护盾化不能据此推断服务端有无敌。 EffectId 只表达视觉选择；伤害范围、投掷距离、复活保护仍由已登记玩法规则决定。若未来一个技能有多个表现事件，应另建事件绑定而非往本列塞多条脚本。">
+              <summary><span class="field-index">11</span>
+                <span class="field-label"><code>EffectId</code><span>特效资源</span></span>
+                <span class="field-tags"><span>string</span>
+                <span class="export-tag">client</span></span></summary>
+              <p class="field-purpose">关联客户端需要的视觉特效资产。</p><dl><div class="explanation"><dt>字段职责</dt><dd>关联客户端需要的视觉特效资产。</dd></div><div class="explanation"><dt>为什么需要这个字段</dt><dd>技能效果和视觉特效虽然中文都常称效果，职责却不同：SkillEffect 是修改生命、体力或装备参数的数值记录，EffectId 是可见粒子或提示资源。保留这一独立字段并解释其边界，可以防止把特效 ID 当成技能数值入口。复活特效等后续交付可单独补齐，空值则不妨碍验证 25 点生命和 40 点体力等服务端结果。</dd></div><div class="explanation"><dt>为什么使用这个类型</dt><dd>string 引用资源系统中的真实键，兼容目录式命名；不使用 int32，避免与 SkillEffect.EffectIdx 的整数身份混淆。</dd></div><div class="explanation"><dt>为什么这样导出</dt><dd>仅 client，视觉资产由客户端加载；server 不通过本列计算伤害、范围或复活。当前配置说明是目标资源字段，填值还需配套客户端触发绑定。</dd></div><div class="explanation"><dt>合法值与填写规则</dt><dd>允许空字符串；仅填真实可加载的特效资源 ID。不能填 EffectIdx、属性 ID、奖励 ID或待填文字；交付后应检查播放位置和结束时机。</dd></div><div class="explanation"><dt>正确填写示例</dt><dd>当前正确值为 &quot;&quot;。skill/vfx/revive_glow 只是资源格式样例，不是现成资产，不可作为已交付引用。</dd></div><div class="explanation"><dt>常见错误与后果</dt><dd>把 EffectId=101 当成死灵法师生命效果，会让客户端寻找名为 101 的资产；特效看起来护盾化不能据此推断服务端有无敌。</dd></div><div class="explanation"><dt>与其他字段的分工及取舍</dt><dd>EffectId 只表达视觉选择；伤害范围、投掷距离、复活保护仍由已登记玩法规则决定。若未来一个技能有多个表现事件，应另建事件绑定而非往本列塞多条脚本。</dd></div></dl>
+            </details><details class="field-card" id="field-Skill-SoundId"
+                data-table="Skill" data-search="Skill SoundId 音效资源 引用技能提示或专属表现所需的客户端音效。 音效给玩家反馈，却不等于怪物听觉判定。猫步需要服务端行动声传播半径和听觉入口，不能靠降低客户端播放音量实现；SoundId 也不能拿来定义噪声范围。单独保存可空音效引用，让后续复活提示等资产接入与数值、生命周期分开维护，同时避免未交付音效阻碍已有技能机制的独立验收。 string 能引用真实声音资源键；int32 需要另一份尚未指定的资产编号字典。空字符串明确表示没有专属音效或尚未交付。 仅 client，用于本地声音表现；server 的行动声事件和怪物感知应走机制状态而非音频文件。现有 cfg_build.lua 不读取 SoundId，填入资源不代表听觉规则已实现。 允许空字符串；资源交付后填真实 ID并约定播放触发时机。不得填分贝、传播半径、待填或 0；命名大小写按客户端资源约定。 当前正确值为 &quot;&quot;。skill/sfx/revive_success 仅是资源命名格式样例，未交付时应保持空。 把猫步 SoundId 改为 quiet 就声称怪物听不见玩家，会漏掉服务端半径规则；填写 -6dB 会被误当资源名。 SoundId 负责听到什么，movement_noise_radius 负责怪物在多远处感知行动声；两者可协调但不互相替代。未来音量混音参数应进入专门音频配置。">
+              <summary><span class="field-index">12</span>
+                <span class="field-label"><code>SoundId</code><span>音效资源</span></span>
+                <span class="field-tags"><span>string</span>
+                <span class="export-tag">client</span></span></summary>
+              <p class="field-purpose">引用技能提示或专属表现所需的客户端音效。</p><dl><div class="explanation"><dt>字段职责</dt><dd>引用技能提示或专属表现所需的客户端音效。</dd></div><div class="explanation"><dt>为什么需要这个字段</dt><dd>音效给玩家反馈，却不等于怪物听觉判定。猫步需要服务端行动声传播半径和听觉入口，不能靠降低客户端播放音量实现；SoundId 也不能拿来定义噪声范围。单独保存可空音效引用，让后续复活提示等资产接入与数值、生命周期分开维护，同时避免未交付音效阻碍已有技能机制的独立验收。</dd></div><div class="explanation"><dt>为什么使用这个类型</dt><dd>string 能引用真实声音资源键；int32 需要另一份尚未指定的资产编号字典。空字符串明确表示没有专属音效或尚未交付。</dd></div><div class="explanation"><dt>为什么这样导出</dt><dd>仅 client，用于本地声音表现；server 的行动声事件和怪物感知应走机制状态而非音频文件。现有 cfg_build.lua 不读取 SoundId，填入资源不代表听觉规则已实现。</dd></div><div class="explanation"><dt>合法值与填写规则</dt><dd>允许空字符串；资源交付后填真实 ID并约定播放触发时机。不得填分贝、传播半径、待填或 0；命名大小写按客户端资源约定。</dd></div><div class="explanation"><dt>正确填写示例</dt><dd>当前正确值为 &quot;&quot;。skill/sfx/revive_success 仅是资源命名格式样例，未交付时应保持空。</dd></div><div class="explanation"><dt>常见错误与后果</dt><dd>把猫步 SoundId 改为 quiet 就声称怪物听不见玩家，会漏掉服务端半径规则；填写 -6dB 会被误当资源名。</dd></div><div class="explanation"><dt>与其他字段的分工及取舍</dt><dd>SoundId 负责听到什么，movement_noise_radius 负责怪物在多远处感知行动声；两者可协调但不互相替代。未来音量混音参数应进入专门音频配置。</dd></div></dl>
+            </details><details class="field-card" id="field-Skill-Enabled"
+                data-table="Skill" data-search="Skill Enabled 是否启用 让完整草稿技能保留在表中，同时控制可进入运行内容的技能集合。 15 项技能应该完整保留供评审，但精力充沛、猫步、开箱大师和货运骡子目前缺少处理器或配套来源，不能与已有 11 项一起进入可选择内容。新增 Enabled 可在迁移完成后把草稿身份、效果和说明保存下来，再由构建过滤运行集合。当前 cfg_build.lua 完全没有读取这个字段，所以填 0 还不会自动禁用，必须同时实现解析、引用闭包和能力校验。 int32 因现有导出工具只用 int32/string，0/1 是无歧义布尔表示；比字符串 false 更不易被客户端语言的真值转换误读。 server 需要过滤 content.skills 并拒绝启用内容引用禁用技能；client 需要保持候选列表一致。标记为 server/client 是目标方案，不表示现有代码已经完成读取。 必填且仅 0 或 1；本版 3、6、14、15 为 0，其余 1 表示建议调试启用。禁用行仍检查字段、外键和参数；启用行额外检查实际能力和所有来源，生产还需显式选表。 猫步 Enabled=0；灵缇 Enabled=1。待猫步移动声和怪物听觉实现并验收后，再改为 1。 只在 Excel 新增 0 就认为旧解析已过滤，会仍然投影尚未支持技能；只隐藏客户端按钮但默认配装引用禁用技能，也会形成服务端内容不一致。 Enabled 管内容可用性，Lifetime 管已持有技能何时消费；禁用不等于删行，也不是发布审批。以后可新增环境或版本选择清单，但不能以跳过校验来启用草稿。">
+              <summary><span class="field-index">13</span>
+                <span class="field-label"><code>Enabled</code><span>是否启用</span></span>
+                <span class="field-tags"><span>int32</span>
+                <span class="export-tag">server/client</span></span></summary>
+              <p class="field-purpose">让完整草稿技能保留在表中，同时控制可进入运行内容的技能集合。</p><dl><div class="explanation"><dt>字段职责</dt><dd>让完整草稿技能保留在表中，同时控制可进入运行内容的技能集合。</dd></div><div class="explanation"><dt>为什么需要这个字段</dt><dd>15 项技能应该完整保留供评审，但精力充沛、猫步、开箱大师和货运骡子目前缺少处理器或配套来源，不能与已有 11 项一起进入可选择内容。新增 Enabled 可在迁移完成后把草稿身份、效果和说明保存下来，再由构建过滤运行集合。当前 cfg_build.lua 完全没有读取这个字段，所以填 0 还不会自动禁用，必须同时实现解析、引用闭包和能力校验。</dd></div><div class="explanation"><dt>为什么使用这个类型</dt><dd>int32 因现有导出工具只用 int32/string，0/1 是无歧义布尔表示；比字符串 false 更不易被客户端语言的真值转换误读。</dd></div><div class="explanation"><dt>为什么这样导出</dt><dd>server 需要过滤 content.skills 并拒绝启用内容引用禁用技能；client 需要保持候选列表一致。标记为 server/client 是目标方案，不表示现有代码已经完成读取。</dd></div><div class="explanation"><dt>合法值与填写规则</dt><dd>必填且仅 0 或 1；本版 3、6、14、15 为 0，其余 1 表示建议调试启用。禁用行仍检查字段、外键和参数；启用行额外检查实际能力和所有来源，生产还需显式选表。</dd></div><div class="explanation"><dt>正确填写示例</dt><dd>猫步 Enabled=0；灵缇 Enabled=1。待猫步移动声和怪物听觉实现并验收后，再改为 1。</dd></div><div class="explanation"><dt>常见错误与后果</dt><dd>只在 Excel 新增 0 就认为旧解析已过滤，会仍然投影尚未支持技能；只隐藏客户端按钮但默认配装引用禁用技能，也会形成服务端内容不一致。</dd></div><div class="explanation"><dt>与其他字段的分工及取舍</dt><dd>Enabled 管内容可用性，Lifetime 管已持有技能何时消费；禁用不等于删行，也不是发布审批。以后可新增环境或版本选择清单，但不能以跳过校验来启用草稿。</dd></div></dl>
+            </details></div><div class="field-group" data-table="Attribute"><h3>Attribute<span class="group-count">7 个字段</span></h3><details class="field-card" id="field-Attribute-AttributeId"
+                data-table="Attribute" data-search="Attribute AttributeId 属性 ID 作为属性字典的稳定主键，供效果表建立可检查的外键。 原效果直接填写 Stat，拼写 run_speed 时若多一个字母，就会变成找不到的处理器。用 AttributeId 把 16 个属性集中登记，策划在效果表只选择属性身份，构建再取出稳定 Stat。这保留原属性 1～10 的 ID，并让新增医疗时长、复活和容量等从 11 继续分配；但当前 cfg_build.lua 尚不读取 Attribute，必须先完成外键解析迁移才能使用此列。 int32 与三表主键、外键和现有导表工具一致；数字引用便于自动检查存在性，不依赖中文名称或 Excel 行号。 server 目标解析用它查属性并投影 stat/op/value；client 用同一身份关联单位与展示字典；key 声明唯一索引。当前运行模型未接入属性表，导出标记本身不会建立关联。 必填、全表唯一、1～2147483647 整数；原 1～10 不重编号，本版新增 11～16。所有效果外键必须指向显式选入的属性记录。 AttributeId=3 固定对应 run_speed；灵缇效果 501 的 AttributeId 填 3。 将属性按单位排序后重新编号，会令旧效果修改另一项能力；只改效果列为 AttributeId 却保留旧解析，会缺少它仍要求的 Stat 字段。 AttributeId 管身份，Stat 管与代码登记表连接，Name 管可读名称；三者不能相互推导。未来新增属性分配新 ID，不让一个 ID 因平衡调整变成另一种单位。">
+              <summary><span class="field-index">01</span>
+                <span class="field-label"><code>AttributeId</code><span>属性 ID</span></span>
+                <span class="field-tags"><span>int32</span>
+                <span class="export-tag">server/client/key</span></span></summary>
+              <p class="field-purpose">作为属性字典的稳定主键，供效果表建立可检查的外键。</p><dl><div class="explanation"><dt>字段职责</dt><dd>作为属性字典的稳定主键，供效果表建立可检查的外键。</dd></div><div class="explanation"><dt>为什么需要这个字段</dt><dd>原效果直接填写 Stat，拼写 run_speed 时若多一个字母，就会变成找不到的处理器。用 AttributeId 把 16 个属性集中登记，策划在效果表只选择属性身份，构建再取出稳定 Stat。这保留原属性 1～10 的 ID，并让新增医疗时长、复活和容量等从 11 继续分配；但当前 cfg_build.lua 尚不读取 Attribute，必须先完成外键解析迁移才能使用此列。</dd></div><div class="explanation"><dt>为什么使用这个类型</dt><dd>int32 与三表主键、外键和现有导表工具一致；数字引用便于自动检查存在性，不依赖中文名称或 Excel 行号。</dd></div><div class="explanation"><dt>为什么这样导出</dt><dd>server 目标解析用它查属性并投影 stat/op/value；client 用同一身份关联单位与展示字典；key 声明唯一索引。当前运行模型未接入属性表，导出标记本身不会建立关联。</dd></div><div class="explanation"><dt>合法值与填写规则</dt><dd>必填、全表唯一、1～2147483647 整数；原 1～10 不重编号，本版新增 11～16。所有效果外键必须指向显式选入的属性记录。</dd></div><div class="explanation"><dt>正确填写示例</dt><dd>AttributeId=3 固定对应 run_speed；灵缇效果 501 的 AttributeId 填 3。</dd></div><div class="explanation"><dt>常见错误与后果</dt><dd>将属性按单位排序后重新编号，会令旧效果修改另一项能力；只改效果列为 AttributeId 却保留旧解析，会缺少它仍要求的 Stat 字段。</dd></div><div class="explanation"><dt>与其他字段的分工及取舍</dt><dd>AttributeId 管身份，Stat 管与代码登记表连接，Name 管可读名称；三者不能相互推导。未来新增属性分配新 ID，不让一个 ID 因平衡调整变成另一种单位。</dd></div></dl>
+            </details><details class="field-card" id="field-Attribute-Name"
+                data-table="Attribute" data-search="Attribute Name 属性名称 给属性字典提供能够准确表达执行范围的中文名称。 属性名越具体，填表越不容易把相似能力混用。枪械初始备弹比弹药数量更明确，枪械每轮装填时间比换弹速度更明确，非消耗品工具携带次数上限比携带量更明确。这些名称直接揭示基础来源与应用时机，能帮助策划在 16 个属性中选择正确外键，也让客户端解释不把射击间隔误当瞄准精度或切枪速度。 string 保存完整中文含义和必要的范围词；不使用数字类别代替名称，因为 AttributeId 已经提供数字身份。 server 目标字典保留名称便于错误定位及配置诊断；client 可用于属性说明。当前属性表未进入玩法解析，不能把有名字的记录当成已注册能力。 必填非空 string，建议采用来源对象＋精确能力名称；名称允许评审后修改，但不改 AttributeId 或 Stat。不要只填速度、时间、数量等含糊词。 AttributeId=7 的 Name 填枪械射击间隔；AttributeId=16 填非消耗品工具携带次数上限。 把 reserve 命名为弹匣容量，会误导把倍率作用到 Magazine；把 movement_noise_radius 命名为音量，会混淆传播距离与客户端响度。 Name 便于人理解，Stat 才连接执行规则，Unit 约束计量，ValueMode 解释参数。未来本地化时可改显示文本，但稳定属性身份和处理器代码必须保持。">
+              <summary><span class="field-index">02</span>
+                <span class="field-label"><code>Name</code><span>属性名称</span></span>
+                <span class="field-tags"><span>string</span>
+                <span class="export-tag">server/client</span></span></summary>
+              <p class="field-purpose">给属性字典提供能够准确表达执行范围的中文名称。</p><dl><div class="explanation"><dt>字段职责</dt><dd>给属性字典提供能够准确表达执行范围的中文名称。</dd></div><div class="explanation"><dt>为什么需要这个字段</dt><dd>属性名越具体，填表越不容易把相似能力混用。枪械初始备弹比弹药数量更明确，枪械每轮装填时间比换弹速度更明确，非消耗品工具携带次数上限比携带量更明确。这些名称直接揭示基础来源与应用时机，能帮助策划在 16 个属性中选择正确外键，也让客户端解释不把射击间隔误当瞄准精度或切枪速度。</dd></div><div class="explanation"><dt>为什么使用这个类型</dt><dd>string 保存完整中文含义和必要的范围词；不使用数字类别代替名称，因为 AttributeId 已经提供数字身份。</dd></div><div class="explanation"><dt>为什么这样导出</dt><dd>server 目标字典保留名称便于错误定位及配置诊断；client 可用于属性说明。当前属性表未进入玩法解析，不能把有名字的记录当成已注册能力。</dd></div><div class="explanation"><dt>合法值与填写规则</dt><dd>必填非空 string，建议采用来源对象＋精确能力名称；名称允许评审后修改，但不改 AttributeId 或 Stat。不要只填速度、时间、数量等含糊词。</dd></div><div class="explanation"><dt>正确填写示例</dt><dd>AttributeId=7 的 Name 填枪械射击间隔；AttributeId=16 填非消耗品工具携带次数上限。</dd></div><div class="explanation"><dt>常见错误与后果</dt><dd>把 reserve 命名为弹匣容量，会误导把倍率作用到 Magazine；把 movement_noise_radius 命名为音量，会混淆传播距离与客户端响度。</dd></div><div class="explanation"><dt>与其他字段的分工及取舍</dt><dd>Name 便于人理解，Stat 才连接执行规则，Unit 约束计量，ValueMode 解释参数。未来本地化时可改显示文本，但稳定属性身份和处理器代码必须保持。</dd></div></dl>
+            </details><details class="field-card" id="field-Attribute-Stat"
+                data-table="Attribute" data-search="Attribute Stat 属性代码 把属性身份映射到代码中登记的真实属性处理器。 现有 skill.lua 只承认其 stats 登记的代码，effective 又按 run_speed、reserve、medkit_ticks 等取对应基础配置计算。把 Stat 集中在属性表，可以避免多个效果行重复维护这些字符串，同时仍把效果投影回现有 stat/op/value 结构。这个代码不是可执行脚本，新增 run_cost 等记录仅声明待实现能力，不会自动建立奔跑扣耗、听觉、奖励或容量处理器。 string 与现有 Lua 属性键匹配；推荐小写 snake_case，避免中文翻译和大小写别名。不能改为 int32，因为运行处理器仍按名称键识别。 server 目标解析查出它后继续调用现有运算模块；client 可将它与属性展示和调试信息对应。客户端不能通过一个未知 Stat 自行模拟出服务端能力。 必填、全表唯一、稳定；本版使用列出的 16 个精确代码。启用技能引用的代码必须真实注册，待实现 1、4、15、16 对应属性只供禁用草稿保留。 AttributeId=11 的 Stat=medkit_ticks；已支持，来源为 Tool.Lag。AttributeId=4 的 movement_noise_radius 仍需新处理器。 写 runSpeed、run_speed空格或自行新增 reload_speed，会不能匹配登记代码；在 Attribute.Stat 填 Lua 表达式，也不会被当成脚本执行。 Stat 定义稳定能力语义，基础值仍归 Player/Weapon/Tool，SkillEffect 只给参数。本版不重复保留可编辑效果 Stat 列；未来新能力需同步代码注册、单位和边界。">
+              <summary><span class="field-index">03</span>
+                <span class="field-label"><code>Stat</code><span>属性代码</span></span>
+                <span class="field-tags"><span>string</span>
+                <span class="export-tag">server/client</span></span></summary>
+              <p class="field-purpose">把属性身份映射到代码中登记的真实属性处理器。</p><dl><div class="explanation"><dt>字段职责</dt><dd>把属性身份映射到代码中登记的真实属性处理器。</dd></div><div class="explanation"><dt>为什么需要这个字段</dt><dd>现有 skill.lua 只承认其 stats 登记的代码，effective 又按 run_speed、reserve、medkit_ticks 等取对应基础配置计算。把 Stat 集中在属性表，可以避免多个效果行重复维护这些字符串，同时仍把效果投影回现有 stat/op/value 结构。这个代码不是可执行脚本，新增 run_cost 等记录仅声明待实现能力，不会自动建立奔跑扣耗、听觉、奖励或容量处理器。</dd></div><div class="explanation"><dt>为什么使用这个类型</dt><dd>string 与现有 Lua 属性键匹配；推荐小写 snake_case，避免中文翻译和大小写别名。不能改为 int32，因为运行处理器仍按名称键识别。</dd></div><div class="explanation"><dt>为什么这样导出</dt><dd>server 目标解析查出它后继续调用现有运算模块；client 可将它与属性展示和调试信息对应。客户端不能通过一个未知 Stat 自行模拟出服务端能力。</dd></div><div class="explanation"><dt>合法值与填写规则</dt><dd>必填、全表唯一、稳定；本版使用列出的 16 个精确代码。启用技能引用的代码必须真实注册，待实现 1、4、15、16 对应属性只供禁用草稿保留。</dd></div><div class="explanation"><dt>正确填写示例</dt><dd>AttributeId=11 的 Stat=medkit_ticks；已支持，来源为 Tool.Lag。AttributeId=4 的 movement_noise_radius 仍需新处理器。</dd></div><div class="explanation"><dt>常见错误与后果</dt><dd>写 runSpeed、run_speed空格或自行新增 reload_speed，会不能匹配登记代码；在 Attribute.Stat 填 Lua 表达式，也不会被当成脚本执行。</dd></div><div class="explanation"><dt>与其他字段的分工及取舍</dt><dd>Stat 定义稳定能力语义，基础值仍归 Player/Weapon/Tool，SkillEffect 只给参数。本版不重复保留可编辑效果 Stat 列；未来新能力需同步代码注册、单位和边界。</dd></div></dl>
+            </details><details class="field-card" id="field-Attribute-Target"
+                data-table="Attribute" data-search="Attribute Target 属性作用对象 在属性字典里声明该能力所属的对象，约束技能引用。 同一个 add=1 可以是玩家负重、箱子额外数量或工具次数，必须依据所属对象取基础数据。把 Target 放在属性字典，可与 Skill.Target 做静态交叉校验，提前阻止武器技能引用医疗量等错误，避免只到配装运行时才发现。它同时固定属性复用边界：两个技能可以引用相同玩家属性，但不能因技能名称相近把它当成枪械或工具属性。 string 与 Skill.Target 使用完全相同的 player/weapon/tool 枚举，可以直接比较，不引入第二套数字对应表。 server 迁移后检查对象一致并建立属性规则，client 使用同一所属对象解释能力。现有 skill.validate 只验证技能 Target 枚举，完整属性一致性检查尚需实现。 必填且只允许 player、weapon、tool；必须与所有引用技能的 Target 一致。tool 的具体适用种类仍由处理器确定，而不是开放给任意工具。 medkit_heal 的 Target=tool；crate_bonus_count 的 Target=player；melee_damage 的 Target=weapon。 把枪械近战属性设 player 会混淆枪托与匕首；把工具容量设 player 后让货运骡子 tool 引用，会产生三表对象冲突。 属性 Target 固定能力归属，技能 Target 是整体声明；两处重复是为了可校验关系，而非两套可独立修改的含义。未来跨对象技能应先扩契约，不允许悄悄放宽一致性。">
+              <summary><span class="field-index">04</span>
+                <span class="field-label"><code>Target</code><span>属性作用对象</span></span>
+                <span class="field-tags"><span>string</span>
+                <span class="export-tag">server/client</span></span></summary>
+              <p class="field-purpose">在属性字典里声明该能力所属的对象，约束技能引用。</p><dl><div class="explanation"><dt>字段职责</dt><dd>在属性字典里声明该能力所属的对象，约束技能引用。</dd></div><div class="explanation"><dt>为什么需要这个字段</dt><dd>同一个 add=1 可以是玩家负重、箱子额外数量或工具次数，必须依据所属对象取基础数据。把 Target 放在属性字典，可与 Skill.Target 做静态交叉校验，提前阻止武器技能引用医疗量等错误，避免只到配装运行时才发现。它同时固定属性复用边界：两个技能可以引用相同玩家属性，但不能因技能名称相近把它当成枪械或工具属性。</dd></div><div class="explanation"><dt>为什么使用这个类型</dt><dd>string 与 Skill.Target 使用完全相同的 player/weapon/tool 枚举，可以直接比较，不引入第二套数字对应表。</dd></div><div class="explanation"><dt>为什么这样导出</dt><dd>server 迁移后检查对象一致并建立属性规则，client 使用同一所属对象解释能力。现有 skill.validate 只验证技能 Target 枚举，完整属性一致性检查尚需实现。</dd></div><div class="explanation"><dt>合法值与填写规则</dt><dd>必填且只允许 player、weapon、tool；必须与所有引用技能的 Target 一致。tool 的具体适用种类仍由处理器确定，而不是开放给任意工具。</dd></div><div class="explanation"><dt>正确填写示例</dt><dd>medkit_heal 的 Target=tool；crate_bonus_count 的 Target=player；melee_damage 的 Target=weapon。</dd></div><div class="explanation"><dt>常见错误与后果</dt><dd>把枪械近战属性设 player 会混淆枪托与匕首；把工具容量设 player 后让货运骡子 tool 引用，会产生三表对象冲突。</dd></div><div class="explanation"><dt>与其他字段的分工及取舍</dt><dd>属性 Target 固定能力归属，技能 Target 是整体声明；两处重复是为了可校验关系，而非两套可独立修改的含义。未来跨对象技能应先扩契约，不允许悄悄放宽一致性。</dd></div></dl>
+            </details><details class="field-card" id="field-Attribute-Unit"
+                data-table="Attribute" data-search="Attribute Unit 参数单位 固定基础值与加法参数的计量单位，避免时间和距离换算误配。 项目采用整数 Tick 和毫米，奔跑速度是毫米/Tick，医疗时间是 Tick，投掷距离是毫米；不写单位时，填写 2 很可能被误认为 2 秒而实际只持续 2 Tick。Unit 也说明 add 的固定增量怎样解释，同时必须说明 mul_bp 是无量纲万分比因子，不随 hp、mm、tick 改含义。单位集中维护能使效果表简洁，又让客户端与评审使用同一解释。 string 使用固定代码便于校验和展示映射；int32 需要额外单位枚举且不易辨读。代码保持 tick、mm 等稳定形式，中文解释写在文档或界面。 server 目标字典校验登记处理器单位，client 生成属性解释和换算显示。展示按 tick_hz=60 换算秒，但不把服务器整数 Tick 参数重写成浮点秒。 必填本版单位之一：stamina_per_second、weight_point、mm_per_tick、mm、hp、round、tick、stamina、bool、item、use；必须与登记 Stat 一致，不能自造秒或米的别名。 medkit_ticks 的 Unit=tick：基础 120 Tick 在 60 Hz 为 2 秒；mul_bp=5000 后为 60 Tick。倍率参数 5000 不是 5000 Tick。 在 shot_ticks 的 add 中填 -1 并以为减少 1 秒，实际只减 1 Tick；将 mm 的 1600 当作 1600 米会误读投掷范围。 Unit 定义计量尺度，Op 决定是否使用该尺度，ValueMode 决定绝对值或修饰值。未来更换模拟频率或尺度需要统一迁移来源与处理器，不只改显示文案。">
+              <summary><span class="field-index">05</span>
+                <span class="field-label"><code>Unit</code><span>参数单位</span></span>
+                <span class="field-tags"><span>string</span>
+                <span class="export-tag">server/client</span></span></summary>
+              <p class="field-purpose">固定基础值与加法参数的计量单位，避免时间和距离换算误配。</p><dl><div class="explanation"><dt>字段职责</dt><dd>固定基础值与加法参数的计量单位，避免时间和距离换算误配。</dd></div><div class="explanation"><dt>为什么需要这个字段</dt><dd>项目采用整数 Tick 和毫米，奔跑速度是毫米/Tick，医疗时间是 Tick，投掷距离是毫米；不写单位时，填写 2 很可能被误认为 2 秒而实际只持续 2 Tick。Unit 也说明 add 的固定增量怎样解释，同时必须说明 mul_bp 是无量纲万分比因子，不随 hp、mm、tick 改含义。单位集中维护能使效果表简洁，又让客户端与评审使用同一解释。</dd></div><div class="explanation"><dt>为什么使用这个类型</dt><dd>string 使用固定代码便于校验和展示映射；int32 需要额外单位枚举且不易辨读。代码保持 tick、mm 等稳定形式，中文解释写在文档或界面。</dd></div><div class="explanation"><dt>为什么这样导出</dt><dd>server 目标字典校验登记处理器单位，client 生成属性解释和换算显示。展示按 tick_hz=60 换算秒，但不把服务器整数 Tick 参数重写成浮点秒。</dd></div><div class="explanation"><dt>合法值与填写规则</dt><dd>必填本版单位之一：stamina_per_second、weight_point、mm_per_tick、mm、hp、round、tick、stamina、bool、item、use；必须与登记 Stat 一致，不能自造秒或米的别名。</dd></div><div class="explanation"><dt>正确填写示例</dt><dd>medkit_ticks 的 Unit=tick：基础 120 Tick 在 60 Hz 为 2 秒；mul_bp=5000 后为 60 Tick。倍率参数 5000 不是 5000 Tick。</dd></div><div class="explanation"><dt>常见错误与后果</dt><dd>在 shot_ticks 的 add 中填 -1 并以为减少 1 秒，实际只减 1 Tick；将 mm 的 1600 当作 1600 米会误读投掷范围。</dd></div><div class="explanation"><dt>与其他字段的分工及取舍</dt><dd>Unit 定义计量尺度，Op 决定是否使用该尺度，ValueMode 决定绝对值或修饰值。未来更换模拟频率或尺度需要统一迁移来源与处理器，不只改显示文案。</dd></div></dl>
+            </details><details class="field-card" id="field-Attribute-AllowedOps"
+                data-table="Attribute" data-search="Attribute AllowedOps 合法运算 限定每种属性允许使用的运算，阻止形式合法而语义无效的参数。 数值属性可以支持固定增加或倍率，但复活生命和体力从基础 0 计算，倍率作用于 0 没有意义；满血标记也只能 add=1。AllowedOps 让表格构建先拒绝这些错误，避免每个效果都要靠策划记住特殊语义。当前运算模块仅认 add/mul_bp，本列是迁移后属性校验的白名单，不允许新增字符串就扩出乘法、覆盖或脚本运算。 string 用半角竖线编码小型枚举集合，沿用工具可处理的类型；add|mul_bp 可读且易拆分。不能填 Excel 数组或带逗号的自由文本。 仅 server，用于构建与运行入口的权威校验；client 获得已合法的 Op 和 Value 用于展示，不需要携带完整的管理白名单。客户端如需编辑器校验，应另接工具流程。 必填 add、mul_bp 或 add|mul_bp；无重复项、无空项、无空格，顺序建议固定为 add|mul_bp。absolute 和 flag 本版必须 add；效果 Op 必须属于本列。 revive_hp AllowedOps=add；run_speed AllowedOps=add|mul_bp；revive_full_hp AllowedOps=add。 填 add,mul_bp 会违反竖线格式；把 revive_hp 配 mul_bp=15000，既不能给基础 0 提供生命，也违背现有复活只接受 add 的规则。 AllowedOps 约束操作集合，ValueMode 说明参数性质，Value 仍需通用范围和最终值检查。未来新增运算必须先扩运算引擎、合成顺序及身份摘要契约。">
+              <summary><span class="field-index">06</span>
+                <span class="field-label"><code>AllowedOps</code><span>合法运算</span></span>
+                <span class="field-tags"><span>string</span>
+                <span class="export-tag">server</span></span></summary>
+              <p class="field-purpose">限定每种属性允许使用的运算，阻止形式合法而语义无效的参数。</p><dl><div class="explanation"><dt>字段职责</dt><dd>限定每种属性允许使用的运算，阻止形式合法而语义无效的参数。</dd></div><div class="explanation"><dt>为什么需要这个字段</dt><dd>数值属性可以支持固定增加或倍率，但复活生命和体力从基础 0 计算，倍率作用于 0 没有意义；满血标记也只能 add=1。AllowedOps 让表格构建先拒绝这些错误，避免每个效果都要靠策划记住特殊语义。当前运算模块仅认 add/mul_bp，本列是迁移后属性校验的白名单，不允许新增字符串就扩出乘法、覆盖或脚本运算。</dd></div><div class="explanation"><dt>为什么使用这个类型</dt><dd>string 用半角竖线编码小型枚举集合，沿用工具可处理的类型；add|mul_bp 可读且易拆分。不能填 Excel 数组或带逗号的自由文本。</dd></div><div class="explanation"><dt>为什么这样导出</dt><dd>仅 server，用于构建与运行入口的权威校验；client 获得已合法的 Op 和 Value 用于展示，不需要携带完整的管理白名单。客户端如需编辑器校验，应另接工具流程。</dd></div><div class="explanation"><dt>合法值与填写规则</dt><dd>必填 add、mul_bp 或 add|mul_bp；无重复项、无空项、无空格，顺序建议固定为 add|mul_bp。absolute 和 flag 本版必须 add；效果 Op 必须属于本列。</dd></div><div class="explanation"><dt>正确填写示例</dt><dd>revive_hp AllowedOps=add；run_speed AllowedOps=add|mul_bp；revive_full_hp AllowedOps=add。</dd></div><div class="explanation"><dt>常见错误与后果</dt><dd>填 add,mul_bp 会违反竖线格式；把 revive_hp 配 mul_bp=15000，既不能给基础 0 提供生命，也违背现有复活只接受 add 的规则。</dd></div><div class="explanation"><dt>与其他字段的分工及取舍</dt><dd>AllowedOps 约束操作集合，ValueMode 说明参数性质，Value 仍需通用范围和最终值检查。未来新增运算必须先扩运算引擎、合成顺序及身份摘要契约。</dd></div></dl>
+            </details><details class="field-card" id="field-Attribute-ValueMode"
+                data-table="Attribute" data-search="Attribute ValueMode 数值语义 区分基础属性修饰、机制绝对参数和机制开关。 同一 add 参数有三种不同意思：weight add=1 增加基础负重，revive_hp add=25 从基础 0 求出复活后的绝对生命，revive_full_hp add=1 开启满血覆盖。ValueMode 将这些语义写入属性字典，防止把复活理解成给死亡前生命加 25，或把标记理解成治疗 1 点。它是配套校验元信息，当前 skill.lua 仍通过 revive_ 等代码判断，迁移时需与登记规则一致。 string 使用 modifier/absolute/flag 三个明确枚举，避免多个布尔列形成不合法组合。字段不执行任意公式，不需要解析脚本文本。 仅 server，用于属性规则校验和正确投影；client 的面向玩家解释由 EffectDesc 与 Unit 表达，避免让普通界面用户承担内部模式术语。 必填 modifier、absolute、flag；本版 12/13 为 absolute，14 为 flag，其余 modifier。absolute 只允许 add 且不得为负；flag 只允许 add=1；最终角色边界仍必须检查。 revive_hp ValueMode=absolute，add=25 表示复活后生命 25；revive_full_hp ValueMode=flag，add=1 表示覆盖为最大生命。 把复活参数设 modifier 并以当前生命为基础，会得到错误复活结果；将 flag 的 Value 填 100 会被误当百分比且违反固定开关规则。 ValueMode 解释单属性参数，Category 解释整体技能，Op 负责具体算术。未来覆盖值或条件开关需扩明确处理器契约，不能仅新增模式字符串便声称支持。">
+              <summary><span class="field-index">07</span>
+                <span class="field-label"><code>ValueMode</code><span>数值语义</span></span>
+                <span class="field-tags"><span>string</span>
+                <span class="export-tag">server</span></span></summary>
+              <p class="field-purpose">区分基础属性修饰、机制绝对参数和机制开关。</p><dl><div class="explanation"><dt>字段职责</dt><dd>区分基础属性修饰、机制绝对参数和机制开关。</dd></div><div class="explanation"><dt>为什么需要这个字段</dt><dd>同一 add 参数有三种不同意思：weight add=1 增加基础负重，revive_hp add=25 从基础 0 求出复活后的绝对生命，revive_full_hp add=1 开启满血覆盖。ValueMode 将这些语义写入属性字典，防止把复活理解成给死亡前生命加 25，或把标记理解成治疗 1 点。它是配套校验元信息，当前 skill.lua 仍通过 revive_ 等代码判断，迁移时需与登记规则一致。</dd></div><div class="explanation"><dt>为什么使用这个类型</dt><dd>string 使用 modifier/absolute/flag 三个明确枚举，避免多个布尔列形成不合法组合。字段不执行任意公式，不需要解析脚本文本。</dd></div><div class="explanation"><dt>为什么这样导出</dt><dd>仅 server，用于属性规则校验和正确投影；client 的面向玩家解释由 EffectDesc 与 Unit 表达，避免让普通界面用户承担内部模式术语。</dd></div><div class="explanation"><dt>合法值与填写规则</dt><dd>必填 modifier、absolute、flag；本版 12/13 为 absolute，14 为 flag，其余 modifier。absolute 只允许 add 且不得为负；flag 只允许 add=1；最终角色边界仍必须检查。</dd></div><div class="explanation"><dt>正确填写示例</dt><dd>revive_hp ValueMode=absolute，add=25 表示复活后生命 25；revive_full_hp ValueMode=flag，add=1 表示覆盖为最大生命。</dd></div><div class="explanation"><dt>常见错误与后果</dt><dd>把复活参数设 modifier 并以当前生命为基础，会得到错误复活结果；将 flag 的 Value 填 100 会被误当百分比且违反固定开关规则。</dd></div><div class="explanation"><dt>与其他字段的分工及取舍</dt><dd>ValueMode 解释单属性参数，Category 解释整体技能，Op 负责具体算术。未来覆盖值或条件开关需扩明确处理器契约，不能仅新增模式字符串便声称支持。</dd></div></dl>
+            </details></div><div class="field-group" data-table="SkillEffect"><h3>SkillEffect<span class="group-count">5 个字段</span></h3><details class="field-card" id="field-SkillEffect-EffectIdx"
+                data-table="SkillEffect" data-search="SkillEffect EffectIdx 效果 ID 为效果表每条记录提供稳定身份，便于定位、导出与差异追踪。 死灵法师有生命和体力两条效果，不能用技能 ID 充当效果表唯一键。独立 EffectIdx 让每行可精确定位，也使错误消息能够说明是哪条参数有问题。本版推荐技能 ID×100＋行序号，便于人工看懂，但当前 cfg_build.lua 按 SkillIdx 找子行，运算又按属性汇总；因此编号前缀不参与关联，排序也不控制先乘后加或触发顺序。 int32 对应现有效果主键导出，能稳定排序与检查唯一；编号规则只是建议，不能用带中文前缀的字符串破坏已有键类型。 server 用于源记录定位和稳定遍历，client 用于表记录索引及配置关联；key 标记声明唯一身份。运行 effects 投影可不保留此键，但源表仍需要它。 必填、全表唯一、1～2147483647 整数；推荐 101、102、201 等。不能因技能换顺序而重编号，不允许用相同 EffectIdx 保存两条效果。 101 是死灵法师复活生命，102 是复活体力；两条都以 SkillIdx=1 明确关联。 给两条复活效果都填 EffectIdx=1 会主键冲突；只凭 501 前缀推导技能 5 而把 SkillIdx 留空，会失去真实外键关系。 EffectIdx 管行身份，SkillIdx 管所属技能，AttributeId 管目标属性；效果计算不以编号执行。未来需要触发顺序应引入明确规则，不能把排序当作隐含逻辑。">
+              <summary><span class="field-index">01</span>
+                <span class="field-label"><code>EffectIdx</code><span>效果 ID</span></span>
+                <span class="field-tags"><span>int32</span>
+                <span class="export-tag">server/client/key</span></span></summary>
+              <p class="field-purpose">为效果表每条记录提供稳定身份，便于定位、导出与差异追踪。</p><dl><div class="explanation"><dt>字段职责</dt><dd>为效果表每条记录提供稳定身份，便于定位、导出与差异追踪。</dd></div><div class="explanation"><dt>为什么需要这个字段</dt><dd>死灵法师有生命和体力两条效果，不能用技能 ID 充当效果表唯一键。独立 EffectIdx 让每行可精确定位，也使错误消息能够说明是哪条参数有问题。本版推荐技能 ID×100＋行序号，便于人工看懂，但当前 cfg_build.lua 按 SkillIdx 找子行，运算又按属性汇总；因此编号前缀不参与关联，排序也不控制先乘后加或触发顺序。</dd></div><div class="explanation"><dt>为什么使用这个类型</dt><dd>int32 对应现有效果主键导出，能稳定排序与检查唯一；编号规则只是建议，不能用带中文前缀的字符串破坏已有键类型。</dd></div><div class="explanation"><dt>为什么这样导出</dt><dd>server 用于源记录定位和稳定遍历，client 用于表记录索引及配置关联；key 标记声明唯一身份。运行 effects 投影可不保留此键，但源表仍需要它。</dd></div><div class="explanation"><dt>合法值与填写规则</dt><dd>必填、全表唯一、1～2147483647 整数；推荐 101、102、201 等。不能因技能换顺序而重编号，不允许用相同 EffectIdx 保存两条效果。</dd></div><div class="explanation"><dt>正确填写示例</dt><dd>101 是死灵法师复活生命，102 是复活体力；两条都以 SkillIdx=1 明确关联。</dd></div><div class="explanation"><dt>常见错误与后果</dt><dd>给两条复活效果都填 EffectIdx=1 会主键冲突；只凭 501 前缀推导技能 5 而把 SkillIdx 留空，会失去真实外键关系。</dd></div><div class="explanation"><dt>与其他字段的分工及取舍</dt><dd>EffectIdx 管行身份，SkillIdx 管所属技能，AttributeId 管目标属性；效果计算不以编号执行。未来需要触发顺序应引入明确规则，不能把排序当作隐含逻辑。</dd></div></dl>
+            </details><details class="field-card" id="field-SkillEffect-SkillIdx"
+                data-table="SkillEffect" data-search="SkillEffect SkillIdx 所属技能 ID 把一条效果显式关联到对应的技能记录。 一项技能可以拥有一至八条效果，复活必须同时恢复生命与体力，所以效果需要子表而非塞进 Skill 单个属性字段。SkillIdx 外键让构建按同一技能收集完整效果并检查孤立行，同时避免用 EffectIdx 的推荐前缀猜关系。它与 Skill 表主键保持一致，才能确保玩家持有技能 1 时两条复活参数一起生效，而不是漏一条或挂到重振旗鼓上。 int32 与 Skill.SkillIdx 相同，保证外键可直接比较；不能填技能名或用字符串 01 创造另一种别名身份。 server 当前 children 按 SkillIdx 收集效果并检查引用存在；client 可按此关系展示技能的全部效果。这是已存在的关联列，不需用名称拼接。 必填正整数，必须引用存在且显式选入的 Skill.SkillIdx；同技能 1～8 条效果，同属性不重复。技能 1 必须同时拥有生命和体力两条；禁用技能也保留正确外键。 EffectIdx=101 和 102 均填写 SkillIdx=1；EffectIdx=201 填 2。 把 102 的 SkillIdx 填 2，会造成技能 1 缺体力、技能 2 缺生命的非法组合；引用 99 而没有技能 99 会形成孤立效果。 本列是多对一父子关系，不是技能依赖；重振旗鼓是否需要另有复活资格属于机制，首版不新增购买依赖字段。未来技能等级可另建等级父键。">
+              <summary><span class="field-index">02</span>
+                <span class="field-label"><code>SkillIdx</code><span>所属技能 ID</span></span>
+                <span class="field-tags"><span>int32</span>
+                <span class="export-tag">server/client</span></span></summary>
+              <p class="field-purpose">把一条效果显式关联到对应的技能记录。</p><dl><div class="explanation"><dt>字段职责</dt><dd>把一条效果显式关联到对应的技能记录。</dd></div><div class="explanation"><dt>为什么需要这个字段</dt><dd>一项技能可以拥有一至八条效果，复活必须同时恢复生命与体力，所以效果需要子表而非塞进 Skill 单个属性字段。SkillIdx 外键让构建按同一技能收集完整效果并检查孤立行，同时避免用 EffectIdx 的推荐前缀猜关系。它与 Skill 表主键保持一致，才能确保玩家持有技能 1 时两条复活参数一起生效，而不是漏一条或挂到重振旗鼓上。</dd></div><div class="explanation"><dt>为什么使用这个类型</dt><dd>int32 与 Skill.SkillIdx 相同，保证外键可直接比较；不能填技能名或用字符串 01 创造另一种别名身份。</dd></div><div class="explanation"><dt>为什么这样导出</dt><dd>server 当前 children 按 SkillIdx 收集效果并检查引用存在；client 可按此关系展示技能的全部效果。这是已存在的关联列，不需用名称拼接。</dd></div><div class="explanation"><dt>合法值与填写规则</dt><dd>必填正整数，必须引用存在且显式选入的 Skill.SkillIdx；同技能 1～8 条效果，同属性不重复。技能 1 必须同时拥有生命和体力两条；禁用技能也保留正确外键。</dd></div><div class="explanation"><dt>正确填写示例</dt><dd>EffectIdx=101 和 102 均填写 SkillIdx=1；EffectIdx=201 填 2。</dd></div><div class="explanation"><dt>常见错误与后果</dt><dd>把 102 的 SkillIdx 填 2，会造成技能 1 缺体力、技能 2 缺生命的非法组合；引用 99 而没有技能 99 会形成孤立效果。</dd></div><div class="explanation"><dt>与其他字段的分工及取舍</dt><dd>本列是多对一父子关系，不是技能依赖；重振旗鼓是否需要另有复活资格属于机制，首版不新增购买依赖字段。未来技能等级可另建等级父键。</dd></div></dl>
+            </details><details class="field-card" id="field-SkillEffect-AttributeId"
+                data-table="SkillEffect" data-search="SkillEffect AttributeId 目标属性 ID 用外键选择效果修改的能力，替代重复填写自由 Stat 字符串。 属性字典已经维护名称、单位、对象和合法运算，效果只需引用 AttributeId，就能一次得到完整语义并验证对象一致。这样调整一个属性说明或合法运算时不必搜索所有效果逐行改字符串，也能在导出前发现引用缺失。本版将原 SkillEffect.Stat 改为 int32 外键，随后投影回现有 stat/op/value；这个转换当前尚未实现，不能直接改列名便期待原解析运行。 int32 与 Attribute.AttributeId 相同，使关系检查明确且减少拼写错误；不同时保留另一列可编辑 Stat，避免 ID 指向 run_speed 而字符串写 reserve 的双重真相。 server 目标构建从字典查 Stat 与校验信息，client 按同一外键获取单位和名称。server/client 标记是新结构目标，旧 cfg_build.lua 仍读取 Stat，必须迁移。 必填正整数并引用存在且显式选入的 Attribute；同一个 SkillIdx 下不能重复 AttributeId。属性 Target、AllowedOps、ValueMode 必须与技能和效果匹配。 灵缇效果 501 的 AttributeId=3；妙手回春效果 1101 的 AttributeId=11。 把 1101 的 AttributeId 填 9 会改成治疗量倍率，误实现成治疗量减半；填 run_speed 会违反 int32 类型并失去外键。 AttributeId 选择能力，Op/Value 选择修改方式与幅度，基础值仍在角色和装备表。本版同技能同属性只一条效果，未来组合固定量和倍率需先扩合成契约。">
+              <summary><span class="field-index">03</span>
+                <span class="field-label"><code>AttributeId</code><span>目标属性 ID</span></span>
+                <span class="field-tags"><span>int32</span>
+                <span class="export-tag">server/client</span></span></summary>
+              <p class="field-purpose">用外键选择效果修改的能力，替代重复填写自由 Stat 字符串。</p><dl><div class="explanation"><dt>字段职责</dt><dd>用外键选择效果修改的能力，替代重复填写自由 Stat 字符串。</dd></div><div class="explanation"><dt>为什么需要这个字段</dt><dd>属性字典已经维护名称、单位、对象和合法运算，效果只需引用 AttributeId，就能一次得到完整语义并验证对象一致。这样调整一个属性说明或合法运算时不必搜索所有效果逐行改字符串，也能在导出前发现引用缺失。本版将原 SkillEffect.Stat 改为 int32 外键，随后投影回现有 stat/op/value；这个转换当前尚未实现，不能直接改列名便期待原解析运行。</dd></div><div class="explanation"><dt>为什么使用这个类型</dt><dd>int32 与 Attribute.AttributeId 相同，使关系检查明确且减少拼写错误；不同时保留另一列可编辑 Stat，避免 ID 指向 run_speed 而字符串写 reserve 的双重真相。</dd></div><div class="explanation"><dt>为什么这样导出</dt><dd>server 目标构建从字典查 Stat 与校验信息，client 按同一外键获取单位和名称。server/client 标记是新结构目标，旧 cfg_build.lua 仍读取 Stat，必须迁移。</dd></div><div class="explanation"><dt>合法值与填写规则</dt><dd>必填正整数并引用存在且显式选入的 Attribute；同一个 SkillIdx 下不能重复 AttributeId。属性 Target、AllowedOps、ValueMode 必须与技能和效果匹配。</dd></div><div class="explanation"><dt>正确填写示例</dt><dd>灵缇效果 501 的 AttributeId=3；妙手回春效果 1101 的 AttributeId=11。</dd></div><div class="explanation"><dt>常见错误与后果</dt><dd>把 1101 的 AttributeId 填 9 会改成治疗量倍率，误实现成治疗量减半；填 run_speed 会违反 int32 类型并失去外键。</dd></div><div class="explanation"><dt>与其他字段的分工及取舍</dt><dd>AttributeId 选择能力，Op/Value 选择修改方式与幅度，基础值仍在角色和装备表。本版同技能同属性只一条效果，未来组合固定量和倍率需先扩合成契约。</dd></div></dl>
+            </details><details class="field-card" id="field-SkillEffect-Op"
+                data-table="SkillEffect" data-search="SkillEffect Op 运算 规定参数是固定增量还是万分比倍率因子。 固定增加 1 点负重和增加 20% 奔跑速度需要不同运算，不能凭数值大小自动猜测。现有 skill.lua 支持 add 与 mul_bp，同属性先汇总固定增量，再把各倍率相对 10000 的贡献相加，最后统一取整；显式 Op 使这一合成契约不受技能获得顺序影响。复活绝对值和满血标记仅接受 add，需结合属性白名单和模式解释，避免数学形式正确但机制无效。 string 保存现有代码认可的 add/mul_bp 枚举，可直接与 AllowedOps 匹配；不用符号 +、× 或数字 1/2，减少工具和策划之间的翻译。 server 执行运算和门禁，client 可正确解释效果比例与结果预览。客户端预览不能改变服务端统一汇总、取整和越界拒绝的顺序。 必填 add 或 mul_bp，且必须属于所引用属性 AllowedOps；absolute/flag 只用 add。不得填 mul、percent 或公式；同属性倍率贡献相加，不逐条相乘。 灵缇 Op=mul_bp、Value=12000 表示乘 1.2；军需官 Op=add、Value=1 表示增加 1 点负重。 把 Op 写 mul 会不被现有模块认可；按获得顺序把 1.2 和 1.5 相乘得到 1.8，会违背当前合成应为 1.7 的规则。 Op 定义算术，ValueMode 定义绝对值或开关语义，Unit 定义 add 的单位。首版不支持 set、min、max 或任意公式，新运算需配套实现与内容版本校验。">
+              <summary><span class="field-index">04</span>
+                <span class="field-label"><code>Op</code><span>运算</span></span>
+                <span class="field-tags"><span>string</span>
+                <span class="export-tag">server/client</span></span></summary>
+              <p class="field-purpose">规定参数是固定增量还是万分比倍率因子。</p><dl><div class="explanation"><dt>字段职责</dt><dd>规定参数是固定增量还是万分比倍率因子。</dd></div><div class="explanation"><dt>为什么需要这个字段</dt><dd>固定增加 1 点负重和增加 20% 奔跑速度需要不同运算，不能凭数值大小自动猜测。现有 skill.lua 支持 add 与 mul_bp，同属性先汇总固定增量，再把各倍率相对 10000 的贡献相加，最后统一取整；显式 Op 使这一合成契约不受技能获得顺序影响。复活绝对值和满血标记仅接受 add，需结合属性白名单和模式解释，避免数学形式正确但机制无效。</dd></div><div class="explanation"><dt>为什么使用这个类型</dt><dd>string 保存现有代码认可的 add/mul_bp 枚举，可直接与 AllowedOps 匹配；不用符号 +、× 或数字 1/2，减少工具和策划之间的翻译。</dd></div><div class="explanation"><dt>为什么这样导出</dt><dd>server 执行运算和门禁，client 可正确解释效果比例与结果预览。客户端预览不能改变服务端统一汇总、取整和越界拒绝的顺序。</dd></div><div class="explanation"><dt>合法值与填写规则</dt><dd>必填 add 或 mul_bp，且必须属于所引用属性 AllowedOps；absolute/flag 只用 add。不得填 mul、percent 或公式；同属性倍率贡献相加，不逐条相乘。</dd></div><div class="explanation"><dt>正确填写示例</dt><dd>灵缇 Op=mul_bp、Value=12000 表示乘 1.2；军需官 Op=add、Value=1 表示增加 1 点负重。</dd></div><div class="explanation"><dt>常见错误与后果</dt><dd>把 Op 写 mul 会不被现有模块认可；按获得顺序把 1.2 和 1.5 相乘得到 1.8，会违背当前合成应为 1.7 的规则。</dd></div><div class="explanation"><dt>与其他字段的分工及取舍</dt><dd>Op 定义算术，ValueMode 定义绝对值或开关语义，Unit 定义 add 的单位。首版不支持 set、min、max 或任意公式，新运算需配套实现与内容版本校验。</dd></div></dl>
+            </details><details class="field-card" id="field-SkillEffect-Value"
+                data-table="SkillEffect" data-search="SkillEffect Value 参数值 保存该效果的精确整数强度或机制参数。 采用整数参数可与现有 Lua 整数运算、毫米和 Tick 配置保持一致，并让客户端与服务端避免浮点解释差异。mul_bp 的 10000 是原值，7000 是减少 30%，绝不是 30 或 -3000；add 又必须结合 Unit 和 ValueMode 判断是负重增量、复活绝对生命或开关。参数合法并不保证所有装备合法，基础 1 Tick 减半取整为 0 时仍要拒绝最终配置。 int32 配合现有整数计算和导表类型；万分比无需小数即可表达常见百分比。不要使用 Excel 公式、带百分号文本或 0.3 浮点值。 server 用于最终属性和复活结果计算，client 用相同参数解释效果与预览。实际治疗、备弹发放、工具数量等仍以权威状态为准，不能由客户端看数值就直接加资源。 必填整数；add 通用范围 -1000000～1000000，mul_bp 为 0～100000；absolute 参数非负且复活生命至少 1，flag 只能 1，奖励次数不得负。最终值还需满足属性边界和角色上限，越界拒绝不截断。 301 的 Value=7000，建议基础扣耗 10 变为 7；101 的 Value=25 表示复活生命 25；201 的 Value=1 是满血标记。 减少 30% 填 30 会得到原值的 0.3%；填 -3000 会成为非法倍率；给复活生命填 1000000 即使通用 add 合法，也可能超出角色最大生命。 Value 是效果强度，基础值不复制到此列，技能成本也不从它自动计算。本版未确认的数值标为建议初值；未来平衡调整只改参数并同步 EffectDesc，保留稳定 ID。">
+              <summary><span class="field-index">05</span>
+                <span class="field-label"><code>Value</code><span>参数值</span></span>
+                <span class="field-tags"><span>int32</span>
+                <span class="export-tag">server/client</span></span></summary>
+              <p class="field-purpose">保存该效果的精确整数强度或机制参数。</p><dl><div class="explanation"><dt>字段职责</dt><dd>保存该效果的精确整数强度或机制参数。</dd></div><div class="explanation"><dt>为什么需要这个字段</dt><dd>采用整数参数可与现有 Lua 整数运算、毫米和 Tick 配置保持一致，并让客户端与服务端避免浮点解释差异。mul_bp 的 10000 是原值，7000 是减少 30%，绝不是 30 或 -3000；add 又必须结合 Unit 和 ValueMode 判断是负重增量、复活绝对生命或开关。参数合法并不保证所有装备合法，基础 1 Tick 减半取整为 0 时仍要拒绝最终配置。</dd></div><div class="explanation"><dt>为什么使用这个类型</dt><dd>int32 配合现有整数计算和导表类型；万分比无需小数即可表达常见百分比。不要使用 Excel 公式、带百分号文本或 0.3 浮点值。</dd></div><div class="explanation"><dt>为什么这样导出</dt><dd>server 用于最终属性和复活结果计算，client 用相同参数解释效果与预览。实际治疗、备弹发放、工具数量等仍以权威状态为准，不能由客户端看数值就直接加资源。</dd></div><div class="explanation"><dt>合法值与填写规则</dt><dd>必填整数；add 通用范围 -1000000～1000000，mul_bp 为 0～100000；absolute 参数非负且复活生命至少 1，flag 只能 1，奖励次数不得负。最终值还需满足属性边界和角色上限，越界拒绝不截断。</dd></div><div class="explanation"><dt>正确填写示例</dt><dd>301 的 Value=7000，建议基础扣耗 10 变为 7；101 的 Value=25 表示复活生命 25；201 的 Value=1 是满血标记。</dd></div><div class="explanation"><dt>常见错误与后果</dt><dd>减少 30% 填 30 会得到原值的 0.3%；填 -3000 会成为非法倍率；给复活生命填 1000000 即使通用 add 合法，也可能超出角色最大生命。</dd></div><div class="explanation"><dt>与其他字段的分工及取舍</dt><dd>Value 是效果强度，基础值不复制到此列，技能成本也不从它自动计算。本版未确认的数值标为建议初值；未来平衡调整只改参数并同步 EffectDesc，保留稳定 ID。</dd></div></dl>
+            </details></div></div></section><section class="chapter" id="section-3"><div class="chapter-heading"><span class="chapter-number">03</span><h2>Excel 表头与导出约定</h2></div><p>三张表都沿用项目已有的四行表头：</p>
+<div class="table-scroll" tabindex="0"><table>
+<thead>
+<tr>
+<th>行号</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>第 1 行</td>
+<td>非空中文字段说明</td>
+</tr>
+<tr>
+<td>第 2 行</td>
+<td>类型，只使用当前工具支持的 <code>int32</code>、<code>string</code></td>
+</tr>
+<tr>
+<td>第 3 行</td>
+<td>下文规定的英文字段名，大小写一致</td>
+</tr>
+<tr>
+<td>第 4 行</td>
+<td><code>server</code>、<code>client</code>、<code>key</code> 等导出标记</td>
+</tr>
+<tr>
+<td>第 5 行起</td>
+<td>数据记录</td>
+</tr>
+</tbody>
+</table></div>
+<p>字段从 A 列连续声明。每表只有一个 <code>int32</code> 主键，标记包含 <code>server/client/key</code>。ID 使用正整数；普通整数单元格不能留空，不填百分号、不填小数、不写 Excel 公式。资源字符串和展示字符串允许留空。</p>
+<p>下面的 TSV 区块以制表符分列，可复制到工作表 A1。Skill 数据行中连续的制表符表示资源字段为空，不要把“待填”“空”写成资源 ID。</p></section><section class="chapter" id="section-4"><div class="chapter-heading"><span class="chapter-number">04</span><h2>技能表 Skill</h2></div><h3>4.1 推荐字段</h3>
+<div class="table-scroll" tabindex="0"><table>
+<thead>
+<tr>
+<th>列</th>
+<th>中文说明</th>
+<th>英文字段</th>
+<th>类型</th>
+<th>导出标记</th>
+<th>填写规则</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A</td>
+<td>技能ID</td>
+<td><code>SkillIdx</code></td>
+<td>int32</td>
+<td>server/client/key</td>
+<td>唯一正整数，沿用现有 1～15</td>
+</tr>
+<tr>
+<td>B</td>
+<td>技能名称</td>
+<td><code>Name</code></td>
+<td>string</td>
+<td>server/client</td>
+<td>必填</td>
+</tr>
+<tr>
+<td>C</td>
+<td>技能说明</td>
+<td><code>Desc</code></td>
+<td>string</td>
+<td>client</td>
+<td>描述设计意图，不解析执行</td>
+</tr>
+<tr>
+<td>D</td>
+<td>消耗技能点</td>
+<td><code>Cost</code></td>
+<td>int32</td>
+<td>server/client</td>
+<td>0～10000；本版全部沿用 1</td>
+</tr>
+<tr>
+<td>E</td>
+<td>作用对象</td>
+<td><code>Target</code></td>
+<td>string</td>
+<td>server/client</td>
+<td><code>player</code>、<code>weapon</code>、<code>tool</code></td>
+</tr>
+<tr>
+<td>F</td>
+<td>效果类别</td>
+<td><code>Category</code></td>
+<td>string</td>
+<td>server/client</td>
+<td><code>numeric</code> 或 <code>mechanic</code></td>
+</tr>
+<tr>
+<td>G</td>
+<td>生命周期</td>
+<td><code>Lifetime</code></td>
+<td>string</td>
+<td>server/client</td>
+<td><code>passive</code>、<code>once</code>、<code>death</code></td>
+</tr>
+<tr>
+<td>H</td>
+<td>效果展示说明</td>
+<td><code>EffectDesc</code></td>
+<td>string</td>
+<td>client</td>
+<td>与效果参数一致，修改参数时同步修改文案</td>
+</tr>
+<tr>
+<td>I</td>
+<td>技能图标</td>
+<td><code>IconId</code></td>
+<td>string</td>
+<td>client</td>
+<td>真实资源 ID；未交付留空</td>
+</tr>
+<tr>
+<td>J</td>
+<td>动画资源</td>
+<td><code>AnimId</code></td>
+<td>string</td>
+<td>client</td>
+<td>需要表现时填写；普通被动技能可以为空</td>
+</tr>
+<tr>
+<td>K</td>
+<td>特效资源</td>
+<td><code>EffectId</code></td>
+<td>string</td>
+<td>client</td>
+<td>真实资源 ID；可以为空</td>
+</tr>
+<tr>
+<td>L</td>
+<td>音效资源</td>
+<td><code>SoundId</code></td>
+<td>string</td>
+<td>client</td>
+<td>真实资源 ID；可以为空</td>
+</tr>
+<tr>
+<td>M</td>
+<td>是否启用</td>
+<td><code>Enabled</code></td>
+<td>int32</td>
+<td>server/client</td>
+<td>0 禁用，1 纳入本版可选择技能候选</td>
+</tr>
+</tbody>
+</table></div>
+<h3>4.2 枚举含义</h3>
+<div class="table-scroll" tabindex="0"><table>
+<thead>
+<tr>
+<th>字段</th>
+<th>值</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Target</td>
+<td>player</td>
+<td>修改猎人自身能力；开箱奖励次数也作为猎人能力保存</td>
+</tr>
+<tr>
+<td>Target</td>
+<td>weapon</td>
+<td>修改已配装枪械的对应属性</td>
+</tr>
+<tr>
+<td>Target</td>
+<td>tool</td>
+<td>修改符合该属性处理器适用条件的工具</td>
+</tr>
+<tr>
+<td>Category</td>
+<td>numeric</td>
+<td>修改基础属性或容量</td>
+</tr>
+<tr>
+<td>Category</td>
+<td>mechanic</td>
+<td>改变复活、交互奖励等机制</td>
+</tr>
+<tr>
+<td>Lifetime</td>
+<td>passive</td>
+<td>持有且未失效时持续生效；常驻的开箱机制也使用此值</td>
+</tr>
+<tr>
+<td>Lifetime</td>
+<td>once</td>
+<td>本局只成功触发一次；成功后标记已消费</td>
+</tr>
+<tr>
+<td>Lifetime</td>
+<td>death</td>
+<td>按现有代码语义，在成功复活提交时移除；死亡瞬间不提前移除</td>
+</tr>
+<tr>
+<td>Enabled</td>
+<td>0</td>
+<td>保留完整配置和说明，不允许购买、配装、拾取或作为默认技能发放</td>
+</tr>
+<tr>
+<td>Enabled</td>
+<td>1</td>
+<td>允许进入候选内容；仍须通过实现能力、参数和来源完整性校验</td>
+</tr>
+</tbody>
+</table></div>
+<p><code>Enabled</code> 是本版新增的目标规则，当前代码尚未读取它。禁用技能仍检查字段、外键和参数格式；只有启用技能进入运行时 <code>content.skills</code>，并接受处理器已实现检查。禁用技能的关联物品或默认配装也不能出现在启用内容中。</p>
+<p>本版 TSV 的 1 表示“建议调试时启用”，不是发布批准。建议初值尚未确认时，正式配置继续保持草稿；完整生产内容仍由显式选表清单决定。</p>
+<p>技能 2 沿用当前行为：可以单独持有，但单独持有不能复活。若以后要求购买或配装技能 2 前必须拥有技能 1，需另加明确依赖字段及选择校验。</p>
+<h3>4.3 完整建议数据</h3>
+<figure class="tsv-block"><figcaption><span>Skill · 四行表头 + 15 条记录</span><div class="js-only"><button data-copy="Skill">复制 TSV</button><button data-download="Skill">下载 TSV</button></div></figcaption><pre><code>技能ID    技能名称    技能说明    消耗技能点   作用对象    效果类别    生命周期    效果展示说明  技能图标    动画资源    特效资源    音效资源    是否启用
+int32   string  string  int32   string  string  string  string  string  string  string  string  int32
+SkillIdx    Name    Desc    Cost    Target  Category    Lifetime    EffectDesc  IconId  AnimId  EffectId    SoundId Enabled
+server/client/key   server/client   client  server/client   server/client   server/client   server/client   client  client  client  client  client  server/client
+1   死灵法师    可在对局中复活一次   1   player  mechanic    once    成功复活恢复25点生命和40点体力，本局只能使用一次                  1
+2   重振旗鼓    复活后将血量恢复至上限 1   player  mechanic    death   成功复活时恢复至最大生命，复活后移除本技能                   1
+3   精力充沛    降低奔跑时体力消耗   1   player  numeric passive 奔跑体力消耗降低30%                 0
+4   军需官 提升角色负重能力    1   player  numeric passive 枪械配装负重上限增加1点                    1
+5   灵缇  提升一定奔跑速度    1   player  numeric passive 奔跑速度增加20%                   1
+6   猫步  降低角色行动时发出的声音    1   player  numeric passive 地面行走、奔跑和匍匐的行动声传播半径降低50%                 0
+7   枪斗术 增加枪械近战伤害    1   weapon  numeric passive 枪械近战伤害增加50%                 1
+8   弹药大师    提升枪械初始备弹    1   weapon  numeric passive 开局时枪械初始备弹翻倍，不增加弹匣容量                 1
+9   手速超群    减少换弹时间  1   weapon  numeric passive 枪械每轮装填时间减少25%                   1
+10  稳定瞄准    减少武器轮转时间，本版指射击间隔    1   weapon  numeric passive 枪械射击间隔减少20%                 1
+11  妙手回春    医疗包的使用时长减半  1   tool    numeric passive 医疗包使用时长减少50%                    1
+12  灵丹妙药    医疗包的治疗效果翻倍  1   tool    numeric passive 医疗包治疗量翻倍，实际生命不超过最大生命                    1
+13  投球好手    增加投掷物投掷距离   1   tool    numeric passive 当前已实现的炸药最大投掷距离增加50%                 1
+14  开箱大师    互动道具箱时可以额外获得一个道具    1   player  mechanic    passive 成功打开适用道具箱时，额外取得同一箱子奖励来源中的1个道具                   0
+15  货运骡子    非消耗品道具额外增加携带量   1   tool    numeric passive 每种适用非消耗品工具的携带次数上限增加1，不自动补发数量                    0
+</code></pre></figure>
+<p>相对原表，技能 14 的 <code>Target</code> 改为 <code>player</code>，<code>Category</code> 改为 <code>mechanic</code>：它是猎人在箱子交互中的额外奖励能力。技能 15 按用户确认的“每种非消耗品工具的携带数量／可用次数增加”配置为携带次数上限加成，不增加槽位或背包格数。</p></section><section class="chapter" id="section-5"><div class="chapter-heading"><span class="chapter-number">05</span><h2>属性表 Attribute</h2></div><h3>5.1 推荐字段</h3>
+<div class="table-scroll" tabindex="0"><table>
+<thead>
+<tr>
+<th>列</th>
+<th>中文说明</th>
+<th>英文字段</th>
+<th>类型</th>
+<th>导出标记</th>
+<th>填写规则</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A</td>
+<td>属性ID</td>
+<td><code>AttributeId</code></td>
+<td>int32</td>
+<td>server/client/key</td>
+<td>唯一正整数，原 1～10 保留，新增从 11 起</td>
+</tr>
+<tr>
+<td>B</td>
+<td>属性名称</td>
+<td><code>Name</code></td>
+<td>string</td>
+<td>server/client</td>
+<td>必填，供策划及界面解释</td>
+</tr>
+<tr>
+<td>C</td>
+<td>属性代码</td>
+<td><code>Stat</code></td>
+<td>string</td>
+<td>server/client</td>
+<td>唯一、稳定，必须对应已登记属性规则</td>
+</tr>
+<tr>
+<td>D</td>
+<td>作用对象</td>
+<td><code>Target</code></td>
+<td>string</td>
+<td>server/client</td>
+<td>与引用技能的 Target 一致</td>
+</tr>
+<tr>
+<td>E</td>
+<td>参数单位</td>
+<td><code>Unit</code></td>
+<td>string</td>
+<td>server/client</td>
+<td>固定单位代码，见下表</td>
+</tr>
+<tr>
+<td>F</td>
+<td>合法运算</td>
+<td><code>AllowedOps</code></td>
+<td>string</td>
+<td>server</td>
+<td><code>add</code>、<code>mul_bp</code>，多项用半角竖线分隔</td>
+</tr>
+<tr>
+<td>G</td>
+<td>数值语义</td>
+<td><code>ValueMode</code></td>
+<td>string</td>
+<td>server</td>
+<td><code>modifier</code>、<code>absolute</code>、<code>flag</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>单位枚举：<code>stamina_per_second</code> 体力/秒、<code>weight_point</code> 负重点、<code>mm_per_tick</code> 毫米/Tick、<code>mm</code> 毫米、<code>hp</code> 生命点、<code>round</code> 发弹药、<code>tick</code> Tick、<code>stamina</code> 体力点、<code>bool</code> 标记、<code>item</code> 道具个数、<code>use</code> 可携带次数。</p>
+<div class="table-scroll" tabindex="0"><table>
+<thead>
+<tr>
+<th>ValueMode</th>
+<th>参数解释</th>
+<th>允许运算</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>modifier</td>
+<td>修改来源配置的基础值；额外奖励次数以 0 为基础值</td>
+<td>以该属性 AllowedOps 为准</td>
+</tr>
+<tr>
+<td>absolute</td>
+<td>提供机制所需绝对值；复活生命、体力从 0 计算</td>
+<td>add</td>
+</tr>
+<tr>
+<td>flag</td>
+<td>开启已实现的机制修饰，本版用于满血复活</td>
+<td>add，且 Value 只能为 1</td>
+</tr>
+</tbody>
+</table></div>
+<p><code>ValueMode=absolute</code> 时，<code>add=25</code> 表示“复活后设置为 25 点生命”，不是增加当前生命 25。<code>modifier</code> 的 <code>add</code> 才表示在来源基础值上增加固定量。</p>
+<h3>5.2 完整建议数据</h3>
+<figure class="tsv-block"><figcaption><span>Attribute · 四行表头 + 16 条记录</span><div class="js-only"><button data-copy="Attribute">复制 TSV</button><button data-download="Attribute">下载 TSV</button></div></figcaption><pre><code>属性ID    属性名称    属性代码    作用对象    参数单位    合法运算    数值语义
+int32   string  string  string  string  string  string
+AttributeId Name    Stat    Target  Unit    AllowedOps  ValueMode
+server/client/key   server/client   server/client   server/client   server/client   server  server
+1   奔跑每秒体力消耗    run_cost    player  stamina_per_second  add|mul_bp  modifier
+2   枪械配装负重上限    weight  player  weight_point    add|mul_bp  modifier
+3   奔跑速度    run_speed   player  mm_per_tick add|mul_bp  modifier
+4   行动声传播半径 movement_noise_radius   player  mm  add|mul_bp  modifier
+5   枪械近战伤害  melee_damage    weapon  hp  add|mul_bp  modifier
+6   枪械初始备弹  reserve weapon  round   add|mul_bp  modifier
+7   枪械射击间隔  shot_ticks  weapon  tick    add|mul_bp  modifier
+8   枪械每轮装填时间    reload_ticks    weapon  tick    add|mul_bp  modifier
+9   医疗包治疗量  medkit_heal tool    hp  add|mul_bp  modifier
+10  炸药最大投掷距离    throw_range tool    mm  add|mul_bp  modifier
+11  医疗包使用时间 medkit_ticks    tool    tick    add|mul_bp  modifier
+12  复活后生命   revive_hp   player  hp  add absolute
+13  复活后体力   revive_stamina  player  stamina add absolute
+14  复活恢复满血  revive_full_hp  player  bool    add flag
+15  箱子额外奖励道具数   crate_bonus_count   player  item    add modifier
+16  非消耗品工具携带次数上限    tool_capacity   tool    use add|mul_bp  modifier
+</code></pre></figure>
+<p>新增代码 <code>run_cost</code>、<code>movement_noise_radius</code>、<code>crate_bonus_count</code>、<code>tool_capacity</code> 是待实现的技能处理器代码。角色运行配置中虽已有 <code>run_cost</code>，目前尚未作为技能效果接入，也未执行奔跑扣耗。</p>
+<h3>5.3 基础值来源、时机和最终值边界</h3>
+<p>以下列是文档说明，不需要再添加到 Attribute 工作表。边界由代码注册和校验；这里的上下限约束运算后的最终值，不是效果表 Value 的输入范围。</p>
+<div class="table-scroll" tabindex="0"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>来源与适用范围</th>
+<th>读取/应用时机</th>
+<th>最终值范围与附加限制</th>
+<th>当前状态</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Player.RunCost，仅实际地面奔跑</td>
+<td>每个模拟 Tick 扣耗</td>
+<td>建议 0～10000 体力/秒；建议基础值 10</td>
+<td>待实现</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Player.EquipmentLimit；当前只合计已配装枪械重量</td>
+<td>配装合法性校验</td>
+<td>1～10000；当前不含工具重量和战利品背包</td>
+<td>已有机制</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Player.Run</td>
+<td>移动 Tick</td>
+<td>1～1000 毫米/Tick</td>
+<td>已有机制</td>
+</tr>
+<tr>
+<td>4</td>
+<td>Player 的行走、奔跑、匍匐基础噪声半径</td>
+<td>实际移动产生行动声时</td>
+<td>建议 0～100000 毫米；按姿态选择基础半径</td>
+<td>待实现</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Weapon.Melee；仅枪托/枪械近战</td>
+<td>近战动作起手</td>
+<td>1～1000000 生命点；不修改匕首和弹丸</td>
+<td>已有机制</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Weapon.InitialReserve；不含 Magazine</td>
+<td>开局初始化</td>
+<td>0～100000 发；配置重算不重新发放</td>
+<td>已有机制</td>
+</tr>
+<tr>
+<td>7</td>
+<td>Weapon.Interval</td>
+<td>射击起手设置冷却</td>
+<td>1～3600 Tick；不修改切枪或瞄准精度</td>
+<td>已有机制</td>
+</tr>
+<tr>
+<td>8</td>
+<td>Weapon.ReloadTicks</td>
+<td>每轮装填起手</td>
+<td>1～3600 Tick；装填方式仍由 ReloadType 决定</td>
+<td>已有机制</td>
+</tr>
+<tr>
+<td>9</td>
+<td>Tool.Value，仅 kind=medkit</td>
+<td>医疗包使用完成</td>
+<td>0～1000000 生命点；实际治疗受缺失生命限制</td>
+<td>已有机制</td>
+</tr>
+<tr>
+<td>10</td>
+<td>Tool.ThrowingDistance，目前仅 kind=bomb</td>
+<td>投掷动作完成、创建投掷物</td>
+<td>1～100000 毫米；不修改速度、伤害和爆炸范围</td>
+<td>已有机制</td>
+</tr>
+<tr>
+<td>11</td>
+<td>Tool.Lag，仅 kind=medkit</td>
+<td>医疗包使用起手</td>
+<td>1～36000 Tick</td>
+<td>已有机制</td>
+</tr>
+<tr>
+<td>12</td>
+<td>基础值 0，效果参数为复活后绝对生命</td>
+<td>成功复活提交</td>
+<td>1～当前角色最大生命；不得依赖技能 2 掩盖越界值</td>
+<td>已有机制</td>
+</tr>
+<tr>
+<td>13</td>
+<td>基础值 0，效果参数为复活后绝对体力</td>
+<td>成功复活提交</td>
+<td>0～当前角色最大体力</td>
+<td>已有机制</td>
+</tr>
+<tr>
+<td>14</td>
+<td>机制标记</td>
+<td>成功复活结果计算</td>
+<td>只允许 add=1；需要另有复活资格</td>
+<td>已有机制</td>
+</tr>
+<tr>
+<td>15</td>
+<td>基础额外奖励次数 0</td>
+<td>适用箱子的交互完成</td>
+<td>建议 0～8；本版固定 add=1，提交容量须能容纳全部候选</td>
+<td>待实现</td>
+</tr>
+<tr>
+<td>16</td>
+<td>新增 Tool.CarryLimit，筛选适用非消耗品工具</td>
+<td>配装、初始化、补给、拾取、导入和资产结算</td>
+<td>建议 1～100；不改变工具槽、背包格及重量上限</td>
+<td>待实现</td>
+</tr>
+</tbody>
+</table></div>
+<p>1、4、15、16 的范围为建议技术门禁，需在对应机制实现时登记。现有属性范围取自 <a href="../server/lua/game/skill.lua">skill.lua</a>；复活还受当前角色上限约束。</p></section><section class="chapter" id="section-6"><div class="chapter-heading"><span class="chapter-number">06</span><h2>技能效果表 SkillEffect</h2></div><h3>6.1 推荐字段</h3>
+<div class="table-scroll" tabindex="0"><table>
+<thead>
+<tr>
+<th>列</th>
+<th>中文说明</th>
+<th>英文字段</th>
+<th>类型</th>
+<th>导出标记</th>
+<th>填写规则</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A</td>
+<td>效果ID</td>
+<td><code>EffectIdx</code></td>
+<td>int32</td>
+<td>server/client/key</td>
+<td>全表唯一正整数；推荐按“技能 ID ×100＋行序号”分配</td>
+</tr>
+<tr>
+<td>B</td>
+<td>技能ID</td>
+<td><code>SkillIdx</code></td>
+<td>int32</td>
+<td>server/client</td>
+<td>引用 Skill.SkillIdx</td>
+</tr>
+<tr>
+<td>C</td>
+<td>属性ID</td>
+<td><code>AttributeId</code></td>
+<td>int32</td>
+<td>server/client</td>
+<td>引用 Attribute.AttributeId</td>
+</tr>
+<tr>
+<td>D</td>
+<td>运算</td>
+<td><code>Op</code></td>
+<td>string</td>
+<td>server/client</td>
+<td>必须属于属性 AllowedOps</td>
+</tr>
+<tr>
+<td>E</td>
+<td>参数值</td>
+<td><code>Value</code></td>
+<td>int32</td>
+<td>server/client</td>
+<td>必填整数，语义由 Op 和 ValueMode 共同决定</td>
+</tr>
+</tbody>
+</table></div>
+<p>效果 ID 只负责稳定身份，不参与计算或触发顺序。例如 101、102 均引用技能 1，但代码仍以 SkillIdx 外键关联，不能通过效果 ID 的前缀推导技能。</p>
+<h3>6.2 完整建议数据</h3>
+<figure class="tsv-block"><figcaption><span>SkillEffect · 四行表头 + 16 条记录</span><div class="js-only"><button data-copy="SkillEffect">复制 TSV</button><button data-download="SkillEffect">下载 TSV</button></div></figcaption><pre><code>效果ID    技能ID    属性ID    运算  参数值
+int32   int32   int32   string  int32
+EffectIdx   SkillIdx    AttributeId Op  Value
+server/client/key   server/client   server/client   server/client   server/client
+101 1   12  add 25
+102 1   13  add 40
+201 2   14  add 1
+301 3   1   mul_bp  7000
+401 4   2   add 1
+501 5   3   mul_bp  12000
+601 6   4   mul_bp  5000
+701 7   5   mul_bp  15000
+801 8   6   mul_bp  20000
+901 9   8   mul_bp  7500
+1001    10  7   mul_bp  8000
+1101    11  11  mul_bp  5000
+1201    12  9   mul_bp  20000
+1301    13  10  mul_bp  15000
+1401    14  15  add 1
+1501    15  16  add 1
+</code></pre></figure>
+<p>技能 1 必须同时填写 101 和 102。只填生命或只填体力都不合法。技能 2 的效果不替代这两条配置。</p>
+<h3>6.3 怎样理解 add 和 mul_bp</h3>
+<div class="table-scroll" tabindex="0"><table>
+<thead>
+<tr>
+<th>写法</th>
+<th>含义</th>
+<th>例子</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>modifier + add=1</td>
+<td>基础属性增加 1 个该属性单位</td>
+<td>负重 3 变为 4</td>
+</tr>
+<tr>
+<td>modifier + add=-10</td>
+<td>基础属性减少 10 个单位</td>
+<td>仅在该属性允许且最终值合法时使用</td>
+</tr>
+<tr>
+<td>modifier + mul_bp=10000</td>
+<td>保持原值</td>
+<td>100%</td>
+</tr>
+<tr>
+<td>modifier + mul_bp=12000</td>
+<td>基础值乘 1.2</td>
+<td>增加 20%</td>
+</tr>
+<tr>
+<td>modifier + mul_bp=7500</td>
+<td>基础值乘 0.75</td>
+<td>减少 25%</td>
+</tr>
+<tr>
+<td>modifier + mul_bp=5000</td>
+<td>基础值乘 0.5</td>
+<td>减半</td>
+</tr>
+<tr>
+<td>modifier + mul_bp=20000</td>
+<td>基础值乘 2</td>
+<td>翻倍</td>
+</tr>
+<tr>
+<td>absolute + add=25</td>
+<td>机制绝对参数为 25</td>
+<td>复活后生命为 25</td>
+</tr>
+<tr>
+<td>flag + add=1</td>
+<td>开启指定机制修饰</td>
+<td>将复活后的生命覆盖为最大生命</td>
+</tr>
+</tbody>
+</table></div>
+<p><code>mul_bp</code> 使用万分比因子。减少 30% 填 7000，增加 30% 填 13000，不填 30、0.3 或 -3000。</p>
+<p>同一属性按当前运算规则合成：</p>
+<pre><code class="language-text">固定增量 = 所有 add 参数之和
+倍率因子 = 10000 + 所有 (mul_bp 参数 - 10000) 之和
+最终值   = floor((基础值 + 固定增量) × 倍率因子 / 10000)
+</code></pre>
+<p>多条倍率的贡献相加。两个不同技能分别增加 20% 和 50%，合成因子是 17000；两个分别减少 25% 的效果合成因子是 5000。不得按技能获得顺序逐条相乘。</p>
+<p>同一个技能内，同一个 AttributeId 只允许一条效果。若一个技能需要同属性的固定量和倍率组合，首版应先重新设计为一条明确效果，或另行扩展合成契约。</p>
+<p>Value 的通用输入范围沿用现有门禁：<code>add</code> 为 -1000000～1000000；<code>mul_bp</code> 为 0～100000。绝对复活参数不得为负，标记只能为 1，额外奖励次数不得为负。倍率合成后也必须满足最终值边界。</p>
+<p>运算结果向下取整，越界时拒绝配置或整份配装，不自动截断。例如使用时间基础为 1 Tick 时再减半会得到 0，必须报错；应调整来源参数或效果值。</p></section><section id="calculator" class="chapter extra-chapter">
+      <div class="chapter-heading"><span class="chapter-number">算例</span><h2>参数怎么改变最终属性</h2></div>
+      <p>选择一项 modifier 属性，查看基础值、固定增量和倍率共同产生的结果。这里只计算本地示例，不修改任何工作簿或游戏状态。</p>
+      <div class="calculator js-only"><div class="calc-controls">
+        <label class="wide">选择属性示例<select id="calc-preset"></select></label>
+        <label>来源基础值<input id="calc-base" type="number" step="1" value="150"></label>
+        <label>固定增量总和<input id="calc-add" type="number" step="1" value="0"></label>
+        <label>技能倍率因子<input id="calc-bp" type="number" step="1" value="12000"></label>
+        <label>另一技能的倍率因子<input id="calc-bp2" type="number" step="1" value="10000"></label>
+        <p class="wide calc-helper">10000 表示原值，12000 表示增加20%，7500 表示减少25%。第二倍率用于不同技能修改同一属性的合成示例；同一个技能仍不能重复配置同一属性。</p>
+      </div><div class="calc-result" aria-live="polite"><span class="result-label">向下取整后的结果</span>
+        <output id="calc-result">180</output><span id="calc-unit">毫米/Tick</span>
+        <p id="calc-equation"></p><p id="calc-status" class="calc-status"></p><p id="calc-note"></p>
+        <div class="calc-bars" aria-hidden="true"><div><span>基础</span><i id="bar-base"></i></div><div><span>有效</span><i id="bar-result"></i></div></div>
+      </div></div><noscript><p>浏览器未启用 JavaScript；下面公式和全部配置说明仍可阅读。</p></noscript>
+      <div class="formula-panel"><code>最终值 = floor((基础值 + Σadd) × (10000 + Σ(mul_bp − 10000)) / 10000)</code>
+        <p>倍率贡献相加，最后统一取整。结果越界时拒绝配置；医疗实际恢复量另受缺失生命限制。复活的绝对参数与满血标记按机制流程处理。</p></div>
+      </section><section class="chapter" id="section-7"><div class="chapter-heading"><span class="chapter-number">07</span><h2>全部技能的参数依据与结果示例</h2></div><p>示例基础值读取自当前角色、武器和工具工作簿，属于现有灰盒参数；计算示例不表示它们已被批准为正式平衡值。按 60 Hz 解释 Tick，1 秒为 60 Tick。</p>
+<div class="table-scroll" tabindex="0"><table>
+<thead>
+<tr>
+<th>ID / 技能</th>
+<th>本版完整参数</th>
+<th>示例结果</th>
+<th>参数依据</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1 死灵法师</td>
+<td>revive_hp add25；revive_stamina add40</td>
+<td>最大生命150、最大体力100的角色，复活后25生命、40体力</td>
+<td>建议初值，参考现有独立技能测试；策划尚未给出复活比例</td>
+</tr>
+<tr>
+<td>2 重振旗鼓</td>
+<td>revive_full_hp add1</td>
+<td>配合技能1复活，生命150、体力仍40</td>
+<td>满血效果来自已有描述</td>
+</tr>
+<tr>
+<td>3 精力充沛</td>
+<td>run_cost mul_bp7000</td>
+<td>建议基础10体力/秒变为7；100体力连续奔跑约14.3秒</td>
+<td>基础扣耗及降低30%均为建议规则</td>
+</tr>
+<tr>
+<td>4 军需官</td>
+<td>weight add1</td>
+<td>负重3变4，可容纳两把各负重2的长枪，仍受2枪槽限制</td>
+<td>建议初值，提供一个清晰的配装选择变化</td>
+</tr>
+<tr>
+<td>5 灵缇</td>
+<td>run_speed mul_bp12000</td>
+<td>奔跑150变180毫米/Tick，普通移动100维持原值</td>
+<td>建议增加20%</td>
+</tr>
+<tr>
+<td>6 猫步</td>
+<td>movement_noise_radius mul_bp5000</td>
+<td>建议奔跑声10000变5000毫米；行走6000变3000</td>
+<td>建议半径减半；不是音量减半</td>
+</tr>
+<tr>
+<td>7 枪斗术</td>
+<td>melee_damage mul_bp15000</td>
+<td>步枪/霰弹枪近战50变75，手枪40变60</td>
+<td>建议增加50%</td>
+</tr>
+<tr>
+<td>8 弹药大师</td>
+<td>reserve mul_bp20000</td>
+<td>步枪备弹10变20，霰弹枪/手枪12变24</td>
+<td>建议按各枪基础备弹翻倍；弹匣5或6维持原值</td>
+</tr>
+<tr>
+<td>9 手速超群</td>
+<td>reload_ticks mul_bp7500</td>
+<td>每轮装填180变135 Tick，即3秒变2.25秒</td>
+<td>建议减少25%，按装填轮次使用</td>
+</tr>
+<tr>
+<td>10 稳定瞄准</td>
+<td>shot_ticks mul_bp8000</td>
+<td>长枪60变48 Tick，手枪30变24 Tick</td>
+<td>建议间隔减少20%；理论射击频率约增加25%</td>
+</tr>
+<tr>
+<td>11 妙手回春</td>
+<td>medkit_ticks mul_bp5000</td>
+<td>急救包120变60 Tick，即2秒变1秒</td>
+<td>减半来自已有描述</td>
+</tr>
+<tr>
+<td>12 灵丹妙药</td>
+<td>medkit_heal mul_bp20000</td>
+<td>急救包治疗50变100；若只缺30生命则实际恢复30</td>
+<td>翻倍来自已有描述</td>
+</tr>
+<tr>
+<td>13 投球好手</td>
+<td>throw_range mul_bp15000</td>
+<td>炸药束1600变2400毫米</td>
+<td>建议增加50%，飞行速度100毫米/Tick维持原值</td>
+</tr>
+<tr>
+<td>14 开箱大师</td>
+<td>crate_bonus_count add1</td>
+<td>箱子基础奖励之外，再取得同来源中的1个道具单位</td>
+<td>数量1来自已有描述；奖励来源等待补充策划</td>
+</tr>
+<tr>
+<td>15 货运骡子</td>
+<td>tool_capacity add1</td>
+<td>急救包基础携带上限3变4；库存只有3时仍只带3</td>
+<td>建议增加1，适用范围见下一节</td>
+</tr>
+</tbody>
+</table></div>
+<p>建议初值可在评审后单独调整，不改变技能和属性 ID。当前测试夹具中的负重 add2、备弹 add20、部分时长减半仅用于验证运算，不能当作本版建议值的来源批准。</p><div class="skill-deepdives" id="skill-details"><h3>每项技能的设计理由、参数与验收</h3>
+      <p>下列参数与三表数据一致。已有描述确定的效果与建议初值分别说明，机制状态也单独标明。</p>
+      <div class="filter-bar js-only"><label class="search-label">查找技能
+      <input id="skill-search" type="search" placeholder="名称、ID或属性代码" autocomplete="off"></label>
+      <div class="filter-options" aria-label="筛选技能实现状态"><button data-skill-filter="all" aria-pressed="true">全部 · 15</button>
+      <button data-skill-filter="ready" aria-pressed="false">已有机制 · 11</button>
+      <button data-skill-filter="pending" aria-pressed="false">待扩展 · 4</button></div>
+      <span id="skill-count" role="status">15 项技能</span></div><p id="skill-empty" class="empty-state" hidden>没有匹配的技能。</p><details class="skill-detail" id="skill-1" data-status="ready"
+          data-search="死灵法师 1 revive_hp / add / 25 revive_stamina / add / 40 把复活资格与复活后的生命、体力拆成两条效果，可以分别调整恢复后的生存能力和逃离能力。一次成功复活给玩家纠正一次失误的机会，但不能让反复倒地成为稳定获益方式，因此生命周期使用 once，并只在复活提交成功后消费技能。 配置 revive_hp/add/25 与 revive_stamina/add/40；25 和 40 均为建议初值，参考现有独立技能测试，尚未经策划批准。生命恢复到 25，使最大生命 150 的角色复活后仍需治疗或脱离危险；体力恢复到 40，则保留移动和后续操作的余地。两项是绝对复活结果，不是在死亡前数值上加 25、加 40，也不是百分比。 作用对象为 player，类别为 mechanic，生命周期为 once。必须同时存在生命与体力两条效果；生命不得超过当前角色最大生命，体力不得超过最大体力。现有复活机制可以复用，新三表结构仍需解析迁移。 猎人死亡后进入等待复活选择状态；合法死亡序号与原地体型放置等检查全部通过，才原子提交复活结果并消费技能。仅死亡或收到复活请求都不算成功触发。 最大生命 150、最大体力 100 的猎人成功复活后为 25 生命、40 体力。若同时持有重振旗鼓，最终生命改为 150，体力仍为 40。成功消费后，本局再次死亡不能再凭该技能复活。 不能只填写复活生命或只填写复活体力；不能把 add 当作增加现有生命。现有 180 Tick 的新目标获取抑制约为 3 秒，是代码固定规则，既不由本技能数值控制，也不提供无敌；已经起手的攻击仍可造成伤害。"><summary><span class="skill-number">01</span>
+          <span class="skill-name">死灵法师</span><span class="status ready">已有运行机制</span></summary>
+          <div class="skill-parameters"><code>revive_hp / add / 25</code><code>revive_stamina / add / 40</code></div><dl><div class="explanation"><dt>这项技能提供什么选择</dt><dd>把复活资格与复活后的生命、体力拆成两条效果，可以分别调整恢复后的生存能力和逃离能力。一次成功复活给玩家纠正一次失误的机会，但不能让反复倒地成为稳定获益方式，因此生命周期使用 once，并只在复活提交成功后消费技能。</dd></div><div class="explanation"><dt>为什么采用这组初始参数</dt><dd>配置 revive_hp/add/25 与 revive_stamina/add/40；25 和 40 均为建议初值，参考现有独立技能测试，尚未经策划批准。生命恢复到 25，使最大生命 150 的角色复活后仍需治疗或脱离危险；体力恢复到 40，则保留移动和后续操作的余地。两项是绝对复活结果，不是在死亡前数值上加 25、加 40，也不是百分比。</dd></div><div class="explanation"><dt>实际作用范围</dt><dd>作用对象为 player，类别为 mechanic，生命周期为 once。必须同时存在生命与体力两条效果；生命不得超过当前角色最大生命，体力不得超过最大体力。现有复活机制可以复用，新三表结构仍需解析迁移。</dd></div><div class="explanation"><dt>触发与消费时机</dt><dd>猎人死亡后进入等待复活选择状态；合法死亡序号与原地体型放置等检查全部通过，才原子提交复活结果并消费技能。仅死亡或收到复活请求都不算成功触发。</dd></div><div class="explanation"><dt>完整结果示例</dt><dd>最大生命 150、最大体力 100 的猎人成功复活后为 25 生命、40 体力。若同时持有重振旗鼓，最终生命改为 150，体力仍为 40。成功消费后，本局再次死亡不能再凭该技能复活。</dd></div><div class="explanation"><dt>容易误解的地方</dt><dd>不能只填写复活生命或只填写复活体力；不能把 add 当作增加现有生命。现有 180 Tick 的新目标获取抑制约为 3 秒，是代码固定规则，既不由本技能数值控制，也不提供无敌；已经起手的攻击仍可造成伤害。</dd></div></dl><div class="acceptance"><h4>验收场景</h4><ul><li>使用 EffectIdx=101、102 两条效果，分别引用属性 12、13；缺少任一条时拒绝配置。</li><li>最大生命 150、最大体力 100 的猎人单独持有本技能，成功复活结果严格为 25/40。</li><li>死亡序号不匹配或原地无法放置时，保持等待复活状态，不消费技能，不修改资源。</li><li>成功复活只消费一次；重复请求和下一次死亡均不能再执行同一次复活。</li></ul></div></details><details class="skill-detail" id="skill-2" data-status="ready"
+          data-search="重振旗鼓 2 revive_full_hp / add / 1 将满血恢复作为对既有复活流程的修饰，能让死灵法师承担复活资格，而本技能承担复活质量，两者的价值和职责都更清楚。使用 death 生命周期，按现有语义在成功复活提交时移除，避免死亡瞬间提前删除导致复活计算丢失效果。 配置 revive_full_hp/add/1。满血效果来自原技能描述，是明确要求；这里的 1 是机制开启标记，不是恢复 1 点生命，也不是 100% 的倍率写法。采用标记而不是固定生命值，可以自动适配不同角色的最大生命，避免某个固定数值只对特定角色正确。 作用对象为 player，类别为 mechanic，生命周期为 death。仅覆盖成功复活后的生命结果，不提供复活资格，不修改复活体力。只能使用 flag 语义的 add=1，不能用 mul_bp 或填其他标记值。 进入成功复活结果计算时，先验证原复活生命、体力参数本身合法，再将生命覆盖为当前角色最大生命。复活提交成功后，按死亡型技能的消费规则移除。 最大生命 150 的猎人同时持有技能 1 和 2，成功复活结果为 150 生命、40 体力。单独持有本技能且没有其他复活资格时，死亡后不能因此获得复活入口。 当前没有技能依赖字段，所以可以单独持有，但单独持有不能复活。不能用满血覆盖掩盖技能 1 配置越界；若以后要求必须先拥有死灵法师才可购买，需要增加明确依赖及选择校验，而不是在名称中隐含规则。"><summary><span class="skill-number">02</span>
+          <span class="skill-name">重振旗鼓</span><span class="status ready">已有运行机制</span></summary>
+          <div class="skill-parameters"><code>revive_full_hp / add / 1</code></div><dl><div class="explanation"><dt>这项技能提供什么选择</dt><dd>将满血恢复作为对既有复活流程的修饰，能让死灵法师承担复活资格，而本技能承担复活质量，两者的价值和职责都更清楚。使用 death 生命周期，按现有语义在成功复活提交时移除，避免死亡瞬间提前删除导致复活计算丢失效果。</dd></div><div class="explanation"><dt>为什么采用这组初始参数</dt><dd>配置 revive_full_hp/add/1。满血效果来自原技能描述，是明确要求；这里的 1 是机制开启标记，不是恢复 1 点生命，也不是 100% 的倍率写法。采用标记而不是固定生命值，可以自动适配不同角色的最大生命，避免某个固定数值只对特定角色正确。</dd></div><div class="explanation"><dt>实际作用范围</dt><dd>作用对象为 player，类别为 mechanic，生命周期为 death。仅覆盖成功复活后的生命结果，不提供复活资格，不修改复活体力。只能使用 flag 语义的 add=1，不能用 mul_bp 或填其他标记值。</dd></div><div class="explanation"><dt>触发与消费时机</dt><dd>进入成功复活结果计算时，先验证原复活生命、体力参数本身合法，再将生命覆盖为当前角色最大生命。复活提交成功后，按死亡型技能的消费规则移除。</dd></div><div class="explanation"><dt>完整结果示例</dt><dd>最大生命 150 的猎人同时持有技能 1 和 2，成功复活结果为 150 生命、40 体力。单独持有本技能且没有其他复活资格时，死亡后不能因此获得复活入口。</dd></div><div class="explanation"><dt>容易误解的地方</dt><dd>当前没有技能依赖字段，所以可以单独持有，但单独持有不能复活。不能用满血覆盖掩盖技能 1 配置越界；若以后要求必须先拥有死灵法师才可购买，需要增加明确依赖及选择校验，而不是在名称中隐含规则。</dd></div></dl><div class="acceptance"><h4>验收场景</h4><ul><li>EffectIdx=201 引用属性 14，Op=add、Value=1；其余值或运算必须拒绝。</li><li>与技能 1 组合时恢复至角色最大生命，体力仍为技能 1 配置的 40。</li><li>单独持有时不创建复活资格；失效或放置失败的复活请求不移除本技能。</li><li>技能 1 的生命参数超过角色上限时，即使同时拥有本技能，也必须拒绝该配置组合。</li></ul></div></details><details class="skill-detail" id="skill-3" data-status="pending"
+          data-search="精力充沛 3 run_cost / mul_bp / 7000 降低奔跑扣耗可以延长追击、撤离和绕路的持续时间，收益来自续航而非直接提速，因此与灵缇形成不同选择。当前 RunCost=0，且移动逻辑没有持续扣体力，仅增加倍率配置不会产生收益，必须先建立可靠的实际奔跑扣耗规则。 配置 run_cost/mul_bp/7000，建议基础 RunCost=10 体力/秒，最终为 7 体力/秒。基础扣耗 10 和降低 30% 都是建议规则，尚未经策划批准。选择 30% 是为了让续航变化可被直接感知，同时保留奔跑耗尽的约束；倍率写 7000 表示保留 70% 消耗，不写 30、0.3 或负 3000。 作用对象为 player，类别为 numeric，生命周期为 passive。仅作用于实际地面奔跑，不改变普通行走、匍匐、爬梯和跳跃规则。该技能机制尚未实现，必须保持 Enabled=0，直到扣耗、状态保存与校验接入。 每个产生实际奔跑位移的模拟 Tick 累加有效每秒扣耗，按 tick_hz 折算整数体力并保存余数。站立或撞墙不动不扣耗；停止奔跑不能清空余数来规避消耗，暂停不推进扣耗。 在 60 Hz 下，连续 60 个有效奔跑 Tick，基础消耗 10 体力，持有技能后消耗 7。100 体力在只计算扣耗、且没有恢复干预时，基础约支持 10 秒奔跑，技能后约支持 14.3 秒。 RunCost=0 乘 7000 仍为 0，应提示技能无实际作用。扣耗余数必须与体力恢复余数分开保存；耗尽后建议要求松开奔跑键再按下，避免按住时每恢复 1 点就立即反复切回奔跑。"><summary><span class="skill-number">03</span>
+          <span class="skill-name">精力充沛</span><span class="status pending">待扩展 · 建议禁用</span></summary>
+          <div class="skill-parameters"><code>run_cost / mul_bp / 7000</code></div><dl><div class="explanation"><dt>这项技能提供什么选择</dt><dd>降低奔跑扣耗可以延长追击、撤离和绕路的持续时间，收益来自续航而非直接提速，因此与灵缇形成不同选择。当前 RunCost=0，且移动逻辑没有持续扣体力，仅增加倍率配置不会产生收益，必须先建立可靠的实际奔跑扣耗规则。</dd></div><div class="explanation"><dt>为什么采用这组初始参数</dt><dd>配置 run_cost/mul_bp/7000，建议基础 RunCost=10 体力/秒，最终为 7 体力/秒。基础扣耗 10 和降低 30% 都是建议规则，尚未经策划批准。选择 30% 是为了让续航变化可被直接感知，同时保留奔跑耗尽的约束；倍率写 7000 表示保留 70% 消耗，不写 30、0.3 或负 3000。</dd></div><div class="explanation"><dt>实际作用范围</dt><dd>作用对象为 player，类别为 numeric，生命周期为 passive。仅作用于实际地面奔跑，不改变普通行走、匍匐、爬梯和跳跃规则。该技能机制尚未实现，必须保持 Enabled=0，直到扣耗、状态保存与校验接入。</dd></div><div class="explanation"><dt>触发与消费时机</dt><dd>每个产生实际奔跑位移的模拟 Tick 累加有效每秒扣耗，按 tick_hz 折算整数体力并保存余数。站立或撞墙不动不扣耗；停止奔跑不能清空余数来规避消耗，暂停不推进扣耗。</dd></div><div class="explanation"><dt>完整结果示例</dt><dd>在 60 Hz 下，连续 60 个有效奔跑 Tick，基础消耗 10 体力，持有技能后消耗 7。100 体力在只计算扣耗、且没有恢复干预时，基础约支持 10 秒奔跑，技能后约支持 14.3 秒。</dd></div><div class="explanation"><dt>容易误解的地方</dt><dd>RunCost=0 乘 7000 仍为 0，应提示技能无实际作用。扣耗余数必须与体力恢复余数分开保存；耗尽后建议要求松开奔跑键再按下，避免按住时每恢复 1 点就立即反复切回奔跑。</dd></div></dl><div class="acceptance"><h4>验收场景</h4><ul><li>未完成处理器前，EffectIdx=301 可以作为禁用草稿保存，Enabled=1 必须被能力校验拒绝。</li><li>RunCost=10、tick_hz=60 时，60 个有效奔跑 Tick 无技能扣 10、有技能扣 7；拆成多段奔跑仍得到一致结果。</li><li>站立、撞墙零位移、匍匐及爬梯均不使用本技能的奔跑扣耗。</li><li>扣耗余数与耗尽门禁在状态导入、恢复后保持一致，暂停不推进；体力耗尽按约定回到普通移动。</li></ul></div></details><details class="skill-detail" id="skill-4" data-status="ready"
+          data-search="军需官 4 weight / add / 1 负重上限的固定增量可以直接打开新的枪械组合，而不依赖角色原始上限的大小。当前负重只计算已配装枪械，所以将文案限定为枪械配装负重，能让玩家明确知道技能解决的是装备合法性，而不是工具携带、战利品数量或背包空间。 配置 weight/add/1，增加 1 个负重点为建议初值，尚未经策划批准。基础上限 3 提升至 4 后，两把各重 2 的长枪可同时纳入合法组合，能形成清晰的配装变化。固定加 1 比倍率更容易跨不同枪械组合评审，也避免整数取整让小上限角色几乎没有收益。 作用对象为 player，类别为 numeric，生命周期为 passive。修改 Player.EquipmentLimit；当前仅合计已配装枪械重量，仍遵守当前枪械槽位限制，不扩工具重量、战利品背包或背包格。 配装合法性校验及有效配置重算时读取上限。持有技能时用增加后的上限验证整份配装；移除或失效后恢复基础上限，并按正常配装门禁检查是否仍合法。 角色基础负重 3 时，有效负重上限为 4。两把各重 2 的长枪总重 4 可被接受，但仍受 2 个枪槽限制；即便负重尚有余量，也不能靠本技能增加第三个槽位。 weight 是上限属性，不是减少每把武器的重量。技能失效后不能留下超重配装却继续当作合法，也不能把新增上限当作工具或战利品的容量规则。"><summary><span class="skill-number">04</span>
+          <span class="skill-name">军需官</span><span class="status ready">已有运行机制</span></summary>
+          <div class="skill-parameters"><code>weight / add / 1</code></div><dl><div class="explanation"><dt>这项技能提供什么选择</dt><dd>负重上限的固定增量可以直接打开新的枪械组合，而不依赖角色原始上限的大小。当前负重只计算已配装枪械，所以将文案限定为枪械配装负重，能让玩家明确知道技能解决的是装备合法性，而不是工具携带、战利品数量或背包空间。</dd></div><div class="explanation"><dt>为什么采用这组初始参数</dt><dd>配置 weight/add/1，增加 1 个负重点为建议初值，尚未经策划批准。基础上限 3 提升至 4 后，两把各重 2 的长枪可同时纳入合法组合，能形成清晰的配装变化。固定加 1 比倍率更容易跨不同枪械组合评审，也避免整数取整让小上限角色几乎没有收益。</dd></div><div class="explanation"><dt>实际作用范围</dt><dd>作用对象为 player，类别为 numeric，生命周期为 passive。修改 Player.EquipmentLimit；当前仅合计已配装枪械重量，仍遵守当前枪械槽位限制，不扩工具重量、战利品背包或背包格。</dd></div><div class="explanation"><dt>触发与消费时机</dt><dd>配装合法性校验及有效配置重算时读取上限。持有技能时用增加后的上限验证整份配装；移除或失效后恢复基础上限，并按正常配装门禁检查是否仍合法。</dd></div><div class="explanation"><dt>完整结果示例</dt><dd>角色基础负重 3 时，有效负重上限为 4。两把各重 2 的长枪总重 4 可被接受，但仍受 2 个枪槽限制；即便负重尚有余量，也不能靠本技能增加第三个槽位。</dd></div><div class="explanation"><dt>容易误解的地方</dt><dd>weight 是上限属性，不是减少每把武器的重量。技能失效后不能留下超重配装却继续当作合法，也不能把新增上限当作工具或战利品的容量规则。</dd></div></dl><div class="acceptance"><h4>验收场景</h4><ul><li>EffectIdx=401 引用属性 2，add=1，基础上限 3 得到有效上限 4。</li><li>两把负重各 2 的长枪由原先超重变为合法；总重超过 4 的整份配装仍被拒绝。</li><li>枪械槽位限制继续生效，技能不会增加枪槽、工具槽或背包格。</li><li>移除技能后有效上限恢复为基础值，并重新检查配装合法性。</li></ul></div></details><details class="skill-detail" id="skill-5" data-status="ready"
+          data-search="灵缇 5 run_speed / mul_bp / 12000 提升奔跑速度可以缩短穿越危险区、追击与撤离所需时间，属于立即可见的机动收益。只修改奔跑而不同时修改所有姿态，可以保留普通行走、匍匐和地形行动的节奏，让玩家在速度与其他技能之间做选择，而不是获得全面移动能力提升。 配置 run_speed/mul_bp/12000，增加 20% 为建议初值，尚未经策划批准。基础 150 毫米/Tick 提升为 180，差值足以让同距离奔跑时间缩短，同时没有直接改变角色尺寸或移动碰撞。采用来源倍率，使不同基础奔跑速度的角色都获得一致的比例收益。 作用对象为 player，类别为 numeric，生命周期为 passive。仅修改 Player.Run 的有效值，最终值须处于 1～1000 毫米/Tick；普通移动、匍匐和其他姿态继续读取各自基础参数。 移动 Tick 选择有效奔跑速度时应用。获得或移除后重算只读有效配置；服务端移动与碰撞继续以权威位置和有效速度处理，客户端展示不决定实际位移。 奔跑基础 150 变为 180 毫米/Tick，普通移动 100 仍为 100。在 60 Hz 下两者的奔跑速度分别对应 9 和 10.8 米/秒；同一距离的理想奔跑用时约为原来的 83.3%。 12000 表示增加 20%，不能写成 add=20 或 mul_bp=20。速度增加不会自动降低体耗、穿越墙体或扩大允许动作；若以后叠加其他速度技能，按统一的增量倍率合成规则计算。"><summary><span class="skill-number">05</span>
+          <span class="skill-name">灵缇</span><span class="status ready">已有运行机制</span></summary>
+          <div class="skill-parameters"><code>run_speed / mul_bp / 12000</code></div><dl><div class="explanation"><dt>这项技能提供什么选择</dt><dd>提升奔跑速度可以缩短穿越危险区、追击与撤离所需时间，属于立即可见的机动收益。只修改奔跑而不同时修改所有姿态，可以保留普通行走、匍匐和地形行动的节奏，让玩家在速度与其他技能之间做选择，而不是获得全面移动能力提升。</dd></div><div class="explanation"><dt>为什么采用这组初始参数</dt><dd>配置 run_speed/mul_bp/12000，增加 20% 为建议初值，尚未经策划批准。基础 150 毫米/Tick 提升为 180，差值足以让同距离奔跑时间缩短，同时没有直接改变角色尺寸或移动碰撞。采用来源倍率，使不同基础奔跑速度的角色都获得一致的比例收益。</dd></div><div class="explanation"><dt>实际作用范围</dt><dd>作用对象为 player，类别为 numeric，生命周期为 passive。仅修改 Player.Run 的有效值，最终值须处于 1～1000 毫米/Tick；普通移动、匍匐和其他姿态继续读取各自基础参数。</dd></div><div class="explanation"><dt>触发与消费时机</dt><dd>移动 Tick 选择有效奔跑速度时应用。获得或移除后重算只读有效配置；服务端移动与碰撞继续以权威位置和有效速度处理，客户端展示不决定实际位移。</dd></div><div class="explanation"><dt>完整结果示例</dt><dd>奔跑基础 150 变为 180 毫米/Tick，普通移动 100 仍为 100。在 60 Hz 下两者的奔跑速度分别对应 9 和 10.8 米/秒；同一距离的理想奔跑用时约为原来的 83.3%。</dd></div><div class="explanation"><dt>容易误解的地方</dt><dd>12000 表示增加 20%，不能写成 add=20 或 mul_bp=20。速度增加不会自动降低体耗、穿越墙体或扩大允许动作；若以后叠加其他速度技能，按统一的增量倍率合成规则计算。</dd></div></dl><div class="acceptance"><h4>验收场景</h4><ul><li>EffectIdx=501 引用属性 3，mul_bp=12000，基础 150 精确得到 180。</li><li>普通移动基础 100 保持 100，匍匐与爬梯等未引用属性的速度保持各自来源值。</li><li>移除技能后奔跑恢复为基础 150，不累乘已有有效值。</li><li>最终速度越界时拒绝配置或配装；碰撞与服务端位移校验继续生效。</li></ul></div></details><details class="skill-detail" id="skill-6" data-status="pending"
+          data-search="猫步 6 movement_noise_radius / mul_bp / 5000 潜行技能需要影响怪物取得目标的条件，单纯降低客户端脚步音量不会改变服务端发现结果。把行动声传播半径作为独立属性，并让视觉与听觉各自判断，可保留近处无遮挡时被看到的风险，同时让远处或隔墙移动有可验证的隐蔽收益。 配置 movement_noise_radius/mul_bp/5000。建议基础行走 6000、奔跑 10000、匍匐 2000 毫米，怪物 HearingRange=10000 毫米；这些基础值及半径降低 50% 均为未批准建议。半径减半带来清晰的发现距离变化，且按姿态统一取比例；它不等于音量减半，也不让角色完全无声。 作用对象为 player，类别为 numeric，生命周期为 passive。只修改地面行走、奔跑、匍匐实际位移产生的行动声半径，不修改枪声、爆炸声、视觉 DetectRange 或警戒持续时间。听觉与噪声处理器尚未实现，Enabled 保持 0。 实际地面位移产生行动声后，按姿态选择基础半径并乘 5000。怪物听觉以距离不超过行动声半径与自身 HearingRange 的较小值判定；视觉以 DetectRange 内且视线无遮挡单独判定，任一满足可获取目标。 技能后行走声 6000→3000、奔跑声 10000→5000、匍匐声 2000→1000 毫米。DetectRange=6000、HearingRange=10000 的怪物在 8000 毫米处听到普通奔跑，却听不到猫步奔跑；无遮挡的 4000 毫米处仍可通过视觉发现。 必须移除当前 DetectRange 内无条件获取目标的旧入口，否则独立降低听觉无法兑现设计。首版二维声音可穿墙，不模拟材料衰减；站立无声，跳跃落地与爬梯不自动纳入。现有复活后的新目标获取抑制门禁仍优先执行。"><summary><span class="skill-number">06</span>
+          <span class="skill-name">猫步</span><span class="status pending">待扩展 · 建议禁用</span></summary>
+          <div class="skill-parameters"><code>movement_noise_radius / mul_bp / 5000</code></div><dl><div class="explanation"><dt>这项技能提供什么选择</dt><dd>潜行技能需要影响怪物取得目标的条件，单纯降低客户端脚步音量不会改变服务端发现结果。把行动声传播半径作为独立属性，并让视觉与听觉各自判断，可保留近处无遮挡时被看到的风险，同时让远处或隔墙移动有可验证的隐蔽收益。</dd></div><div class="explanation"><dt>为什么采用这组初始参数</dt><dd>配置 movement_noise_radius/mul_bp/5000。建议基础行走 6000、奔跑 10000、匍匐 2000 毫米，怪物 HearingRange=10000 毫米；这些基础值及半径降低 50% 均为未批准建议。半径减半带来清晰的发现距离变化，且按姿态统一取比例；它不等于音量减半，也不让角色完全无声。</dd></div><div class="explanation"><dt>实际作用范围</dt><dd>作用对象为 player，类别为 numeric，生命周期为 passive。只修改地面行走、奔跑、匍匐实际位移产生的行动声半径，不修改枪声、爆炸声、视觉 DetectRange 或警戒持续时间。听觉与噪声处理器尚未实现，Enabled 保持 0。</dd></div><div class="explanation"><dt>触发与消费时机</dt><dd>实际地面位移产生行动声后，按姿态选择基础半径并乘 5000。怪物听觉以距离不超过行动声半径与自身 HearingRange 的较小值判定；视觉以 DetectRange 内且视线无遮挡单独判定，任一满足可获取目标。</dd></div><div class="explanation"><dt>完整结果示例</dt><dd>技能后行走声 6000→3000、奔跑声 10000→5000、匍匐声 2000→1000 毫米。DetectRange=6000、HearingRange=10000 的怪物在 8000 毫米处听到普通奔跑，却听不到猫步奔跑；无遮挡的 4000 毫米处仍可通过视觉发现。</dd></div><div class="explanation"><dt>容易误解的地方</dt><dd>必须移除当前 DetectRange 内无条件获取目标的旧入口，否则独立降低听觉无法兑现设计。首版二维声音可穿墙，不模拟材料衰减；站立无声，跳跃落地与爬梯不自动纳入。现有复活后的新目标获取抑制门禁仍优先执行。</dd></div></dl><div class="acceptance"><h4>验收场景</h4><ul><li>EffectIdx=601 引用属性 4，mul_bp=5000；处理器未实现时拒绝 Enabled=1。</li><li>三种姿态分别得到 3000、5000、1000 毫米有效半径，零位移不产生这三类行动声。</li><li>8000 毫米奔跑听觉示例在无技能时发现、持有技能时不发现；4000 毫米无遮挡仍能视觉发现。</li><li>隔墙视觉失败后单独判断听觉，枪声与爆炸声半径不因猫步改变。</li></ul></div></details><details class="skill-detail" id="skill-7" data-status="ready"
+          data-search="枪斗术 7 melee_damage / mul_bp / 15000 枪械近战的增强让弹药紧张或近距离接触时存在更有价值的应对方式，收益集中在枪托动作而非所有伤害。独立保留 weapon 作用对象与 melee_damage 属性，可以避免玩家把它理解为匕首加成或枪械射击伤害加成，也方便后续按枪械基础近战值调试。 配置 melee_damage/mul_bp/15000，增加 50% 为建议初值，尚未经策划批准。当前长枪近战 50 变为 75、手枪 40 变为 60，足以放大近战价值；实际击杀次数仍取决于未来怪物生命与战斗环境，不能据此宣称固定几次击杀。倍率保持不同武器的基础差异。 作用对象为 weapon，类别为 numeric，生命周期为 passive。只修改 Weapon.Melee 对应的枪托／枪械近战伤害，最终值 1～1000000 生命点；匕首、弹丸伤害与攻击范围不受影响。 枪械近战动作起手时读取有效近战伤害。后续命中与伤害提交沿用现有动作机制；持有技能并不绕过命中条件，也不改变已经开始动作的其他参数。 步枪与霰弹枪基础近战 50 变为 75，手枪基础 40 变为 60。使用匕首时继续读取匕首自己的基础伤害，开枪时也继续读取弹丸伤害来源。 mul_bp=15000 是保留原值并增加 50%，不是额外增加 15000 点伤害。名称不能替代对象校验；效果表引用 player 或 tool 属性时应报错，而不是尝试套用到全部近战行为。"><summary><span class="skill-number">07</span>
+          <span class="skill-name">枪斗术</span><span class="status ready">已有运行机制</span></summary>
+          <div class="skill-parameters"><code>melee_damage / mul_bp / 15000</code></div><dl><div class="explanation"><dt>这项技能提供什么选择</dt><dd>枪械近战的增强让弹药紧张或近距离接触时存在更有价值的应对方式，收益集中在枪托动作而非所有伤害。独立保留 weapon 作用对象与 melee_damage 属性，可以避免玩家把它理解为匕首加成或枪械射击伤害加成，也方便后续按枪械基础近战值调试。</dd></div><div class="explanation"><dt>为什么采用这组初始参数</dt><dd>配置 melee_damage/mul_bp/15000，增加 50% 为建议初值，尚未经策划批准。当前长枪近战 50 变为 75、手枪 40 变为 60，足以放大近战价值；实际击杀次数仍取决于未来怪物生命与战斗环境，不能据此宣称固定几次击杀。倍率保持不同武器的基础差异。</dd></div><div class="explanation"><dt>实际作用范围</dt><dd>作用对象为 weapon，类别为 numeric，生命周期为 passive。只修改 Weapon.Melee 对应的枪托／枪械近战伤害，最终值 1～1000000 生命点；匕首、弹丸伤害与攻击范围不受影响。</dd></div><div class="explanation"><dt>触发与消费时机</dt><dd>枪械近战动作起手时读取有效近战伤害。后续命中与伤害提交沿用现有动作机制；持有技能并不绕过命中条件，也不改变已经开始动作的其他参数。</dd></div><div class="explanation"><dt>完整结果示例</dt><dd>步枪与霰弹枪基础近战 50 变为 75，手枪基础 40 变为 60。使用匕首时继续读取匕首自己的基础伤害，开枪时也继续读取弹丸伤害来源。</dd></div><div class="explanation"><dt>容易误解的地方</dt><dd>mul_bp=15000 是保留原值并增加 50%，不是额外增加 15000 点伤害。名称不能替代对象校验；效果表引用 player 或 tool 属性时应报错，而不是尝试套用到全部近战行为。</dd></div></dl><div class="acceptance"><h4>验收场景</h4><ul><li>EffectIdx=701 引用属性 5，mul_bp=15000，长枪 50→75、手枪 40→60。</li><li>匕首伤害和枪械弹丸伤害保持来源值，不共享本技能加成。</li><li>未命中或被正常动作门禁拒绝时不因技能直接造成伤害。</li><li>移除技能恢复基础近战值；最终值越界时拒绝对应配置。</li></ul></div></details><details class="skill-detail" id="skill-8" data-status="ready"
+          data-search="弹药大师 8 reserve / mul_bp / 20000 初始备弹加成提供整局资源续航，但不改变单次交火的弹匣容量和装填节奏。把效果应用时机限定为开局初始化，可以避免通过反复配装、重算配置、复活或重新导入状态来重复领取子弹，也让弹药实际数量始终由权威状态记录。 配置 reserve/mul_bp/20000，初始备弹翻倍为建议初值，尚未经策划批准。当前步枪 10→20、霰弹枪和手枪 12→24，按每把枪自己的基础备弹增加，不用统一固定加弹数。比例方案保留各枪的来源关系；收益不意味着射击、换弹或命中能力提高。 作用对象为 weapon，类别为 numeric，生命周期为 passive。仅修改 Weapon.InitialReserve，在开局初始化实际备弹；不含 Magazine，最终备弹配置范围为 0～100000 发。 开局创建已配装枪械状态时使用有效初始备弹。配置重算只更新配置视图，局中获得技能、复活、状态恢复均不再次发放初始弹药；实际消耗继续由射击与装填状态决定。 步枪初始备弹 10 变为 20，霰弹枪和手枪 12 变为 24。基础弹匣为 5 或 6 时仍为 5 或 6；打掉一部分备弹后重算技能配置，剩余备弹不会重置为翻倍初始值。 不能把 InitialReserve 与 Magazine 合并计算，也不能直接在每次读取配置时向状态加弹。移除技能后已实际发放并消耗的子弹不回滚；跨局与永久资产仍遵守已有资产契约。"><summary><span class="skill-number">08</span>
+          <span class="skill-name">弹药大师</span><span class="status ready">已有运行机制</span></summary>
+          <div class="skill-parameters"><code>reserve / mul_bp / 20000</code></div><dl><div class="explanation"><dt>这项技能提供什么选择</dt><dd>初始备弹加成提供整局资源续航，但不改变单次交火的弹匣容量和装填节奏。把效果应用时机限定为开局初始化，可以避免通过反复配装、重算配置、复活或重新导入状态来重复领取子弹，也让弹药实际数量始终由权威状态记录。</dd></div><div class="explanation"><dt>为什么采用这组初始参数</dt><dd>配置 reserve/mul_bp/20000，初始备弹翻倍为建议初值，尚未经策划批准。当前步枪 10→20、霰弹枪和手枪 12→24，按每把枪自己的基础备弹增加，不用统一固定加弹数。比例方案保留各枪的来源关系；收益不意味着射击、换弹或命中能力提高。</dd></div><div class="explanation"><dt>实际作用范围</dt><dd>作用对象为 weapon，类别为 numeric，生命周期为 passive。仅修改 Weapon.InitialReserve，在开局初始化实际备弹；不含 Magazine，最终备弹配置范围为 0～100000 发。</dd></div><div class="explanation"><dt>触发与消费时机</dt><dd>开局创建已配装枪械状态时使用有效初始备弹。配置重算只更新配置视图，局中获得技能、复活、状态恢复均不再次发放初始弹药；实际消耗继续由射击与装填状态决定。</dd></div><div class="explanation"><dt>完整结果示例</dt><dd>步枪初始备弹 10 变为 20，霰弹枪和手枪 12 变为 24。基础弹匣为 5 或 6 时仍为 5 或 6；打掉一部分备弹后重算技能配置，剩余备弹不会重置为翻倍初始值。</dd></div><div class="explanation"><dt>容易误解的地方</dt><dd>不能把 InitialReserve 与 Magazine 合并计算，也不能直接在每次读取配置时向状态加弹。移除技能后已实际发放并消耗的子弹不回滚；跨局与永久资产仍遵守已有资产契约。</dd></div></dl><div class="acceptance"><h4>验收场景</h4><ul><li>EffectIdx=801 引用属性 6，mul_bp=20000，开局分别得到 20、24、24 发备弹。</li><li>弹匣容量 5 或 6 保持来源值，装填方式不受影响。</li><li>局中获得技能、重算、复活和状态恢复均不补发或重置当前备弹。</li><li>移除技能不倒扣已发放弹药；状态导入保持实际剩余数量。</li></ul></div></details><details class="skill-detail" id="skill-9" data-status="ready"
+          data-search="手速超群 9 reload_ticks / mul_bp / 7500 缩短每轮装填时间可以降低换弹暴露窗口，又保留不同 ReloadType 的装填结构。将规则固定为每轮起手读取，使整匣与逐轮装填都沿用原动作机制；局中技能变化不倒带已经开始的计时，避免读条突然跳变和动作结果重入。 配置 reload_ticks/mul_bp/7500，每轮装填时间减少 25% 为建议初值，尚未经策划批准。当前基础 180 Tick 变为 135，在 60 Hz 下从 3 秒降到 2.25 秒，减少的 0.75 秒易于观察。保留 75% 时间而不是全部减半，可先以适度变化检验装填风险与收益。 作用对象为 weapon，类别为 numeric，生命周期为 passive。修改 Weapon.ReloadTicks，每轮装填的时间范围为 1～3600 Tick；ReloadType、弹匣容量、可用备弹和装填取消规则继续由原机制决定。 每轮装填起手时读取有效装填时间并设置该轮计时。该轮一旦开始，后续获得或移除技能不重置其既有进度；下一轮起手再读取当时有效配置。 基础 180 Tick 的装填轮次缩短为 135 Tick，即 3 秒变 2.25 秒。逐轮装填的每一轮分别用 135，而不是把所有轮次无条件合并成一次 135 Tick 的整枪装填。 参数 7500 表示减少 25%，不能填 2500。整数运算向下取整；若来源时间过小导致最终值为 0，应拒绝配置或配装，不能自动夹成 1 来掩盖不合法数值。"><summary><span class="skill-number">09</span>
+          <span class="skill-name">手速超群</span><span class="status ready">已有运行机制</span></summary>
+          <div class="skill-parameters"><code>reload_ticks / mul_bp / 7500</code></div><dl><div class="explanation"><dt>这项技能提供什么选择</dt><dd>缩短每轮装填时间可以降低换弹暴露窗口，又保留不同 ReloadType 的装填结构。将规则固定为每轮起手读取，使整匣与逐轮装填都沿用原动作机制；局中技能变化不倒带已经开始的计时，避免读条突然跳变和动作结果重入。</dd></div><div class="explanation"><dt>为什么采用这组初始参数</dt><dd>配置 reload_ticks/mul_bp/7500，每轮装填时间减少 25% 为建议初值，尚未经策划批准。当前基础 180 Tick 变为 135，在 60 Hz 下从 3 秒降到 2.25 秒，减少的 0.75 秒易于观察。保留 75% 时间而不是全部减半，可先以适度变化检验装填风险与收益。</dd></div><div class="explanation"><dt>实际作用范围</dt><dd>作用对象为 weapon，类别为 numeric，生命周期为 passive。修改 Weapon.ReloadTicks，每轮装填的时间范围为 1～3600 Tick；ReloadType、弹匣容量、可用备弹和装填取消规则继续由原机制决定。</dd></div><div class="explanation"><dt>触发与消费时机</dt><dd>每轮装填起手时读取有效装填时间并设置该轮计时。该轮一旦开始，后续获得或移除技能不重置其既有进度；下一轮起手再读取当时有效配置。</dd></div><div class="explanation"><dt>完整结果示例</dt><dd>基础 180 Tick 的装填轮次缩短为 135 Tick，即 3 秒变 2.25 秒。逐轮装填的每一轮分别用 135，而不是把所有轮次无条件合并成一次 135 Tick 的整枪装填。</dd></div><div class="explanation"><dt>容易误解的地方</dt><dd>参数 7500 表示减少 25%，不能填 2500。整数运算向下取整；若来源时间过小导致最终值为 0，应拒绝配置或配装，不能自动夹成 1 来掩盖不合法数值。</dd></div></dl><div class="acceptance"><h4>验收场景</h4><ul><li>EffectIdx=901 引用属性 8，mul_bp=7500，180→135 Tick。</li><li>按现有 ReloadType 对每轮起手应用，不改弹匣容量与每轮装弹数量。</li><li>装填已开始后修改技能，不倒带、不重置该轮读条；后续轮次按新有效配置读取。</li><li>来源 1 Tick 乘 7500 得到 0 时明确拒绝，不静默截断为合法值。</li></ul></div></details><details class="skill-detail" id="skill-10" data-status="ready"
+          data-search="稳定瞄准 10 shot_ticks / mul_bp / 8000 原表的轮转时间需要先消除歧义，本版沿用当前备注，将其落实为枪械射击间隔。独立修改 shot_ticks 可以调整连续射击节奏，而不用同时引入瞄准精度、切枪动画或后坐力规则；展示说明也必须明确间隔收益，避免名称让玩家期待尚不存在的精准度效果。 配置 shot_ticks/mul_bp/8000，射击间隔减少 20% 为建议初值，尚未经策划批准。长枪 60→48 Tick，手枪 30→24 Tick；因为频率是间隔的倒数，理想射击频率约增加 25%，不能把减少 20% 间隔误写成增加 20% 射速。 作用对象为 weapon，类别为 numeric，生命周期为 passive。修改 Weapon.Interval，最终间隔为 1～3600 Tick；不修改切枪时间、瞄准精度、弹丸伤害、装填时间或其他动作冷却。 合法射击起手时用有效间隔设置冷却。能否射击仍检查现有弹药、动作和冷却门禁；已经设置的本次冷却不因重算配置回滚，后续起手使用新有效间隔。 长枪 60 Tick 的间隔变为 48，在 60 Hz 下为 1 秒变 0.8 秒；手枪 30 变为 24，即 0.5 秒变 0.4 秒。理想连续射击频率均乘 1.25，但换弹、弹药不足和动作冲突仍会限制实际输出。 名称与数值含义不同，EffectDesc 必须写射击间隔减少 20%。如果策划最终希望稳定瞄准影响精度，应新增对应属性和规则，而不是悄悄让 shot_ticks 兼任多项能力。"><summary><span class="skill-number">10</span>
+          <span class="skill-name">稳定瞄准</span><span class="status ready">已有运行机制</span></summary>
+          <div class="skill-parameters"><code>shot_ticks / mul_bp / 8000</code></div><dl><div class="explanation"><dt>这项技能提供什么选择</dt><dd>原表的轮转时间需要先消除歧义，本版沿用当前备注，将其落实为枪械射击间隔。独立修改 shot_ticks 可以调整连续射击节奏，而不用同时引入瞄准精度、切枪动画或后坐力规则；展示说明也必须明确间隔收益，避免名称让玩家期待尚不存在的精准度效果。</dd></div><div class="explanation"><dt>为什么采用这组初始参数</dt><dd>配置 shot_ticks/mul_bp/8000，射击间隔减少 20% 为建议初值，尚未经策划批准。长枪 60→48 Tick，手枪 30→24 Tick；因为频率是间隔的倒数，理想射击频率约增加 25%，不能把减少 20% 间隔误写成增加 20% 射速。</dd></div><div class="explanation"><dt>实际作用范围</dt><dd>作用对象为 weapon，类别为 numeric，生命周期为 passive。修改 Weapon.Interval，最终间隔为 1～3600 Tick；不修改切枪时间、瞄准精度、弹丸伤害、装填时间或其他动作冷却。</dd></div><div class="explanation"><dt>触发与消费时机</dt><dd>合法射击起手时用有效间隔设置冷却。能否射击仍检查现有弹药、动作和冷却门禁；已经设置的本次冷却不因重算配置回滚，后续起手使用新有效间隔。</dd></div><div class="explanation"><dt>完整结果示例</dt><dd>长枪 60 Tick 的间隔变为 48，在 60 Hz 下为 1 秒变 0.8 秒；手枪 30 变为 24，即 0.5 秒变 0.4 秒。理想连续射击频率均乘 1.25，但换弹、弹药不足和动作冲突仍会限制实际输出。</dd></div><div class="explanation"><dt>容易误解的地方</dt><dd>名称与数值含义不同，EffectDesc 必须写射击间隔减少 20%。如果策划最终希望稳定瞄准影响精度，应新增对应属性和规则，而不是悄悄让 shot_ticks 兼任多项能力。</dd></div></dl><div class="acceptance"><h4>验收场景</h4><ul><li>EffectIdx=1001 引用属性 7，mul_bp=8000，长枪 60→48、手枪 30→24 Tick。</li><li>无弹或未结束冷却时，技能不绕过射击门禁。</li><li>切枪、精度、近战与装填参数保持各自来源值。</li><li>射击起手设置的冷却不因技能重算倒回；最终间隔为 0 或越界时拒绝。</li></ul></div></details><details class="skill-detail" id="skill-11" data-status="ready"
+          data-search="妙手回春 11 medkit_ticks / mul_bp / 5000 医疗包使用时长减半直接降低治疗期间的操作与暴露时间，区别于灵丹妙药提升治疗量。按 medkit 处理器限定适用范围，可以确保生命针剂等其他医疗工具继续保持原设计；使用完成才扣次数并治疗，也能让打断或取消得到一致的结果。 配置 medkit_ticks/mul_bp/5000，减半是原技能描述明确给出的要求，不是本版自行批准的平衡调整。当前急救包基础 120 Tick 变为 60，在 60 Hz 下从 2 秒到 1 秒；倍率能在未来不同基础使用时间的医疗包之间维持相同的减半语义。 作用对象为 tool，类别为 numeric，生命周期为 passive。只作用于 kind=medkit 的 Tool.Lag，最终使用时间为 1～36000 Tick；针剂不受该属性影响，治疗量也不因本技能变化。 医疗包使用起手时读取有效使用时间，满血时不能起手。使用完成时才按现有机制扣次数并提交治疗；取消使用不发治疗，不通过本技能提前结算。 基础急救包读条 120→60 Tick，即 2 秒变为 1 秒。未持有灵丹妙药时，完成一次仍按基础 50 点治疗处理；若只缺 30 点生命，实际恢复仍为 30。 减半的是时间而非治疗量或工具消耗次数。对 1 Tick 来源值减半会向下取整为 0，应拒绝不合法配置，不能把 0 Tick 当成瞬发医疗。"><summary><span class="skill-number">11</span>
+          <span class="skill-name">妙手回春</span><span class="status ready">已有运行机制</span></summary>
+          <div class="skill-parameters"><code>medkit_ticks / mul_bp / 5000</code></div><dl><div class="explanation"><dt>这项技能提供什么选择</dt><dd>医疗包使用时长减半直接降低治疗期间的操作与暴露时间，区别于灵丹妙药提升治疗量。按 medkit 处理器限定适用范围，可以确保生命针剂等其他医疗工具继续保持原设计；使用完成才扣次数并治疗，也能让打断或取消得到一致的结果。</dd></div><div class="explanation"><dt>为什么采用这组初始参数</dt><dd>配置 medkit_ticks/mul_bp/5000，减半是原技能描述明确给出的要求，不是本版自行批准的平衡调整。当前急救包基础 120 Tick 变为 60，在 60 Hz 下从 2 秒到 1 秒；倍率能在未来不同基础使用时间的医疗包之间维持相同的减半语义。</dd></div><div class="explanation"><dt>实际作用范围</dt><dd>作用对象为 tool，类别为 numeric，生命周期为 passive。只作用于 kind=medkit 的 Tool.Lag，最终使用时间为 1～36000 Tick；针剂不受该属性影响，治疗量也不因本技能变化。</dd></div><div class="explanation"><dt>触发与消费时机</dt><dd>医疗包使用起手时读取有效使用时间，满血时不能起手。使用完成时才按现有机制扣次数并提交治疗；取消使用不发治疗，不通过本技能提前结算。</dd></div><div class="explanation"><dt>完整结果示例</dt><dd>基础急救包读条 120→60 Tick，即 2 秒变为 1 秒。未持有灵丹妙药时，完成一次仍按基础 50 点治疗处理；若只缺 30 点生命，实际恢复仍为 30。</dd></div><div class="explanation"><dt>容易误解的地方</dt><dd>减半的是时间而非治疗量或工具消耗次数。对 1 Tick 来源值减半会向下取整为 0，应拒绝不合法配置，不能把 0 Tick 当成瞬发医疗。</dd></div></dl><div class="acceptance"><h4>验收场景</h4><ul><li>EffectIdx=1101 引用属性 11，mul_bp=5000，120→60 Tick。</li><li>只作用 medkit，生命针剂的时长保持来源值。</li><li>满血不能起手；取消不治疗，成功完成才扣一次并提交治疗。</li><li>单独持有本技能时治疗量不变；最终读条时间 0 的组合必须拒绝。</li></ul></div></details><details class="skill-detail" id="skill-12" data-status="ready"
+          data-search="灵丹妙药 12 medkit_heal / mul_bp / 20000 治疗量翻倍提升每次医疗包使用的资源效率，适合较大生命缺口，但不应允许越过角色最大生命或治疗满血目标刷收益。与妙手回春分别作用于治疗量和使用时间，使两项组合可以通过不同属性自然合成，无需增加专用组合分支。 配置 medkit_heal/mul_bp/20000，翻倍是原技能描述明确要求。当前急救包 Tool.Value=50，最终治疗配置为 100；选择倍率是为了维持所有适用医疗包的翻倍含义，而不是对每种来源工具都固定加 50。实际恢复量仍受缺失生命限制，100 不是保底恢复值。 作用对象为 tool，类别为 numeric，生命周期为 passive。仅修改 kind=medkit 的 Tool.Value，治疗配置范围为 0～1000000 生命点；不修改针剂效果、生命上限、读条时间或次数消耗。 医疗包使用完成时读取并提交有效治疗量，最终生命不得超过角色最大生命。起手仍检查满血、工具次数和动作合法性；取消使用不提交治疗。 基础治疗 50 变为 100。最大生命 150、当前生命 50 时可恢复到 150；当前生命 120 时只恢复缺失的 30。与妙手回春组合时，完成读条为 60 Tick、治疗配置为 100，两项独立生效。 不能因为配置治疗 100 就直接给当前生命加满 100，必须按缺口限制实际结果。翻倍不代表多扣一份医疗包；本技能也不能自动提高永久库存或免费补给次数。"><summary><span class="skill-number">12</span>
+          <span class="skill-name">灵丹妙药</span><span class="status ready">已有运行机制</span></summary>
+          <div class="skill-parameters"><code>medkit_heal / mul_bp / 20000</code></div><dl><div class="explanation"><dt>这项技能提供什么选择</dt><dd>治疗量翻倍提升每次医疗包使用的资源效率，适合较大生命缺口，但不应允许越过角色最大生命或治疗满血目标刷收益。与妙手回春分别作用于治疗量和使用时间，使两项组合可以通过不同属性自然合成，无需增加专用组合分支。</dd></div><div class="explanation"><dt>为什么采用这组初始参数</dt><dd>配置 medkit_heal/mul_bp/20000，翻倍是原技能描述明确要求。当前急救包 Tool.Value=50，最终治疗配置为 100；选择倍率是为了维持所有适用医疗包的翻倍含义，而不是对每种来源工具都固定加 50。实际恢复量仍受缺失生命限制，100 不是保底恢复值。</dd></div><div class="explanation"><dt>实际作用范围</dt><dd>作用对象为 tool，类别为 numeric，生命周期为 passive。仅修改 kind=medkit 的 Tool.Value，治疗配置范围为 0～1000000 生命点；不修改针剂效果、生命上限、读条时间或次数消耗。</dd></div><div class="explanation"><dt>触发与消费时机</dt><dd>医疗包使用完成时读取并提交有效治疗量，最终生命不得超过角色最大生命。起手仍检查满血、工具次数和动作合法性；取消使用不提交治疗。</dd></div><div class="explanation"><dt>完整结果示例</dt><dd>基础治疗 50 变为 100。最大生命 150、当前生命 50 时可恢复到 150；当前生命 120 时只恢复缺失的 30。与妙手回春组合时，完成读条为 60 Tick、治疗配置为 100，两项独立生效。</dd></div><div class="explanation"><dt>容易误解的地方</dt><dd>不能因为配置治疗 100 就直接给当前生命加满 100，必须按缺口限制实际结果。翻倍不代表多扣一份医疗包；本技能也不能自动提高永久库存或免费补给次数。</dd></div></dl><div class="acceptance"><h4>验收场景</h4><ul><li>EffectIdx=1201 引用属性 9，mul_bp=20000，基础 50→100 生命点。</li><li>当前 50/150 成功使用后为 150；当前 120/150 使用后也只到 150。</li><li>医疗包只扣一次；针剂效果、基础读条及最大生命不因单独持有本技能改变。</li><li>与技能 11 组合得到 60 Tick/100 治疗配置，取消使用仍不提交治疗。</li></ul></div></details><details class="skill-detail" id="skill-13" data-status="ready"
+          data-search="投球好手 13 throw_range / mul_bp / 15000 更远的投掷距离让炸药可从较安全位置覆盖目标，但收益应限定在可达距离，不能顺带提高伤害或爆炸范围。当前只有 bomb 已实现，因此展示明确写当前炸药；未来若增加其他投掷工具，需要先明确适用处理器，再扩展效果覆盖范围。 配置 throw_range/mul_bp/15000，增加 50% 为建议初值，尚未经策划批准。当前炸药束基础 1600 毫米变为 2400，新增 800 毫米可作为灰盒验证的可见距离差；倍率保留来源工具之间的距离差异。它不意味着飞行速度或爆炸半径也乘 1.5。 作用对象为 tool，类别为 numeric，生命周期为 passive。修改 Tool.ThrowingDistance，目前仅 kind=bomb；最终范围 1～100000 毫米。当前直线飞行、速度、伤害与爆炸范围继续读取原来源参数。 投掷动作完成、创建投掷物时读取有效最大距离并沿用现有轨迹。动作合法性和物品消耗仍由既有工具机制决定，不通过技能直接生成免费投掷物。 炸药束最大投掷距离 1600→2400 毫米，飞行速度仍为 100 毫米/Tick。远点是否命中仍取决于原直线飞行、碰撞和爆炸条件；技能不把当前轨迹改成抛物线。 不能仅因名字包含投球就扩展到所有工具或未来尚未实现的投掷物。最大距离是约束参数，不是强制每次都飞到最远点，也不是爆炸半径；表现与权威投掷结果必须使用同一有效距离。"><summary><span class="skill-number">13</span>
+          <span class="skill-name">投球好手</span><span class="status ready">已有运行机制</span></summary>
+          <div class="skill-parameters"><code>throw_range / mul_bp / 15000</code></div><dl><div class="explanation"><dt>这项技能提供什么选择</dt><dd>更远的投掷距离让炸药可从较安全位置覆盖目标，但收益应限定在可达距离，不能顺带提高伤害或爆炸范围。当前只有 bomb 已实现，因此展示明确写当前炸药；未来若增加其他投掷工具，需要先明确适用处理器，再扩展效果覆盖范围。</dd></div><div class="explanation"><dt>为什么采用这组初始参数</dt><dd>配置 throw_range/mul_bp/15000，增加 50% 为建议初值，尚未经策划批准。当前炸药束基础 1600 毫米变为 2400，新增 800 毫米可作为灰盒验证的可见距离差；倍率保留来源工具之间的距离差异。它不意味着飞行速度或爆炸半径也乘 1.5。</dd></div><div class="explanation"><dt>实际作用范围</dt><dd>作用对象为 tool，类别为 numeric，生命周期为 passive。修改 Tool.ThrowingDistance，目前仅 kind=bomb；最终范围 1～100000 毫米。当前直线飞行、速度、伤害与爆炸范围继续读取原来源参数。</dd></div><div class="explanation"><dt>触发与消费时机</dt><dd>投掷动作完成、创建投掷物时读取有效最大距离并沿用现有轨迹。动作合法性和物品消耗仍由既有工具机制决定，不通过技能直接生成免费投掷物。</dd></div><div class="explanation"><dt>完整结果示例</dt><dd>炸药束最大投掷距离 1600→2400 毫米，飞行速度仍为 100 毫米/Tick。远点是否命中仍取决于原直线飞行、碰撞和爆炸条件；技能不把当前轨迹改成抛物线。</dd></div><div class="explanation"><dt>容易误解的地方</dt><dd>不能仅因名字包含投球就扩展到所有工具或未来尚未实现的投掷物。最大距离是约束参数，不是强制每次都飞到最远点，也不是爆炸半径；表现与权威投掷结果必须使用同一有效距离。</dd></div></dl><div class="acceptance"><h4>验收场景</h4><ul><li>EffectIdx=1301 引用属性 10，mul_bp=15000，炸药束 1600→2400 毫米。</li><li>飞行速度保持 100 毫米/Tick，伤害与爆炸半径保持来源值。</li><li>当前只作用 bomb，不为匕首、医疗包或未实现工具自动注册投掷行为。</li><li>动作创建与数量消耗沿用现有门禁；技能移除后新投掷恢复基础距离。</li></ul></div></details><details class="skill-detail" id="skill-14" data-status="pending"
+          data-search="开箱大师 14 crate_bonus_count / add / 1 额外奖励属于猎人的箱子交互能力，而不是修改某种工具，所以使用 player/mechanic/passive。把基础奖励和额外奖励放在一次提交中，可以避免先领取基础奖励后因容量不足丢失加成，或重复请求复制物品；真实箱子来源还未补齐时，应保留规则而不捏造奖励 ID。 配置 crate_bonus_count/add/1，额外 1 个来自原技能描述的明确要求。属性以基础额外次数 0 为起点，固定加 1 可直接对应奖励单位数量；这里的 1 不是一组随机数量，也不保证一定获得新的道具种类。奖励内容仍由同一箱子的真实来源决定，不由技能参数指定。 作用对象为 player，类别为 mechanic，生命周期为 passive。仅适用于后续明确标识的道具奖励箱；当前 supply 是工具补给点，不能全部自动当成奖励箱。机制尚未实现，真实奖励来源待补充策划，Enabled 保持 0。 合法箱子交互完成时读取当前有效技能，生成基础奖励，再从同一来源取得额外 1 个道具单位；合并全部物品变化与箱子已使用状态，核对容量后一次原子提交。同一箱子本局只成功打开一次。 独立机制夹具可验证基础 1 个加额外 1 个，共 2 个道具单位。两次抽取可得到同一道具，并按合法规则堆叠；如果是不同道具则分别占用对应容量。示例不定义生产奖励池或道具 ID。 推荐容量不足时整笔拒绝，不发基础或额外奖励，也不消耗箱子；失败还要保留随机状态，避免反复失败刷新奖励。迟到、重复请求、交互中断或终局请求不能再次发奖，不得借用已移除的怪物掉落表补造来源。"><summary><span class="skill-number">14</span>
+          <span class="skill-name">开箱大师</span><span class="status pending">待扩展 · 建议禁用</span></summary>
+          <div class="skill-parameters"><code>crate_bonus_count / add / 1</code></div><dl><div class="explanation"><dt>这项技能提供什么选择</dt><dd>额外奖励属于猎人的箱子交互能力，而不是修改某种工具，所以使用 player/mechanic/passive。把基础奖励和额外奖励放在一次提交中，可以避免先领取基础奖励后因容量不足丢失加成，或重复请求复制物品；真实箱子来源还未补齐时，应保留规则而不捏造奖励 ID。</dd></div><div class="explanation"><dt>为什么采用这组初始参数</dt><dd>配置 crate_bonus_count/add/1，额外 1 个来自原技能描述的明确要求。属性以基础额外次数 0 为起点，固定加 1 可直接对应奖励单位数量；这里的 1 不是一组随机数量，也不保证一定获得新的道具种类。奖励内容仍由同一箱子的真实来源决定，不由技能参数指定。</dd></div><div class="explanation"><dt>实际作用范围</dt><dd>作用对象为 player，类别为 mechanic，生命周期为 passive。仅适用于后续明确标识的道具奖励箱；当前 supply 是工具补给点，不能全部自动当成奖励箱。机制尚未实现，真实奖励来源待补充策划，Enabled 保持 0。</dd></div><div class="explanation"><dt>触发与消费时机</dt><dd>合法箱子交互完成时读取当前有效技能，生成基础奖励，再从同一来源取得额外 1 个道具单位；合并全部物品变化与箱子已使用状态，核对容量后一次原子提交。同一箱子本局只成功打开一次。</dd></div><div class="explanation"><dt>完整结果示例</dt><dd>独立机制夹具可验证基础 1 个加额外 1 个，共 2 个道具单位。两次抽取可得到同一道具，并按合法规则堆叠；如果是不同道具则分别占用对应容量。示例不定义生产奖励池或道具 ID。</dd></div><div class="explanation"><dt>容易误解的地方</dt><dd>推荐容量不足时整笔拒绝，不发基础或额外奖励，也不消耗箱子；失败还要保留随机状态，避免反复失败刷新奖励。迟到、重复请求、交互中断或终局请求不能再次发奖，不得借用已移除的怪物掉落表补造来源。</dd></div></dl><div class="acceptance"><h4>验收场景</h4><ul><li>EffectIdx=1401 引用属性 15，add=1；未实现处理器或缺少真实来源时保持禁用。</li><li>独立奖励夹具验证基础 1 加额外 1，同道具合法叠堆与不同道具占用容量均正确。</li><li>容量不足时物品、箱子状态和随机状态都不变，腾出空间后重试保持相同候选结果。</li><li>同一箱子重复、迟到或中断交互请求不重复发奖；基础与额外奖励只有一次成功提交。</li></ul></div></details><details class="skill-detail" id="skill-15" data-status="pending"
+          data-search="货运骡子 15 tool_capacity / add / 1 用户已确认携带量指每种非消耗品工具的携带数量／可用次数，因此采用单种工具容量加成，不改变工具槽或背包格。将 CarryLimit 上限与 Quantity 初始化数量分开，可以让技能扩大可携带空间，同时不免费补发次数，也避免永久出战与结算复制库存。 配置 tool_capacity/add/1，增加 1 为建议初值，尚未经策划批准；适用口径已确认不等于数值已批准。急救包基础 Quantity=3、建议 CarryLimit=3，技能后容量为 4，能多容纳一次实际库存或补给恢复。固定加 1 可明确每一种适用工具的增量，避免小容量倍率取整没有收益。 作用对象为 tool，类别为 numeric，生命周期为 passive。新增 Tool.CarryLimit，要求 1≤Quantity≤CarryLimit≤100；当前仅已实现的非消耗品次数工具急救包适用。匕首排除，针剂与炸药属于消耗品而排除；照明棒尚未实现，只列未来可纳入对象。 配装、初始化、补给、拾取、导入、永久出战和结算统一读取有效 CarryLimit。技能只修改上限，不直接增加当前 count 或永久库存；补给可在有效容量内恢复次数，资产结算按本局实际带入量和已有资产契约处理。 急救包基础携带上限 3→4。普通独立夹具仍按 Quantity=3 初始化为 3/4；永久库存有 4 次时可带入 4/4，库存只有 3 次时仍为 3/4。未来照明棒基础 5 可在实现后变为 6，但当前不得启用该工具运行内容。 不能在获得技能时自动补发第 4 次，也不能把局内补给当成可永久结算的新增库存。永久结算要保存实际带入量，不能继续用旧基础 uses 代替；未来局中移除技能若当前数量超过新容量，应返回容量冲突，不静默删道具。"><summary><span class="skill-number">15</span>
+          <span class="skill-name">货运骡子</span><span class="status pending">待扩展 · 建议禁用</span></summary>
+          <div class="skill-parameters"><code>tool_capacity / add / 1</code></div><dl><div class="explanation"><dt>这项技能提供什么选择</dt><dd>用户已确认携带量指每种非消耗品工具的携带数量／可用次数，因此采用单种工具容量加成，不改变工具槽或背包格。将 CarryLimit 上限与 Quantity 初始化数量分开，可以让技能扩大可携带空间，同时不免费补发次数，也避免永久出战与结算复制库存。</dd></div><div class="explanation"><dt>为什么采用这组初始参数</dt><dd>配置 tool_capacity/add/1，增加 1 为建议初值，尚未经策划批准；适用口径已确认不等于数值已批准。急救包基础 Quantity=3、建议 CarryLimit=3，技能后容量为 4，能多容纳一次实际库存或补给恢复。固定加 1 可明确每一种适用工具的增量，避免小容量倍率取整没有收益。</dd></div><div class="explanation"><dt>实际作用范围</dt><dd>作用对象为 tool，类别为 numeric，生命周期为 passive。新增 Tool.CarryLimit，要求 1≤Quantity≤CarryLimit≤100；当前仅已实现的非消耗品次数工具急救包适用。匕首排除，针剂与炸药属于消耗品而排除；照明棒尚未实现，只列未来可纳入对象。</dd></div><div class="explanation"><dt>触发与消费时机</dt><dd>配装、初始化、补给、拾取、导入、永久出战和结算统一读取有效 CarryLimit。技能只修改上限，不直接增加当前 count 或永久库存；补给可在有效容量内恢复次数，资产结算按本局实际带入量和已有资产契约处理。</dd></div><div class="explanation"><dt>完整结果示例</dt><dd>急救包基础携带上限 3→4。普通独立夹具仍按 Quantity=3 初始化为 3/4；永久库存有 4 次时可带入 4/4，库存只有 3 次时仍为 3/4。未来照明棒基础 5 可在实现后变为 6，但当前不得启用该工具运行内容。</dd></div><div class="explanation"><dt>容易误解的地方</dt><dd>不能在获得技能时自动补发第 4 次，也不能把局内补给当成可永久结算的新增库存。永久结算要保存实际带入量，不能继续用旧基础 uses 代替；未来局中移除技能若当前数量超过新容量，应返回容量冲突，不静默删道具。</dd></div></dl><div class="acceptance"><h4>验收场景</h4><ul><li>EffectIdx=1501 引用属性 16，add=1；机制未实现前 Enabled=0，当前仅急救包进入适用集合。</li><li>普通初始化为 3/4，实际库存 4 次可带入 4/4，库存 3 次仍为 3/4；获得技能不自动补次数。</li><li>补给、拾取与导入使用同一有效容量；匕首、生命针剂和炸药容量不增加，未实现照明棒不进入运行内容。</li><li>永久出战与结算按实际带入量验证，不复制库存；数量高于移除后容量时明确返回冲突。</li></ul></div></details></div></section><section class="chapter" id="section-8"><div class="chapter-heading"><span class="chapter-number">08</span><h2>四项待扩展技能的完整规则建议</h2></div><h3>8.1 精力充沛：先建立奔跑扣耗</h3>
+<p>角色表 <code>RunCost</code> 目前为 0，现有校验只接受 0，移动逻辑没有持续扣体力。仅填写技能效果 301 不会产生效果。</p>
+<p>建议在角色表将 <code>RunCost</code> 的字段说明改为“奔跑每秒体力消耗”，调试基础值填 10。保持原类型 <code>int32</code> 和字段名，不扩大到跳跃体耗；本版 <code>JumpCost</code> 仍为 0。</p>
+<p>建议扣耗规则：</p>
+<ol>
+<li>仅在地面产生实际奔跑位移时扣耗，站立、撞墙不动、匍匐、爬梯不按奔跑扣耗。</li>
+<li>每 Tick 累加有效每秒扣耗，累计值整除 tick_hz 后扣整数体力，余数保留到下一次实际奔跑；停止奔跑不能通过清除余数规避消耗。</li>
+<li>扣耗余数与现有体力恢复余数分开。暂停不推进，恢复至满体力时可以清理扣耗余数，开始新的满体力周期。</li>
+<li>体力归零后回到普通移动，开始现有体力恢复延迟。建议要求松开奔跑键后重新按下才能再次奔跑，避免一直按住时在恢复1点后反复切换。</li>
+<li>新增扣耗余数和耗尽门禁的跨 Tick 状态由 C++ Player 保存，同步进入状态导入与恢复校验。</li>
+</ol>
+<p>以 RunCost=10、tick_hz=60 为例，连续60个有效奔跑Tick消耗10体力；持有技能3后消耗7。RunCost=0 的来源配置即使乘7000仍为0，应提示该技能在该角色上无实际作用。</p>
+<h3>8.2 猫步：声音与视觉分别判定</h3>
+<p>推荐增加以下外部基础字段；这些是角色和怪物表的配套调整，不属于技能效果参数：</p>
+<div class="table-scroll" tabindex="0"><table>
+<thead>
+<tr>
+<th>来源表</th>
+<th>新字段</th>
+<th>类型与标记</th>
+<th>建议初值</th>
+<th>单位/含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Player</td>
+<td>WalkNoiseRadius</td>
+<td>int32，server/client</td>
+<td>6000</td>
+<td>地面普通行走声传播半径，毫米</td>
+</tr>
+<tr>
+<td>Player</td>
+<td>RunNoiseRadius</td>
+<td>int32，server/client</td>
+<td>10000</td>
+<td>地面奔跑声传播半径，毫米</td>
+</tr>
+<tr>
+<td>Player</td>
+<td>ProneNoiseRadius</td>
+<td>int32，server/client</td>
+<td>2000</td>
+<td>地面匍匐声传播半径，毫米</td>
+</tr>
+<tr>
+<td>Monster</td>
+<td>HearingRange</td>
+<td>int32，server/client</td>
+<td>10000</td>
+<td>怪物听觉最大距离，毫米；0表示不听声</td>
+</tr>
+</tbody>
+</table></div>
+<p>本版建议视觉条件为“在原 DetectRange 内且视线无遮挡”，听觉条件为“本 Tick 有行动声，且距离不超过行动声半径和怪物 HearingRange 两者的较小值”。两个条件任一满足即可获取目标。</p>
+<p>猫步只将行动声基础半径乘5000。第一版行动声按二维圆形传播，可以穿墙，不模拟材料衰减。行走、奔跑和匍匐均按实际位移发声；站着不动不产生这三种行动声。跳跃落地、爬梯等其他声源后续另设基础规则，本版不自动归入该效果。</p>
+<p>当前怪物感知是在 DetectRange 内直接警戒，没有独立听觉。因此实施猫步时必须同步修改感知入口。保留原无条件距离获取，再单独降低声音范围，不能验证出正确的潜行收益。</p>
+<p>复活后现有新目标获取抑制门禁仍优先执行。枪声、爆炸声、视觉距离和警戒持续时间不受猫步倍率影响。客户端降低音量可作为表现调整，但不替代服务端半径规则。</p>
+<p>验收示例：怪物DetectRange=6000、HearingRange=10000，玩家在8000毫米外奔跑时，无猫步可通过听觉发现，持有猫步时听不到；玩家在无遮挡的4000毫米处仍可通过视觉被发现。隔墙时，视觉应失败，再单独判听觉。</p>
+<h3>8.3 开箱大师：额外道具在一次提交中生成</h3>
+<p>本版技能14保持 Disabled，直到适用箱子和真实奖励来源接入。当前 <code>supply</code> 是工具补给点，不能自动把所有 supply 当成策划中的奖励道具箱。</p>
+<p>推荐完整行为：</p>
+<ol>
+<li>后续箱子配置标明是否属于适用道具箱，并绑定自己的奖励来源。技能只提供额外数量1，不指定怪物掉落表、道具ID或奖励池ID。</li>
+<li>完成交互时读取猎人当前有效技能。先生成箱子基础奖励，再从同一箱子的奖励来源取得额外1个道具单位。</li>
+<li>“1个”定义为数量1，允许与基础奖励为同一道具并按合法规则堆叠；不是额外生成一整组随机数量，也不要求一定获得新道具种类。</li>
+<li>形成包含全部物品变化和箱子已使用状态的候选，核对背包/工具数量及实体容量，再一次原子提交。</li>
+<li>本版推荐容量不足时整笔拒绝：不发基础奖励、不发额外奖励、不消耗箱子。调整空间后可重试。失败还须保留随机状态，重试不能通过连续失败刷新奖励。</li>
+<li>同一箱子本局只成功开一次；迟到、重复请求、交互中断或终局请求不再次发奖。</li>
+</ol>
+<p>真实箱子资源仍待补充策划，不能在本版填写虚构奖励引用。机制可以用独立的奖励夹具验证基础1个＋额外1个、相同物品叠堆、不同物品占格及容量失败。</p>
+<h3>8.4 货运骡子：提升单种非消耗品工具容量</h3>
+<p>“携带量”的口径已由用户确认：每种非消耗品工具的携带数量／可用次数增加。本版按每种适用工具的携带次数上限实现，增加1为建议初值。当前工具表 <code>ToolType=1</code> 对应非消耗品工具，<code>ToolType=2</code> 对应针剂、炸药等消耗品。非消耗品工具的使用次数仍可能减少，并可由补给恢复。</p>
+<p>推荐在工具表增加 <code>CarryLimit</code>，类型 <code>int32</code>、标记 <code>server/client</code>，单位为可携带次数；原 <code>Quantity</code> 保留为基础初始化数量。源配置必须满足 <code>1 ≤ Quantity ≤ CarryLimit ≤ 100</code>。</p>
+<div class="table-scroll" tabindex="0"><table>
+<thead>
+<tr>
+<th>工具ID / 名称</th>
+<th>当前 Quantity</th>
+<th>建议基础 CarryLimit</th>
+<th>技能15有效容量</th>
+<th>首版适用情况</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>30001 匕首</td>
+<td>1</td>
+<td>1</td>
+<td>1</td>
+<td>排除；刀不通过该技能增加次数</td>
+</tr>
+<tr>
+<td>30002 急救包</td>
+<td>3</td>
+<td>3</td>
+<td>4</td>
+<td>适用，是当前已实现的非消耗品次数工具</td>
+</tr>
+<tr>
+<td>3 照明棒</td>
+<td>5</td>
+<td>5</td>
+<td>6</td>
+<td>未来该工具实现后可纳入；目前不能启用其运行内容</td>
+</tr>
+<tr>
+<td>30004 生命针剂</td>
+<td>1</td>
+<td>1</td>
+<td>1</td>
+<td>排除，属于消耗品</td>
+</tr>
+<tr>
+<td>5 恢复针剂</td>
+<td>1</td>
+<td>1</td>
+<td>1</td>
+<td>排除，且当前尚未实现该具体工具</td>
+</tr>
+<tr>
+<td>30006 炸药束</td>
+<td>1</td>
+<td>1</td>
+<td>1</td>
+<td>排除，属于消耗品</td>
+</tr>
+</tbody>
+</table></div>
+<p>技能只计算有效 CarryLimit，不直接增加当前 count 或永久库存。普通独立夹具仍按 Quantity 初始化，急救包为3/4；拥有4次实际库存的永久猎人可带入4/4，库存只有3次时带入3/4。</p>
+<p>补给可以在有效容量内恢复次数。配装、初始化、补给、拾取、导入、永久出战和结算统一使用同一有效容量。永久结算须保存本局实际带入量并据此计算返还，不能继续用旧基础 uses 代替实际带入量；补给不得凭空增加可结算库存。</p>
+<p>若未来允许局中移除该技能，本版建议仅在当前数量不超过新容量时接受移除；超过时返回容量冲突，不静默删除道具。现有局外移除、装备选择和出战占用也须按相同规则校验。</p></section><section class="chapter" id="section-9"><div class="chapter-heading"><span class="chapter-number">09</span><h2>现有技能还需固定的行为边界</h2></div><div class="table-scroll" tabindex="0"><table>
+<thead>
+<tr>
+<th>技能/规则</th>
+<th>本版保持的含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>死灵法师</td>
+<td>死亡后等待复活选择；成功才消费。死亡序号检查、原地体型放置失败均保持等待和技能状态</td>
+</tr>
+<tr>
+<td>重振旗鼓</td>
+<td>只修改已有复活资格的生命结果，体力仍按技能1的参数恢复；成功复活后与死亡型技能一并消费</td>
+</tr>
+<tr>
+<td>复活保护</td>
+<td>现有180 Tick新目标获取抑制约为3秒，是代码固定规则，不在本版16条效果中配置；不提供无敌，已起手攻击仍可伤害</td>
+</tr>
+<tr>
+<td>军需官</td>
+<td>当前提升枪械配装总负重上限，仍遵守枪械槽位；工具和战利品重量若需纳入必须另扩规则</td>
+</tr>
+<tr>
+<td>弹药大师</td>
+<td>只在开局设置备弹；局中获得技能、重算有效配置、状态恢复和复活均不额外发弹</td>
+</tr>
+<tr>
+<td>手速超群</td>
+<td>每轮起手读取装填时间；不把已经开始的装填进度倒带或重置</td>
+</tr>
+<tr>
+<td>稳定瞄准</td>
+<td>表中“轮转”按当前备注解释为射击间隔，不代表切枪时间或瞄准精度</td>
+</tr>
+<tr>
+<td>医疗两项</td>
+<td>仅作用medkit；针剂不受当前加成。满血不能起手，使用完成才扣次数并治疗；取消使用不发治疗</td>
+</tr>
+<tr>
+<td>投球好手</td>
+<td>当前作用于bomb距离；现有直线飞行不因技能改为抛物线，炸药速度和爆炸半径维持来源值</td>
+</tr>
+<tr>
+<td>数值被动</td>
+<td>获得后重算只读有效配置，移除后恢复基础值；已发弹药、已使用物品与已开始计时不回滚</td>
+</tr>
+</tbody>
+</table></div>
+<p>Lifetime 描述本局消费行为。永久猎人的技能保留或消费结算继续遵守已有资产契约，本版不增加跨局自动重发一次性技能的规则。</p></section><section class="chapter" id="section-10"><div class="chapter-heading"><span class="chapter-number">10</span><h2>三表必须执行的校验</h2></div><div class="table-scroll" tabindex="0"><table>
+<thead>
+<tr>
+<th>层次</th>
+<th>必须检查</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>字段</td>
+<td>固定字段和类型；整数不为空，不接受公式；Enabled只允许0/1</td>
+</tr>
+<tr>
+<td>身份</td>
+<td>各表主键唯一；Attribute.Stat唯一；稳定ID不能随意重编号</td>
+</tr>
+<tr>
+<td>外键</td>
+<td>每个SkillEffect.SkillIdx存在；每个AttributeId存在；无孤立效果</td>
+</tr>
+<tr>
+<td>技能内容</td>
+<td>每项技能1～8条效果；同技能同属性不能重复；资源缺失不影响纯服务端机制验证</td>
+</tr>
+<tr>
+<td>对象</td>
+<td>Skill.Target必须等于所引用Attribute.Target；Category和Lifetime符合该机制的约定</td>
+</tr>
+<tr>
+<td>运算</td>
+<td>Op在AllowedOps中；Value是合法整数；AllowedOps和ValueMode与登记处理器一致</td>
+</tr>
+<tr>
+<td>机制组合</td>
+<td>技能1生命/体力成对且为player/mechanic/once；技能2为player/mechanic/death且仅flag=1</td>
+</tr>
+<tr>
+<td>能力</td>
+<td>启用技能必须有真实已实现处理器；3/6/14/15未完成时拒绝Enabled=1</td>
+</tr>
+<tr>
+<td>数值</td>
+<td>在具体角色与装备上计算最终值；检查技术范围、角色上限和合成后倍率</td>
+</tr>
+<tr>
+<td>引用闭包</td>
+<td>启用默认配装、技能物品等不得引用禁用技能；正式显式来源必须选入所需Skill、Effect和Attribute</td>
+</tr>
+<tr>
+<td>身份摘要</td>
+<td>属性代码、运算、数值及启用集合变化均重新生成对应内容身份，客户端与服务端保持一致</td>
+</tr>
+<tr>
+<td>展示</td>
+<td>EffectDesc与实际效果一致，百分比按万分比解释；资产与治疗结果以权威状态为准</td>
+</tr>
+</tbody>
+</table></div>
+<p>建议的错误定位应包含工作簿名、工作表、源行号、主键和具体问题，例如“SkillEffect 第8行，EffectIdx=301，技能3尚未实现，不能启用”。</p>
+<p>校验 Disabled 行只验证结构和声明参数，不执行尚未实现的业务；Enabled行不能通过忽略错误、默认填0或自动补测试数值继续发布。</p></section><section class="chapter" id="section-11"><div class="chapter-heading"><span class="chapter-number">11</span><h2>代码与导出如何迁移</h2></div><p>本文件只提供配置目标与参数建议；以下为使用新结构所需的实际开发工作。</p>
+<div class="table-scroll" tabindex="0"><table>
+<thead>
+<tr>
+<th>位置</th>
+<th>需要调整的内容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="../export/gameplay.py">export/gameplay.py</a></td>
+<td>OPTIONAL_TABLES加入Attribute；保持通用int32/string导出。正式来源恢复后显式选入属性记录，不根据描述补效果</td>
+</tr>
+<tr>
+<td><a href="../server/lua/game/cfg_build.lua">cfg_build.lua</a></td>
+<td>读取Enabled；通过AttributeId查Stat；校验三表外键及元信息，仅投影启用技能。现有效果输出仍是stat/op/value</td>
+</tr>
+<tr>
+<td><a href="../server/lua/game/skill.lua">skill.lua</a></td>
+<td>现有11项数值运算可以复用；补对象/机制约束和新效果注册，扩展3/6/14/15对应处理器</td>
+</tr>
+<tr>
+<td><a href="../server/lua/game/cfg_check.lua">cfg_check.lua</a></td>
+<td>放开建议奔跑扣耗的合法范围；校验噪声、听觉、CarryLimit及配置引用，维持完整候选门禁</td>
+</tr>
+<tr>
+<td><a href="../server/lua/game/movement.lua">movement.lua</a>、<a href="../server/lua/game/vitals.lua">vitals.lua</a></td>
+<td>接入实际奔跑扣耗、独立余量和体力耗尽行为</td>
+</tr>
+<tr>
+<td><a href="../server/lua/game/encounter.lua">encounter.lua</a>、<a href="../server/lua/game/ai.lua">ai.lua</a></td>
+<td>视觉/听觉分别判断，接入姿态行动声与猫步效果，继续遵守复活抑制</td>
+</tr>
+<tr>
+<td><a href="../server/lua/game/actions.lua">actions.lua</a>、<a href="../server/lua/game/scene.lua">scene.lua</a></td>
+<td>接入适用奖励箱、额外数量与整笔提交；补给按有效容量处理</td>
+</tr>
+<tr>
+<td><a href="../server/lua/game/loadout.lua">loadout.lua</a>、<a href="../server/lua/game/inventory.lua">inventory.lua</a>、<a href="../server/lua/game/career.lua">career.lua</a>、<a href="../server/lua/game/statecheck.lua">statecheck.lua</a></td>
+<td>初始化数量与容量分开；永久出战和结算核对实际带入量；导入检查动态有效容量</td>
+</tr>
+<tr>
+<td>C++ Player/World、状态schema</td>
+<td>保存新增跨Tick余量、门禁或提交状态；同步桥接、导入、恢复与必要版本调整</td>
+</tr>
+<tr>
+<td>客户端表生成与Hunter协议适配</td>
+<td>同步AttributeId外键、Enabled、技能展示及有效数量，复用动作表现并读取权威结果</td>
+</tr>
+<tr>
+<td>导表及玩法测试</td>
+<td>改旧Stat效果夹具为AttributeId＋Attribute字典；验证外键、禁用门禁、摘要变化、机制组合和数量一致性</td>
+</tr>
+</tbody>
+</table></div>
+<p>当前解析完全不读取Attribute，且SkillEffect仍直接读取Stat。因此不能只把效果表列名改成AttributeId就导出运行。也不要只新增Enabled列后假设现有解析会自动过滤禁用技能。</p>
+<p>如果共享内容结构或原生跨Tick状态发生变化，按现有版本契约同步升级；表层外键转成原有stat/op/value形状时可以保留现有技能运算接口，但必须重新生成内容身份。</p></section><section class="chapter" id="section-12"><div class="chapter-heading"><span class="chapter-number">12</span><h2>分阶段接入与验收清单</h2></div><ol>
+<li>先调整三张表的目标表头与配置转换，建立只含技能、属性和必要基础装备的独立夹具。15项配置完整保留，3/6/14/15保持Enabled=0。</li>
+<li>对已有11项验证本版参数：复活25/40、满血组合、负重4、奔跑180、近战75/60、备弹20/24、装填135、射击48/24、医疗60Tick/100生命、炸药距离2400。</li>
+<li>验证拒绝场景：外键不存在、属性代码重复、同技能重复属性、倍率非法、生命/体力未成对、时长取整为0、来源角色上限不足、引用禁用技能。</li>
+<li>分别实现奔跑扣耗、听觉、工具容量和奖励箱机制。每项的配置与跨Tick状态验证通过后，再将对应Enabled改为1。</li>
+<li>对开箱验证重放、中断、箱子使用状态、容量失败与随机状态；对货运验证3/4和4/4、补给、存档导入及永久返还不复制物品。</li>
+<li>完成客户端选择、复活、使用读条和数量展示联调。当前Unity本地试炼的检查点复活和本地扣血不能替代Hunter技能协议验收。</li>
+<li>后续策划补齐真实箱子/掉落来源，再恢复完整显式生产来源与整局验收。技能机制测试不以补造已移除的关卡表、掉落表为前置。</li>
+</ol>
+<p>当前可独立执行的已有验证是 <a href="../server/tests/scripts/test_skill.py">test_skill.py</a>，只加载Lua技能模块。它不读取本文件TSV，也不证明上述新增字段或四项扩展已经实现；现有C++ Hunt契约仍依赖完整生成内容，后续需相应最小机制夹具。</p>
+<p>2026-10-03 本版文档校核：三段TSV的列数、15/16/16条记录、主键、全部外键、对象匹配和运算枚举检查通过；将本版11项已支持效果转换为现有运行结构后，用真实Luax strict模块核对上述参数结果通过。新字段的正式解析和四项扩展机制尚未因此实现。</p>
+<p>此前实现范围与当前优先级见 <a href="../server/V1_HUNT_TASKS.md#当前优先技能表实现">技能实施安排</a>。</p></section>
+<footer class="page-footer"><span>Hunter · 技能配置设计手册 / 2026-10-03</span><span>建议配置与现有能力分别标明</span><a class="back-top" href="#top">返回顶部 ↑</a></footer></main>
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+<script type="application/json" id="document-data">{"tables": {"Skill": {"raw": "技能ID\t技能名称\t技能说明\t消耗技能点\t作用对象\t效果类别\t生命周期\t效果展示说明\t技能图标\t动画资源\t特效资源\t音效资源\t是否启用\nint32\tstring\tstring\tint32\tstring\tstring\tstring\tstring\tstring\tstring\tstring\tstring\tint32\nSkillIdx\tName\tDesc\tCost\tTarget\tCategory\tLifetime\tEffectDesc\tIconId\tAnimId\tEffectId\tSoundId\tEnabled\nserver/client/key\tserver/client\tclient\tserver/client\tserver/client\tserver/client\tserver/client\tclient\tclient\tclient\tclient\tclient\tserver/client\n1\t死灵法师\t可在对局中复活一次\t1\tplayer\tmechanic\tonce\t成功复活恢复25点生命和40点体力，本局只能使用一次\t\t\t\t\t1\n2\t重振旗鼓\t复活后将血量恢复至上限\t1\tplayer\tmechanic\tdeath\t成功复活时恢复至最大生命，复活后移除本技能\t\t\t\t\t1\n3\t精力充沛\t降低奔跑时体力消耗\t1\tplayer\tnumeric\tpassive\t奔跑体力消耗降低30%\t\t\t\t\t0\n4\t军需官\t提升角色负重能力\t1\tplayer\tnumeric\tpassive\t枪械配装负重上限增加1点\t\t\t\t\t1\n5\t灵缇\t提升一定奔跑速度\t1\tplayer\tnumeric\tpassive\t奔跑速度增加20%\t\t\t\t\t1\n6\t猫步\t降低角色行动时发出的声音\t1\tplayer\tnumeric\tpassive\t地面行走、奔跑和匍匐的行动声传播半径降低50%\t\t\t\t\t0\n7\t枪斗术\t增加枪械近战伤害\t1\tweapon\tnumeric\tpassive\t枪械近战伤害增加50%\t\t\t\t\t1\n8\t弹药大师\t提升枪械初始备弹\t1\tweapon\tnumeric\tpassive\t开局时枪械初始备弹翻倍，不增加弹匣容量\t\t\t\t\t1\n9\t手速超群\t减少换弹时间\t1\tweapon\tnumeric\tpassive\t枪械每轮装填时间减少25%\t\t\t\t\t1\n10\t稳定瞄准\t减少武器轮转时间，本版指射击间隔\t1\tweapon\tnumeric\tpassive\t枪械射击间隔减少20%\t\t\t\t\t1\n11\t妙手回春\t医疗包的使用时长减半\t1\ttool\tnumeric\tpassive\t医疗包使用时长减少50%\t\t\t\t\t1\n12\t灵丹妙药\t医疗包的治疗效果翻倍\t1\ttool\tnumeric\tpassive\t医疗包治疗量翻倍，实际生命不超过最大生命\t\t\t\t\t1\n13\t投球好手\t增加投掷物投掷距离\t1\ttool\tnumeric\tpassive\t当前已实现的炸药最大投掷距离增加50%\t\t\t\t\t1\n14\t开箱大师\t互动道具箱时可以额外获得一个道具\t1\tplayer\tmechanic\tpassive\t成功打开适用道具箱时，额外取得同一箱子奖励来源中的1个道具\t\t\t\t\t0\n15\t货运骡子\t非消耗品道具额外增加携带量\t1\ttool\tnumeric\tpassive\t每种适用非消耗品工具的携带次数上限增加1，不自动补发数量\t\t\t\t\t0", "fields": ["SkillIdx", "Name", "Desc", "Cost", "Target", "Category", "Lifetime", "EffectDesc", "IconId", "AnimId", "EffectId", "SoundId", "Enabled"], "types": ["int32", "string", "string", "int32", "string", "string", "string", "string", "string", "string", "string", "string", "int32"], "flags": ["server/client/key", "server/client", "client", "server/client", "server/client", "server/client", "server/client", "client", "client", "client", "client", "client", "server/client"], "rows": [{"SkillIdx": "1", "Name": "死灵法师", "Desc": "可在对局中复活一次", "Cost": "1", "Target": "player", "Category": "mechanic", "Lifetime": "once", "EffectDesc": "成功复活恢复25点生命和40点体力，本局只能使用一次", "IconId": "", "AnimId": "", "EffectId": "", "SoundId": "", "Enabled": "1"}, {"SkillIdx": "2", "Name": "重振旗鼓", "Desc": "复活后将血量恢复至上限", "Cost": "1", "Target": "player", "Category": "mechanic", "Lifetime": "death", "EffectDesc": "成功复活时恢复至最大生命，复活后移除本技能", "IconId": "", "AnimId": "", "EffectId": "", "SoundId": "", "Enabled": "1"}, {"SkillIdx": "3", "Name": "精力充沛", "Desc": "降低奔跑时体力消耗", "Cost": "1", "Target": "player", "Category": "numeric", "Lifetime": "passive", "EffectDesc": "奔跑体力消耗降低30%", "IconId": "", "AnimId": "", "EffectId": "", "SoundId": "", "Enabled": "0"}, {"SkillIdx": "4", "Name": "军需官", "Desc": "提升角色负重能力", "Cost": "1", "Target": "player", "Category": "numeric", "Lifetime": "passive", "EffectDesc": "枪械配装负重上限增加1点", "IconId": "", "AnimId": "", "EffectId": "", "SoundId": "", "Enabled": "1"}, {"SkillIdx": "5", "Name": "灵缇", "Desc": "提升一定奔跑速度", "Cost": "1", "Target": "player", "Category": "numeric", "Lifetime": "passive", "EffectDesc": "奔跑速度增加20%", "IconId": "", "AnimId": "", "EffectId": "", "SoundId": "", "Enabled": "1"}, {"SkillIdx": "6", "Name": "猫步", "Desc": "降低角色行动时发出的声音", "Cost": "1", "Target": "player", "Category": "numeric", "Lifetime": "passive", "EffectDesc": "地面行走、奔跑和匍匐的行动声传播半径降低50%", "IconId": "", "AnimId": "", "EffectId": "", "SoundId": "", "Enabled": "0"}, {"SkillIdx": "7", "Name": "枪斗术", "Desc": "增加枪械近战伤害", "Cost": "1", "Target": "weapon", "Category": "numeric", "Lifetime": "passive", "EffectDesc": "枪械近战伤害增加50%", "IconId": "", "AnimId": "", "EffectId": "", "SoundId": "", "Enabled": "1"}, {"SkillIdx": "8", "Name": "弹药大师", "Desc": "提升枪械初始备弹", "Cost": "1", "Target": "weapon", "Category": "numeric", "Lifetime": "passive", "EffectDesc": "开局时枪械初始备弹翻倍，不增加弹匣容量", "IconId": "", "AnimId": "", "EffectId": "", "SoundId": "", "Enabled": "1"}, {"SkillIdx": "9", "Name": "手速超群", "Desc": "减少换弹时间", "Cost": "1", "Target": "weapon", "Category": "numeric", "Lifetime": "passive", "EffectDesc": "枪械每轮装填时间减少25%", "IconId": "", "AnimId": "", "EffectId": "", "SoundId": "", "Enabled": "1"}, {"SkillIdx": "10", "Name": "稳定瞄准", "Desc": "减少武器轮转时间，本版指射击间隔", "Cost": "1", "Target": "weapon", "Category": "numeric", "Lifetime": "passive", "EffectDesc": "枪械射击间隔减少20%", "IconId": "", "AnimId": "", "EffectId": "", "SoundId": "", "Enabled": "1"}, {"SkillIdx": "11", "Name": "妙手回春", "Desc": "医疗包的使用时长减半", "Cost": "1", "Target": "tool", "Category": "numeric", "Lifetime": "passive", "EffectDesc": "医疗包使用时长减少50%", "IconId": "", "AnimId": "", "EffectId": "", "SoundId": "", "Enabled": "1"}, {"SkillIdx": "12", "Name": "灵丹妙药", "Desc": "医疗包的治疗效果翻倍", "Cost": "1", "Target": "tool", "Category": "numeric", "Lifetime": "passive", "EffectDesc": "医疗包治疗量翻倍，实际生命不超过最大生命", "IconId": "", "AnimId": "", "EffectId": "", "SoundId": "", "Enabled": "1"}, {"SkillIdx": "13", "Name": "投球好手", "Desc": "增加投掷物投掷距离", "Cost": "1", "Target": "tool", "Category": "numeric", "Lifetime": "passive", "EffectDesc": "当前已实现的炸药最大投掷距离增加50%", "IconId": "", "AnimId": "", "EffectId": "", "SoundId": "", "Enabled": "1"}, {"SkillIdx": "14", "Name": "开箱大师", "Desc": "互动道具箱时可以额外获得一个道具", "Cost": "1", "Target": "player", "Category": "mechanic", "Lifetime": "passive", "EffectDesc": "成功打开适用道具箱时，额外取得同一箱子奖励来源中的1个道具", "IconId": "", "AnimId": "", "EffectId": "", "SoundId": "", "Enabled": "0"}, {"SkillIdx": "15", "Name": "货运骡子", "Desc": "非消耗品道具额外增加携带量", "Cost": "1", "Target": "tool", "Category": "numeric", "Lifetime": "passive", "EffectDesc": "每种适用非消耗品工具的携带次数上限增加1，不自动补发数量", "IconId": "", "AnimId": "", "EffectId": "", "SoundId": "", "Enabled": "0"}]}, "Attribute": {"raw": "属性ID\t属性名称\t属性代码\t作用对象\t参数单位\t合法运算\t数值语义\nint32\tstring\tstring\tstring\tstring\tstring\tstring\nAttributeId\tName\tStat\tTarget\tUnit\tAllowedOps\tValueMode\nserver/client/key\tserver/client\tserver/client\tserver/client\tserver/client\tserver\tserver\n1\t奔跑每秒体力消耗\trun_cost\tplayer\tstamina_per_second\tadd|mul_bp\tmodifier\n2\t枪械配装负重上限\tweight\tplayer\tweight_point\tadd|mul_bp\tmodifier\n3\t奔跑速度\trun_speed\tplayer\tmm_per_tick\tadd|mul_bp\tmodifier\n4\t行动声传播半径\tmovement_noise_radius\tplayer\tmm\tadd|mul_bp\tmodifier\n5\t枪械近战伤害\tmelee_damage\tweapon\thp\tadd|mul_bp\tmodifier\n6\t枪械初始备弹\treserve\tweapon\tround\tadd|mul_bp\tmodifier\n7\t枪械射击间隔\tshot_ticks\tweapon\ttick\tadd|mul_bp\tmodifier\n8\t枪械每轮装填时间\treload_ticks\tweapon\ttick\tadd|mul_bp\tmodifier\n9\t医疗包治疗量\tmedkit_heal\ttool\thp\tadd|mul_bp\tmodifier\n10\t炸药最大投掷距离\tthrow_range\ttool\tmm\tadd|mul_bp\tmodifier\n11\t医疗包使用时间\tmedkit_ticks\ttool\ttick\tadd|mul_bp\tmodifier\n12\t复活后生命\trevive_hp\tplayer\thp\tadd\tabsolute\n13\t复活后体力\trevive_stamina\tplayer\tstamina\tadd\tabsolute\n14\t复活恢复满血\trevive_full_hp\tplayer\tbool\tadd\tflag\n15\t箱子额外奖励道具数\tcrate_bonus_count\tplayer\titem\tadd\tmodifier\n16\t非消耗品工具携带次数上限\ttool_capacity\ttool\tuse\tadd|mul_bp\tmodifier", "fields": ["AttributeId", "Name", "Stat", "Target", "Unit", "AllowedOps", "ValueMode"], "types": ["int32", "string", "string", "string", "string", "string", "string"], "flags": ["server/client/key", "server/client", "server/client", "server/client", "server/client", "server", "server"], "rows": [{"AttributeId": "1", "Name": "奔跑每秒体力消耗", "Stat": "run_cost", "Target": "player", "Unit": "stamina_per_second", "AllowedOps": "add|mul_bp", "ValueMode": "modifier"}, {"AttributeId": "2", "Name": "枪械配装负重上限", "Stat": "weight", "Target": "player", "Unit": "weight_point", "AllowedOps": "add|mul_bp", "ValueMode": "modifier"}, {"AttributeId": "3", "Name": "奔跑速度", "Stat": "run_speed", "Target": "player", "Unit": "mm_per_tick", "AllowedOps": "add|mul_bp", "ValueMode": "modifier"}, {"AttributeId": "4", "Name": "行动声传播半径", "Stat": "movement_noise_radius", "Target": "player", "Unit": "mm", "AllowedOps": "add|mul_bp", "ValueMode": "modifier"}, {"AttributeId": "5", "Name": "枪械近战伤害", "Stat": "melee_damage", "Target": "weapon", "Unit": "hp", "AllowedOps": "add|mul_bp", "ValueMode": "modifier"}, {"AttributeId": "6", "Name": "枪械初始备弹", "Stat": "reserve", "Target": "weapon", "Unit": "round", "AllowedOps": "add|mul_bp", "ValueMode": "modifier"}, {"AttributeId": "7", "Name": "枪械射击间隔", "Stat": "shot_ticks", "Target": "weapon", "Unit": "tick", "AllowedOps": "add|mul_bp", "ValueMode": "modifier"}, {"AttributeId": "8", "Name": "枪械每轮装填时间", "Stat": "reload_ticks", "Target": "weapon", "Unit": "tick", "AllowedOps": "add|mul_bp", "ValueMode": "modifier"}, {"AttributeId": "9", "Name": "医疗包治疗量", "Stat": "medkit_heal", "Target": "tool", "Unit": "hp", "AllowedOps": "add|mul_bp", "ValueMode": "modifier"}, {"AttributeId": "10", "Name": "炸药最大投掷距离", "Stat": "throw_range", "Target": "tool", "Unit": "mm", "AllowedOps": "add|mul_bp", "ValueMode": "modifier"}, {"AttributeId": "11", "Name": "医疗包使用时间", "Stat": "medkit_ticks", "Target": "tool", "Unit": "tick", "AllowedOps": "add|mul_bp", "ValueMode": "modifier"}, {"AttributeId": "12", "Name": "复活后生命", "Stat": "revive_hp", "Target": "player", "Unit": "hp", "AllowedOps": "add", "ValueMode": "absolute"}, {"AttributeId": "13", "Name": "复活后体力", "Stat": "revive_stamina", "Target": "player", "Unit": "stamina", "AllowedOps": "add", "ValueMode": "absolute"}, {"AttributeId": "14", "Name": "复活恢复满血", "Stat": "revive_full_hp", "Target": "player", "Unit": "bool", "AllowedOps": "add", "ValueMode": "flag"}, {"AttributeId": "15", "Name": "箱子额外奖励道具数", "Stat": "crate_bonus_count", "Target": "player", "Unit": "item", "AllowedOps": "add", "ValueMode": "modifier"}, {"AttributeId": "16", "Name": "非消耗品工具携带次数上限", "Stat": "tool_capacity", "Target": "tool", "Unit": "use", "AllowedOps": "add|mul_bp", "ValueMode": "modifier"}]}, "SkillEffect": {"raw": "效果ID\t技能ID\t属性ID\t运算\t参数值\nint32\tint32\tint32\tstring\tint32\nEffectIdx\tSkillIdx\tAttributeId\tOp\tValue\nserver/client/key\tserver/client\tserver/client\tserver/client\tserver/client\n101\t1\t12\tadd\t25\n102\t1\t13\tadd\t40\n201\t2\t14\tadd\t1\n301\t3\t1\tmul_bp\t7000\n401\t4\t2\tadd\t1\n501\t5\t3\tmul_bp\t12000\n601\t6\t4\tmul_bp\t5000\n701\t7\t5\tmul_bp\t15000\n801\t8\t6\tmul_bp\t20000\n901\t9\t8\tmul_bp\t7500\n1001\t10\t7\tmul_bp\t8000\n1101\t11\t11\tmul_bp\t5000\n1201\t12\t9\tmul_bp\t20000\n1301\t13\t10\tmul_bp\t15000\n1401\t14\t15\tadd\t1\n1501\t15\t16\tadd\t1", "fields": ["EffectIdx", "SkillIdx", "AttributeId", "Op", "Value"], "types": ["int32", "int32", "int32", "string", "int32"], "flags": ["server/client/key", "server/client", "server/client", "server/client", "server/client"], "rows": [{"EffectIdx": "101", "SkillIdx": "1", "AttributeId": "12", "Op": "add", "Value": "25"}, {"EffectIdx": "102", "SkillIdx": "1", "AttributeId": "13", "Op": "add", "Value": "40"}, {"EffectIdx": "201", "SkillIdx": "2", "AttributeId": "14", "Op": "add", "Value": "1"}, {"EffectIdx": "301", "SkillIdx": "3", "AttributeId": "1", "Op": "mul_bp", "Value": "7000"}, {"EffectIdx": "401", "SkillIdx": "4", "AttributeId": "2", "Op": "add", "Value": "1"}, {"EffectIdx": "501", "SkillIdx": "5", "AttributeId": "3", "Op": "mul_bp", "Value": "12000"}, {"EffectIdx": "601", "SkillIdx": "6", "AttributeId": "4", "Op": "mul_bp", "Value": "5000"}, {"EffectIdx": "701", "SkillIdx": "7", "AttributeId": "5", "Op": "mul_bp", "Value": "15000"}, {"EffectIdx": "801", "SkillIdx": "8", "AttributeId": "6", "Op": "mul_bp", "Value": "20000"}, {"EffectIdx": "901", "SkillIdx": "9", "AttributeId": "8", "Op": "mul_bp", "Value": "7500"}, {"EffectIdx": "1001", "SkillIdx": "10", "AttributeId": "7", "Op": "mul_bp", "Value": "8000"}, {"EffectIdx": "1101", "SkillIdx": "11", "AttributeId": "11", "Op": "mul_bp", "Value": "5000"}, {"EffectIdx": "1201", "SkillIdx": "12", "AttributeId": "9", "Op": "mul_bp", "Value": "20000"}, {"EffectIdx": "1301", "SkillIdx": "13", "AttributeId": "10", "Op": "mul_bp", "Value": "15000"}, {"EffectIdx": "1401", "SkillIdx": "14", "AttributeId": "15", "Op": "add", "Value": "1"}, {"EffectIdx": "1501", "SkillIdx": "15", "AttributeId": "16", "Op": "add", "Value": "1"}]}}, "presets": [{"name": "灵缇 · 奔跑速度", "base": 150, "add": 0, "bp": 12000, "unit": "毫米/Tick", "min": 1, "max": 1000, "note": "已有机制。普通移动、匍匐与跳跃速度不受该倍率影响。"}, {"name": "军需官 · 枪械负重上限", "base": 3, "add": 1, "bp": 10000, "unit": "负重点", "min": 1, "max": 10000, "note": "已有机制。枪械槽位仍为来源规则的数量上限。"}, {"name": "枪斗术 · 枪械近战伤害", "base": 50, "add": 0, "bp": 15000, "unit": "生命点", "min": 1, "max": 1000000, "note": "已有机制。当前只修改枪械近战，不修改匕首或弹丸。"}, {"name": "弹药大师 · 初始备弹", "base": 10, "add": 0, "bp": 20000, "unit": "发", "min": 0, "max": 100000, "note": "已有机制。只在开局初始化发放；弹匣容量保持原值。"}, {"name": "手速超群 · 每轮装填时间", "base": 180, "add": 0, "bp": 7500, "unit": "Tick", "min": 1, "max": 3600, "note": "已有机制。60Hz下135Tick为2.25秒；已经开始的计时不倒带。"}, {"name": "稳定瞄准 · 射击间隔", "base": 60, "add": 0, "bp": 8000, "unit": "Tick", "min": 1, "max": 3600, "note": "已有机制。间隔降低20%，理想持续射击频率增加25%。"}, {"name": "妙手回春 · 医疗包使用时间", "base": 120, "add": 0, "bp": 5000, "unit": "Tick", "min": 1, "max": 36000, "note": "减半来自已有描述。1Tick再减半将得到0，必须拒绝配置。"}, {"name": "灵丹妙药 · 医疗包治疗量", "base": 50, "add": 0, "bp": 20000, "unit": "生命点", "min": 0, "max": 1000000, "note": "翻倍来自已有描述。实际治疗=min(有效治疗量,缺失生命)。"}, {"name": "投球好手 · 炸药投掷距离", "base": 1600, "add": 0, "bp": 15000, "unit": "毫米", "min": 1, "max": 100000, "note": "已有机制。当前仅bomb距离，速度与爆炸范围保持来源值。"}, {"name": "精力充沛 · 奔跑体耗（待实现）", "base": 10, "add": 0, "bp": 7000, "unit": "体力/秒", "min": 0, "max": 10000, "note": "建议基础与边界。真实来源目前RunCost=0，需先实现按Tick扣耗。"}, {"name": "猫步 · 奔跑声半径（待实现）", "base": 10000, "add": 0, "bp": 5000, "unit": "毫米", "min": 0, "max": 100000, "note": "建议基础与边界。必须先将听觉与视觉分开判断，HearingRange再限制听觉范围。"}, {"name": "开箱大师 · 额外道具数（待实现）", "base": 0, "add": 1, "bp": 10000, "unit": "个", "min": 0, "max": 8, "addOnly": true, "note": "本版仅允许add。额外一个来自已有描述，真实箱子奖励来源仍待补充。"}, {"name": "货运骡子 · 急救包容量（待实现）", "base": 3, "add": 1, "bp": 10000, "unit": "次", "min": 1, "max": 100, "note": "口径已确认，+1为建议参数。提升容量不自动增加现有次数或库存。"}]}</script><script>
+// 提供本地字段检索、技能筛选、精确 TSV 导出与参数计算，不写入工作簿。
+(() => {
+  'use strict';
+  document.documentElement.classList.add('js');
+  const payload = JSON.parse(document.getElementById('document-data').textContent);
+  const $ = (selector) => document.querySelector(selector);
+  const $$ = (selector) => [...document.querySelectorAll(selector)];
+  const toast = $('#toast');
+  let toastTimer;
+  // 反馈复制、下载及输入错误，消息同时提供给辅助技术。
+  function message(text) {
+    toast.textContent = text; toast.hidden = false;
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => { toast.hidden = true; }, 3200);
+  }
+  // 过滤字段及技能说明，筛选状态只影响当前文档的展示。
+  function configureFilter(kind) {
+    const isField = kind === 'field';
+    const cards = $$(isField ? '.field-card' : '.skill-detail');
+    const input = $('#' + kind + '-search');
+    const buttons = $$('[data-' + kind + '-filter]');
+    let selected = 'all';
+    // 同步筛选结果计数、分组标题与无结果提示。
+    function apply() {
+      const query = input.value.trim().toLocaleLowerCase();
+      let count = 0;
+      for (const card of cards) {
+        const value = isField ? card.dataset.table : card.dataset.status;
+        const matches = (selected === 'all' || value === selected)
+          && card.dataset.search.toLocaleLowerCase().includes(query);
+        card.hidden = !matches; if (matches) count++;
+      }
+      if (isField) for (const group of $$('.field-group'))
+        group.hidden = ![...group.querySelectorAll('.field-card')].some(card => !card.hidden);
+      $('#' + kind + '-count').textContent = count + (isField ? ' 个字段' : ' 项技能');
+      $('#' + kind + '-empty').hidden = count !== 0;
+    }
+    input.addEventListener('input', apply);
+    for (const button of buttons) button.addEventListener('click', () => {
+      selected = button.dataset[kind + 'Filter'];
+      for (const peer of buttons) peer.setAttribute('aria-pressed', String(peer === button));
+      apply();
+    });
+    return apply;
+  }
+  const applyFields = configureFilter('field'); configureFilter('skill');
+  $('#fields-expand').addEventListener('click', () => {
+    for (const card of $$('.field-card')) if (!card.hidden) card.open = true;
+  });
+  $('#fields-collapse').addEventListener('click', () => {
+    for (const card of $$('.field-card')) if (!card.hidden) card.open = false;
+  });
+  // 优先使用剪贴板 API，离线浏览器不可用时尝试传统用户触发复制。
+  async function copyTable(name) {
+    const text = payload.tables[name].raw;
+    try { await navigator.clipboard.writeText(text); message(name + ' TSV 已复制，含四行表头及空资源列。'); return; }
+    catch (_) { /* 离线文件权限因浏览器而异，继续尝试用户触发的复制。 */ }
+    const area = document.createElement('textarea');
+    area.value = text; area.style.cssText = 'position:fixed;left:-9999px;top:0;';
+    document.body.appendChild(area); area.focus(); area.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch (_) { ok = false; }
+    area.remove();
+    message(ok ? name + ' TSV 已复制。' : '浏览器未允许复制，请使用“下载 TSV”或从下方文本选择复制。');
+  }
+  for (const button of $$('[data-copy]')) button.addEventListener('click', () => { copyTable(button.dataset.copy); });
+  // 导出精确表格内容；UTF-8 BOM 帮助 Windows Excel 正确识别中文。
+  function downloadTable(name) {
+    const blob = new Blob(['\uFEFF', payload.tables[name].raw + '\n'], {type: 'text/tab-separated-values;charset=utf-8'});
+    const url = URL.createObjectURL(blob); const link = document.createElement('a');
+    link.href = url; link.download = name + '-建议配置.tsv'; document.body.appendChild(link);
+    link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+    message(name + ' TSV 已生成。数据仍为本版建议配置。');
+  }
+  for (const button of $$('[data-download]')) button.addEventListener('click', () => { downloadTable(button.dataset.download); });
+  const select = $('#calc-preset'), controls = [$('#calc-base'), $('#calc-add'), $('#calc-bp'), $('#calc-bp2')];
+  for (const [index, item] of payload.presets.entries()) {
+    const option = document.createElement('option'); option.value = String(index); option.textContent = item.name; select.appendChild(option);
+  }
+  // 输入为空、小数、越界或倍率合成非法时给出明确的失败结果。
+  function calculate() {
+    const preset = payload.presets[Number(select.value)];
+    const values = controls.map(input => input.value.trim() === '' ? NaN : Number(input.value));
+    const [base, add, bp, bp2] = values;
+    const invalidInput = values.some(value => !Number.isSafeInteger(value))
+      || base < 0 || base > 1000000 || add < -1000000 || add > 1000000
+      || bp < 0 || bp > 100000 || bp2 < 0 || bp2 > 100000;
+    const totalBp = 10000 + (bp - 10000) + (bp2 - 10000);
+    const result = Math.floor((base + add) * totalBp / 10000);
+    const ok = !invalidInput && totalBp >= 0 && Number.isSafeInteger(result) && result >= preset.min && result <= preset.max;
+    $('#calc-result').textContent = invalidInput ? '输入无效' : String(result);
+    $('#calc-unit').textContent = preset.unit;
+    $('#calc-equation').textContent = invalidInput ? '请填写合法整数。' : `floor((${base} + ${add}) × ${totalBp} / 10000) = ${result}`;
+    const status = $('#calc-status'); status.classList.toggle('invalid', !ok);
+    status.textContent = invalidInput ? '拒绝：空值、小数或输入范围错误'
+      : totalBp < 0 ? '拒绝：合成倍率因子小于0'
+      : ok ? `范围内：${preset.min}～${preset.max} ${preset.unit}`
+      : `拒绝：最终值应为 ${preset.min}～${preset.max} ${preset.unit}`;
+    $('#calc-note').textContent = preset.note;
+    const scale = Math.max(base, ok ? result : 0, 1);
+    $('#bar-base').style.width = (invalidInput ? 0 : base / scale * 78) + '%';
+    $('#bar-result').style.width = (ok ? result / scale * 78 : 0) + '%';
+  }
+  // 切换示例时恢复该属性的来源基值和本版建议参数。
+  function loadPreset() {
+    const preset = payload.presets[Number(select.value)];
+    controls[0].value = preset.base; controls[1].value = preset.add;
+    controls[2].value = preset.bp; controls[3].value = 10000;
+    controls[2].disabled = !!preset.addOnly; controls[3].disabled = !!preset.addOnly;
+    calculate();
+  }
+  select.addEventListener('change', loadPreset);
+  for (const input of controls) input.addEventListener('input', calculate);
+  loadPreset();
+  $('#print-document').addEventListener('click', () => window.print());
+  $('#mobile-nav').addEventListener('click', () => {
+    const opened = $('.sidebar').classList.toggle('open'); $('#mobile-nav').setAttribute('aria-expanded', String(opened));
+  });
+  const navLinks = $$('.sidebar nav a'), chapters = navLinks.map(link => document.getElementById(link.hash.slice(1)));
+  let scheduled = false;
+  // 同步当前阅读章节及顶部进度，长文档始终保留可定位的目录。
+  function updateReading() {
+    scheduled = false;
+    let current = 0;
+    for (const [index, chapter] of chapters.entries()) if (chapter && chapter.getBoundingClientRect().top <= 135) current = index;
+    for (const [index, link] of navLinks.entries()) {
+      link.classList.toggle('active', index === current);
+      if (index === current) link.setAttribute('aria-current', 'location'); else link.removeAttribute('aria-current');
+    }
+    const max = document.documentElement.scrollHeight - window.innerHeight;
+    const proportion = max > 0 ? Math.min(1, Math.max(0, window.scrollY / max)) : 0;
+    $('.reading-progress').style.width = `calc((100vw - var(--sidebar)) * ${proportion})`;
+  }
+  window.addEventListener('scroll', () => { if (!scheduled) { scheduled = true; requestAnimationFrame(updateReading); } }, {passive:true});
+  window.addEventListener('resize', updateReading); updateReading();
+  for (const link of navLinks) link.addEventListener('click', () => { $('.sidebar').classList.remove('open'); $('#mobile-nav').setAttribute('aria-expanded','false'); });
+  // 打印时展开理由和技能条目，并保留原先筛选及展开状态以便打印后恢复。
+  let beforePrintState = null;
+  window.addEventListener('beforeprint', () => {
+    beforePrintState = [...$$('details'), ...$$('.field-group'), ...$$('.empty-state')].map(element => ({element, hidden:element.hidden, open:element.open}));
+    for (const {element} of beforePrintState) { element.hidden = false; if (element.tagName === 'DETAILS') element.open = true; }
+    for (const element of $$('.empty-state')) element.hidden = true;
+  });
+  window.addEventListener('afterprint', () => {
+    if (!beforePrintState) return;
+    for (const {element, hidden, open} of beforePrintState) { element.hidden = hidden; if (element.tagName === 'DETAILS') element.open = open; }
+    beforePrintState = null; applyFields();
+  });
+})();
+</script></body></html>

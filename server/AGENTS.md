@@ -8,7 +8,10 @@ SRV-007 提供 SQLite 底座；SRV-011 接通 Runtime 读档、持久局号、�
 首版任务和实际验证见 [V1_TASKS.md](V1_TASKS.md)，Unity 与 Android 仍为独立门槛。
 SRV-012 增加免费配装、姿态恢复、三枪四工具和场景交互；历史增量状态见
 [V1_GAMEPLAY_TASKS.md](V1_GAMEPLAY_TASKS.md)。生产内容从根工作簿与 `design/demo_sources.json`
-生成，旧首版工作簿仅作回归夹具。SRV-013 的 Windows 双 Runtime 实现与验证已完成，见
+生成的流程属于此前内容基线。2026-10-03 当前 `design/` 仅保留六张根工作簿，关卡表、
+掉落表与生产来源清单不在目录中；先推进技能表已有技能，杀怪掉落资源及数值等待补充策划案。
+具体安排见 [技能实施安排](V1_HUNT_TASKS.md#当前优先技能表实现)。
+SRV-013 的 Windows 双 Runtime 实现与验证已完成，见
 [Lua 配置任务表](V1_LUA_CFG_TASKS.md)，其中旧版本号保留为历史。
 SRV-014 接入怪物能力、玩家天赋与复活、地图探索及永久猎人，当前协议 v6、内容 v5、
 Host／状态 v8、SQLite V2，进度见 [新策划任务表](V1_HUNT_TASKS.md)。缺失策划值保留草稿；
@@ -19,9 +22,11 @@ Host／状态 v8、SQLite V2，进度见 [新策划任务表](V1_HUNT_TASKS.md)�
   Entity、Unit、Player、Monster、Item、Weapon、World 与同名小写 Lua 文件配对。
   掉落与撤离模块已列入正式清单；`tests/fixtures` 的实体夹具不属于生产模块清单。
 - `lua/modules.json` 定义正式构建清单，桥接与状态 schema 见 `lua/contract.json`。
-- 生产源表按 `design/demo_sources.json` 导出独立 Lua 数据模块，`game.cfg` 加载、解析关联
+- 生产来源恢复后，按显式清单导出独立 Lua 数据模块，`game.cfg` 加载、解析关联
   并校验玩法语义；Python 不维护第二套玩法配置模型。只读配置允许在 Lua 缓存，C++ 不持有
   完整配置文档。共享 JSON 为客户端派生产物，`ContentId.h` 仅保存身份元数据。
+- 技能机制可使用独立夹具验证；不得为恢复完整构建重新创建已移除的关卡、掉落内容，
+  不得将旧生成内容、示例参数或测试奖励当作当前生产来源。
 - 配装、拾取、工具消费、补给、掉落及依赖配置的状态校验由 Lua 决定；C++ 负责权威状态、
   句柄、容量、整数范围及有界批量原子提交。旧上下文和旧内部状态明确拒绝。
 - 不因目录和文件已经存在，就将相应阶段、模块或测试标记为完成。
