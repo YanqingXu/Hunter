@@ -13,11 +13,11 @@ ROOT = Path(__file__).resolve().parents[3]
 SPEC = importlib.util.spec_from_file_location("hunter_content", ROOT / "export/combat.py")
 CONTENT = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(CONTENT)
-SOURCE = ROOT / "design/combat_demo.json"
+SOURCE = ROOT / "server/tests/fixtures/combat.json"
 
 
 class ContentTest(unittest.TestCase):
-    # 每个用例读取独立的正式配置副本，防止相互污染。
+    # 每个用例读取独立的历史战斗夹具，防止相互污染。
     def setUp(self):
         self.doc = json.loads(SOURCE.read_text(encoding="utf-8"))
 
@@ -144,7 +144,7 @@ class ContentTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             CONTENT.validate(doc)
 
-    # 成功导出使用正式来源，且输出 JSON 可以再次严格校验。
+    # 历史夹具导出仅验证旧工具，输出 JSON 可以再次严格校验。
     def test_export(self):
         with tempfile.TemporaryDirectory() as temp:
             folder = Path(temp)

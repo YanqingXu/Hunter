@@ -78,15 +78,19 @@ else()
     set(HUNTER_LUAX_DEP "${HUNTER_HOST_LUAX}")
 endif()
 file(GLOB HUNTER_CFG_LUA CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/lua/game/cfg*.lua")
+# 根工作簿新增、移除或改值均重新导出，Office 临时文件不成为生产依赖。
+file(GLOB HUNTER_CFG_XLSX CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/../design/*.[xX][lL][sS][xX]")
+list(FILTER HUNTER_CFG_XLSX EXCLUDE REGEX "/~[$]")
+file(GENERATE OUTPUT "${HUNTER_GEN}/cfg-inputs.txt" CONTENT "${HUNTER_CFG_XLSX}\n")
 add_custom_command(OUTPUT "${HUNTER_GEN}/content.json" "${HUNTER_GEN}/ContentId.h"
     "${HUNTER_GEN}/cfg/Manifest.json"
     COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/../export/gameplay.py"
-        --source "${CMAKE_CURRENT_SOURCE_DIR}/../design/demo_sources.json"
+        --source "${CMAKE_CURRENT_SOURCE_DIR}/../design"
         --output "${HUNTER_GEN}/content.json" --header "${HUNTER_GEN}/ContentId.h"
         --cfg "${HUNTER_GEN}/cfg" --luax "${HUNTER_LUAX}"
-    DEPENDS ../design/demo_sources.json ../design/角色表.xlsx ../design/武器表.xlsx
-        ../design/道具表.xlsx ../design/怪物表.xlsx ../design/掉落表.xlsx ../design/地图表.xlsx
-        ../design/技能表.xlsx lua/game/skill.lua
+    DEPENDS ${HUNTER_CFG_XLSX} "${HUNTER_GEN}/cfg-inputs.txt" lua/game/skill.lua
+        lua/modules.json lua/framework/state.lua
         ../export/gameplay.py ../export/export.py tools/publish.py tools/assemble.py
         ${HUNTER_CFG_LUA} ${HUNTER_LUAX_DEP} VERBATIM)
 add_custom_target(hunter_content ALL DEPENDS

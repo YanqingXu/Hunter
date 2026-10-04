@@ -90,7 +90,7 @@ return function(deps)
         for group, choices in ipairs({value.tools, value.consumables}) do
             for _, id in ipairs(choices) do
                 local tool = content.tools[id]
-                if tool == nil or selected[id] then
+                if tool == nil or (group == 1 and selected[id]) then
                     return nil, "invalid_tool_cfg"
                 end
                 selected[id] = true

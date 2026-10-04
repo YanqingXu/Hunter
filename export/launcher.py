@@ -1,4 +1,4 @@
-# 策划双击入口：读取目标清单、导出选中工作簿，并显示中文结果窗口。
+# 策划双击入口：默认读取全部根工作簿并校验玩法，草稿保留独立目标清单和输出。
 import argparse
 from dataclasses import dataclass
 from datetime import datetime
@@ -94,8 +94,7 @@ def run_export(root, *, check=False, draft=False):
             workbooks = select_workbooks(source, target_file)
             tables = cfg.export_config(source, output, check=check, workbooks=workbooks)
         else:
-            manifest = source / "demo_sources.json"
-            tables, _ = gameplay.export_content(source=manifest, output=output.parent / "content.json",
+            tables, _ = gameplay.export_content(source=source, output=output.parent / "content.json",
                 header=output.parent / "ContentId.h", cfg=output, check=check)
             tables = list(tables.values())
             workbooks = sorted({table.sheet.path for table in tables})
@@ -136,7 +135,7 @@ def show_report(report):
                      foreground="#176739" if report.ok else "#B3261E")
     title.pack(fill="x", pady=(0, 8))
     description = ("草稿由导出目标.txt 选择，输出到独立 draft-cfg 目录。" if report.draft else
-                   "正式内容由 design/demo_sources.json 选择，修改源表后重新导出。")
+                   "正式内容读取 design 根目录全部配置工作簿，修改源表后重新导出。")
     ttk.Label(container, text=description).pack(anchor="w", pady=(0, 12))
     detail = scrolledtext.ScrolledText(container, wrap="word", height=18, font=("Microsoft YaHei UI", 10))
     detail.insert("1.0", report.detail)
@@ -151,8 +150,8 @@ def show_report(report):
         except OSError as error:
             messagebox.showerror("无法打开", str(error), parent=window)
 
-    target = report.root / ("export/" + TARGET_NAME if report.draft else "design/demo_sources.json")
-    ttk.Button(buttons, text="打开草稿清单" if report.draft else "打开生产清单",
+    target = report.root / ("export/" + TARGET_NAME if report.draft else "design")
+    ttk.Button(buttons, text="打开草稿清单" if report.draft else "打开配置目录",
                command=lambda: open_path(target)).pack(side="left")
     output = report.root / ("server/build/draft-cfg" if report.draft else "server/build/generated/cfg")
     if output.is_dir():

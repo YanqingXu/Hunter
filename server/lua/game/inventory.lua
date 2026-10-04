@@ -54,17 +54,21 @@ return function(deps)
         end
         local cfg = content.tools[source.cfg_id]
         if cfg ~= nil and (cfg.kind == "needle" or cfg.kind == "bomb") then
-            local slot = 0
+            local slot, free = 0, 0
             for index = 5, 4 + content.rules.consumable_slots do
                 local current = Player.get_tool_cfg(player.controls, index)
-                if current == source.cfg_id then
+                if current == source.cfg_id
+                    and Player.get_tool_count(player.controls, index) + source.count
+                        <= cfg.uses then
                     slot = index
                     break
-                elseif current == "0" and slot == 0 then
-                    slot = index
+                elseif current == "0" and free == 0 then
+                    free = index
                 end
             end
-            if slot == 0 or Player.get_tool_count(player.controls, slot) + source.count > cfg.uses then
+            if slot == 0 then slot = free end
+            if slot == 0 or Player.get_tool_count(player.controls, slot) + source.count
+                > cfg.uses then
                 return "consumable_full"
             end
             batch.tools[1] = {slot = slot,
@@ -84,7 +88,8 @@ return function(deps)
                     if item.cfg_id == source.cfg_id then
                         local amount = math.min(remaining, item_cfg.max_stack - item.count)
                         if amount > 0 then
-                            batch.items[#batch.items + 1] = item_change(item, item.count + amount, "Bag")
+                            batch.items[#batch.items + 1] = item_change(item,
+                                item.count + amount, "Bag")
                             remaining = remaining - amount
                         end
                     end

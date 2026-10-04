@@ -1,4 +1,4 @@
-# 读取显式根表清单并导出 Lua；玩法投影和语义校验只由同一份 Luax 脚本执行。
+# 读取 design 根工作簿并导出全部服务端记录；玩法投影和语义校验由同一份 Luax 执行。
 import argparse
 import hashlib
 import json
@@ -14,12 +14,6 @@ ROOT = sheets.ROOT
 sys.path.insert(0, str(ROOT / "server/tools"))
 import assemble
 
-TABLES = set("Player Weapon Ammunition Item Equip Tool Monster Attack Drop DropEntry "
-             "Map MapSolid PlayerSpawn MonsterSpawn ExtractPoint Bag Rules Loadout Scene".split())
-OPTIONAL_TABLES = set("Skill SkillEffect Ability MonsterAi MonsterAbility Encounter "
-                      "SceneAction Barrel Region Career CareerLevel KillXp".split())
-
-
 MAX_BYTES = 60 * 1024
 
 
@@ -33,73 +27,15 @@ def unique_pairs(pairs):
     return result
 
 
-# 只检查来源清单结构，玩法字段和含义由 Lua 负责。
-def fields(value, names, name):
-    if type(value) is not dict or set(value) != set(names.split()):
-        raise ValueError(f"{name}: expected exactly {names}")
-
-
-# 清单记录主键必须是实际整数，禁止布尔或浮点别名。
-def integer_value(value, low, high, name):
-    if type(value) is not int or not low <= value <= high:
-        raise ValueError(f"{name}: expected integer [{low},{high}]")
-
-
-# 只解析清单选中的记录，未选中的不完整草稿和以井号开头的说明行不进入生产数据。
-def select(sheet, ids):
-    fields = sheets.read_fields(sheet)
-    keys = [field for field in fields if "key" in field.flags]
-    if len(keys) != 1 or keys[0].kind != "int32" or "server" not in keys[0].flags:
-        sheet.fail(4, 1, "生产表必须有唯一的 server/key int32 主键")
-    key = keys[0]
-    server = [field for field in fields if "server" in field.flags]
-    rows = {}
-    for number in sorted({r for r, c in sheet.cells if r >= 5}):
-        cell = sheet.cell(number, key.column)
-        if not cell.text or cell.text.startswith("#"):
-            continue
-        identity = sheets.convert(sheet, number, key)
-        if identity not in ids:
-            continue
-        if identity in rows:
-            sheet.fail(number, key.column, f"生产主键重复: {identity}")
-        rows[identity] = {field.name: sheets.convert(sheet, number, field) for field in server}
-    if set(rows) != set(ids):
-        sheet.fail(1, 1, f"清单记录不存在: {sorted(set(ids) - set(rows))}")
-    return sheets.Table(sheet.name.split("|")[-1], sheet, server, rows)
-
-
-# 显式清单是唯一生产入口，拒绝目录逃逸、重复表和隐式补入依赖。
+# 生产读取根目录全部工作簿和服务端记录；必要表、关联及启用范围由 Lua 校验。
 def read_tables(source):
     source = Path(source).resolve()
-    spec = json.loads(source.read_text(encoding="utf-8"), object_pairs_hook=unique_pairs)
-    fields(spec, "v sources", "manifest")
-    if spec["v"] != 1 or not isinstance(spec["sources"], list):
-        raise ValueError("manifest: unsupported version or sources")
-    books, tables = {}, {}
-    for entry in spec["sources"]:
-        fields(entry, "file sheet ids", "source")
-        if not isinstance(entry["file"], str) or not isinstance(entry["sheet"], str):
-            raise ValueError("source: file and sheet must be strings")
-        path = (source.parent / entry["file"]).resolve()
-        if path.parent != source.parent or path.suffix.lower() != ".xlsx":
-            raise ValueError("source: only root design workbooks are allowed")
-        ids = entry["ids"]
-        if not isinstance(ids, list) or not ids or len(set(ids)) != len(ids):
-            raise ValueError("source.ids: expected nonempty unique IDs")
-        for key in ids:
-            integer_value(key, 1, 2147483647, "source.ids")
-        if path not in books:
-            books[path] = {sheet.name: sheet for sheet in sheets.read_workbook(path)}
-        if entry["sheet"] not in books[path]:
-            raise ValueError(f"{path}: missing worksheet {entry['sheet']}")
-        table = select(books[path][entry["sheet"]], ids)
-        if table.name in tables:
-            raise ValueError(f"duplicate production table: {table.name}")
-        tables[table.name] = table
-    if not TABLES <= set(tables) or not set(tables) <= TABLES | OPTIONAL_TABLES:
-        raise ValueError(f"manifest: required {sorted(TABLES)}, optional {sorted(OPTIONAL_TABLES)}")
-    return tables
+    books = sheets.scan_workbooks(source, recursive=False)
+    tables = sheets.collect_tables(source, workbooks=books)
+    for table in tables:
+        if table.name.casefold() in {"tables", "fixture"}:
+            table.sheet.fail(1, 1, "生产表名不能使用内部聚合或测试夹具名称 Tables/Fixture")
+    return {table.name: table for table in tables}
 
 
 # 从固定依赖的本地工具选择解释器，不使用系统 PATH 中的其他 Lua 实现。
@@ -142,8 +78,8 @@ def config_files(tables=None, fixture=None):
                                 + literal(fixture) + "\n").encode("utf-8")
         names = ["Fixture"]
     else:
-        if not TABLES <= set(tables) or not set(tables) <= TABLES | OPTIONAL_TABLES:
-            raise ValueError("production requires the selected source table set")
+        if not tables:
+            raise ValueError("production requires server configuration tables")
         for name, table in sorted(tables.items()):
             files[name + ".lua"] = sheets.render_lua(table)
             names.append(name)
@@ -203,10 +139,12 @@ def evaluate(files, luax=None):
 
 # 只对 Lua 返回的数据进行通用规范编码和摘要，不保存第二套 Python 玩法模型。
 def content_bytes(value):
+    if type(value) is not dict or value.get("v") != 6:
+        raise ValueError("expected validated gameplay content v6")
     data = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
     if len(data) > MAX_BYTES:
         raise ValueError("gameplay content exceeds 60 KiB")
-    version = "gameplay-v5:" + hashlib.sha256(data).hexdigest()
+    version = "gameplay-v6:" + hashlib.sha256(data).hexdigest()
     header = ('// 从 Lua 配置派生的内容身份，禁止手工修改。\n#pragma once\n'
               '#include <string_view>\nnamespace hunter::content\n{\n'
               f'inline constexpr std::string_view version = "{version}";\n}}\n')
@@ -251,11 +189,11 @@ def export_content(source=None, fixture=None, output=None, header=None, cfg=None
     return tables, data
 
 
-# 命令行、CMake 与策划窗口共用同一个显式清单和失败不发布入口。
+# 命令行、CMake 与策划窗口共用根工作簿来源和失败不发布入口。
 def main():
     parser = argparse.ArgumentParser()
     source = parser.add_mutually_exclusive_group(required=True)
-    source.add_argument("--source", type=Path)
+    source.add_argument("--source", type=Path, help="读取全部根工作簿的 design 目录")
     source.add_argument("--fixture", type=Path)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--header", type=Path)

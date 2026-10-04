@@ -390,8 +390,8 @@ struct Script::Impl
                     require(json_object(content_json, cfg.max_json_bytes)
                         && json_object(bounds_json, cfg.max_json_bytes), "invalid_configuration");
                     const auto content = nlohmann::json::parse(content_json);
-                    require(content.at("v") == 5, "invalid_content_version");
-                    const Str key = "gameplay-v5:" + digest(content.dump());
+                    require(content.at("v") == 6, "invalid_content_version");
+                    const Str key = "gameplay-v6:" + digest(content.dump());
                     world.configure(nlohmann::json::parse(bounds_json), key);
                     return true;
                 }

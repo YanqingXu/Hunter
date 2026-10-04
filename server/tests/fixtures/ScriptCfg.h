@@ -26,6 +26,59 @@ inline nlohmann::json test_content()
     return nlohmann::json::parse(input);
 }
 
+// 从生产超集显式派生历史三出生、三场景夹具，各用例再声明所需新增机制。
+inline nlohmann::json test_combat_content()
+{
+    auto doc = test_content();
+    doc["item_spawns"] = nlohmann::json::array();
+    doc["encounter"] = false;
+    doc["exploration"] = false;
+    doc["abilities"] = nlohmann::json::object();
+    doc["skills"] = nlohmann::json::object();
+    doc["default_loadout"]["skills"] = nlohmann::json::array();
+    nlohmann::json enemies = nlohmann::json::array();
+    for (const auto& spawn : doc["map"]["enemies"])
+    {
+        const auto id = spawn.at("spawn_id").get<Str>();
+        if (id == "12" || id == "13" || id == "14")
+        {
+            enemies.push_back(spawn);
+        }
+    }
+    doc["map"]["enemies"] = std::move(enemies);
+    nlohmann::json scenes = nlohmann::json::array();
+    for (const auto& scene : doc["scenes"])
+    {
+        const auto id = scene.at("id").get<Str>();
+        if (id == "1" || id == "2" || id == "3")
+        {
+            scenes.push_back(scene);
+        }
+    }
+    doc["scenes"] = std::move(scenes);
+    for (auto& monster : doc["monsters"])
+    {
+        monster["ai"] = false;
+    }
+    for (auto& item : doc["items"])
+    {
+        item["skill_cfg_id"] = "0";
+    }
+    for (auto& ammo : doc["ammo"])
+    {
+        nlohmann::json props = nlohmann::json::array();
+        for (const auto& id : ammo["prop_ids"])
+        {
+            if (id == "3")
+            {
+                props.push_back(id);
+            }
+        }
+        ammo["prop_ids"] = std::move(props);
+    }
+    return doc;
+}
+
 // 在独立进程运行固定的离线工具，参数按数组传递而不经过命令解释器。
 inline void test_cfg_process(const Vec<Str>& args)
 {

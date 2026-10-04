@@ -27,7 +27,7 @@ local career = career_factory({["game.loadout"]=loadout})
 local doc = {players={["1"]={hp=100,hp_segments=json.array({50,50}),weight=3,
     stamina=100,run_speed=100,skill_points=0,recruit_cost={currency_id="0",amount=0}}},
     weapons={["1"]={item_cfg_id="101",ammo_cfg_id="1",weight=1,melee_damage=50,
-        reserve=10,fire_ticks=10,reload_ticks=60}},ammo={["1"]={}},
+        magazine=6,reserve=10,fire_ticks=10,reload_ticks=60}},ammo={["1"]={}},
     tools={["201"]={kind="medkit",uses=3,use_ticks=120,heal=25}},
     rules={weapon_slots=2,tool_slots=4,consumable_slots=4},
     skills={["5"]={cost=4,effects=json.array({{stat="run_speed",op="add",value=10}})}},

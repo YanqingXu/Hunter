@@ -1,19 +1,19 @@
 # 配置导出工具
 
-2026-10-03 当前范围：`design/` 已移除关卡表和掉落表，生产来源清单
-`design/demo_sources.json` 也不在当前目录中。杀怪掉落资源及数值等待补充策划案，
-当前优先推进[技能表实现](../server/V1_HUNT_TASKS.md#当前优先技能表实现)。
-独立技能机制测试无需完整生产来源；下面的正式导出流程保留为历史基线，
-恢复真实来源和完整引用后才能重新使用，不能用旧产物或测试配置替代缺失来源。
+2026-10-04：用户已授权补齐缺失配置，正式来源为 `design/` 根目录全部 `.xlsx`。
+当前八本工作簿导出 37 张服务端表、186 条记录；不读取 `design/demo_sources.json`，
+不使用表白名单或 JSON 选行。每张表导出独立 Lua，保留原英文字段和数字主键。
+`Server[1]` 选择当前地图、背包、规则、默认配装、遭遇及成长；启用内容和关联由 Lua 校验。
+新增初版数值可继续调整，不代表最终平衡确认，配置职责见
+[配置表填写说明](../design/配置表填写说明.md)。
 
-此前正式 DEMO 按 `design/demo_sources.json` 读取根工作簿中明确选中的工作表和记录。当时选入
-6 个工作簿、19 张表、51 条记录。每张表导出独立 Lua 文件，保留原英文字段名和数字主键。
-生产不扫描整个 `design/`，不读取天赋草稿、重复关卡表或历史首版工作簿。
+2026-10-03 以前的“六本、19 表、51 条、显式 JSON 选行”和缺失掉落来源属于历史基线，
+已由根目录入口取代。旧生成内容与独立夹具不会自动补入生产。
 
-Python 只负责读取 OOXML、检查字段类型、选择记录及确定性序列化。`server/lua/game/cfg.lua`
+Python 只负责读取 OOXML、检查字段类型及确定性序列化。`server/lua/game/cfg.lua`
 及其配置模块负责字段转换、单位、引用、默认配装、地图几何和玩法语义校验。构建和服务端
-运行同一份 Lua 规则；规范 JSON 及 `gameplay-v4:` 摘要从 Lua 返回内容派生。数值和语义未
-变时摘要不变，未选草稿不参与身份。
+运行同一份 Lua 规则；规范内容 v6 JSON 及 `gameplay-v6:` 摘要从 Lua 返回内容派生。
+语义相同的 Lua 运行内容保持同一身份；根表新增或改值须完整重导，禁用记录不进入运行候选。
 
 ## 正式导出
 
@@ -21,8 +21,8 @@ Python 只负责读取 OOXML、检查字段类型、选择记录及确定性序�
 
 ```powershell
 $luax = 'server/build/win-dev/_deps/luax-build/Release/luax.exe'
-python export/gameplay.py --source design/demo_sources.json --luax $luax --check
-python export/gameplay.py --source design/demo_sources.json --luax $luax `
+python export/gameplay.py --source design --luax $luax --check
+python export/gameplay.py --source design --luax $luax `
     --cfg server/build/win-dev/generated/cfg `
     --output server/build/win-dev/generated/content.json `
     --header server/build/win-dev/generated/ContentId.h
@@ -45,17 +45,17 @@ PATH 中另一个 Lua 实现。缺少解释器明确失败。跨机构建可显�
 服务端启动由 Lua 加载配置，不读取共享 JSON、不内嵌完整配置头；C++ 保留结构边界和
 权威状态。更新玩法数值只需重新导出并组装脚本或 Bundle，无需重新编译服务端核心。
 
-清单缺表、缺记录、重复身份、未选依赖、非法血段、超重初装、弹药不匹配、错误单位范围
+缺表、缺记录、重复身份、禁用依赖、非法血段、超重初装、弹药不匹配、错误单位范围
 及场景阻断出生或巡逻均阻止发布。源字段缺值不回退旧表，整数空白不自动变成零。
-源表选择与默认值见 [DEMO 内容说明](../design/DEMO内容说明.md)。
+地图选择、补给、掉落与技能字段见 [配置表填写说明](../design/配置表填写说明.md)。
 
 ## 策划双击入口
 
-1. 保存 `design/` 中源表的修改；生产选择由 `design/demo_sources.json` 明确指定。
+1. 保存 `design/` 根工作簿的修改；在 `服务端表.xlsx/Server` 中选择地图及规则。
 2. 双击 `export/导出配置.exe`，查看中文结果窗口和 `export/导出结果.log`。
 
 默认入口与 CMake 使用同一个 `gameplay.export_content` 流程，输出目录是
-`server/build/generated/cfg`，共享 JSON 和身份头输出到其父目录。缺失清单、工具或 Lua
+`server/build/generated/cfg`，共享 JSON 和身份头输出到其父目录。源表缺值、缺少工具或 Lua
 校验失败都明确报错，绝不改用旧草稿。策划无需安装 Python；项目必须包含固定 Luax 工具
 与 Lua 配置脚本，开发人员可先构建 `hunter_tools` 准备好环境。
 
@@ -79,14 +79,17 @@ python export/export.py --source design --output server/build/draft-cfg --check
 python export/launcher.py --draft --no-ui
 ```
 
-未选草稿可以不完整，因此通用全目录扫描可能失败；正式构建只转换生产清单选中的记录。
+正式构建读取根目录全部服务端记录，未被当前地图使用的记录也须满足字段类型要求。
+仅作说明的工作表应去掉 `|`；独立历史工作簿放到子目录或工作区外，不能依赖选行清单隐藏。
 
 ### 输入约定
 
-递归读取 `.xlsx`（扩展名大小写均可），跳过文件名以 `~$` 开头的 Office 临时文件。
+正式 `gameplay.py` 只读取根目录 `.xlsx`，通用草稿 `export.py` 保留递归读取；扩展名大小写
+均可。两者跳过文件名以 `~$` 开头的 Office 临时文件。
 没有 `|` 的说明工作表不导出。配置工作表使用 `中文名|EnglishName`，英文名必须匹配
 `[A-Za-z_][A-Za-z0-9_]*`，且不能是 `CON`、`NUL`、`COM1` 等 Windows 保留名。
-服务端输出表名在整个输入目录中不能重复，大小写不同也算重复。没有可导出的表会报错。
+服务端输出表名在本次输入中不能重复，大小写不同也算重复。正式表不能使用内部名称
+`Tables` 或 `Fixture`；没有可导出的服务端表会报错。
 
 | 行 | 内容 | 示例 |
 | --- | --- | --- |
@@ -115,7 +118,8 @@ python export/launcher.py --draft --no-ui
 
 服务端公式单元格一律拒绝，即使有缓存值；Excel 错误值同样拒绝。类型未知时报错，
 不截断、不自动补零。四条历史货币的 `Item.Type` 已在源表补为 `0`，不需要特殊兼容规则。
-纯空行跳过；只有客户端列有数据的行仍须补主键与服务端必填整数。合法空表允许导出。
+纯空行及主键文本以 `#` 开头的说明行跳过；只有客户端列有数据的实际行仍须补主键与
+服务端必填整数。合法空表允许导出，但选用的机制不能缺少必需记录。
 字符串没有通用的“必填名称”业务检查；Excel 表内的名称必填、枚举、外键、掉落概率、
 几何和跨行唯一性约束仍按[填表说明](../design/配置表填写说明.md)维护，本工具不读取
 Excel 输入校验来推导业务规则。
@@ -149,11 +153,11 @@ LF 换行，不包含时间戳或机器路径。字符串转义引号、反斜�
 
 ## 夹具与验证
 
-旧 `combat.py`、`demo.py`、`design/combat_demo.json` 与 `design/demo/首版.xlsx` 仅用于
-明确隔离的历史测试。当前 Runtime 需要旧灰盒时，通过 Lua 升级为内容 v4：
+旧 `combat.py`、`demo.py` 保留历史工具用途；已移除的 `design/combat_demo.json` 与
+`design/demo/首版.xlsx` 不再作为当前测试命令的必需文件。独立测试使用明确的临时 JSON：
 
 ```powershell
-python export/gameplay.py --fixture design/combat_demo.json --luax $luax `
+python export/gameplay.py --fixture '<独立测试内容.json>' --luax $luax `
     --cfg server/build/win-dev/generated/fixture/cfg `
     --output server/build/win-dev/generated/fixture/content.json `
     --header server/build/win-dev/generated/fixture/ContentId.h
@@ -162,11 +166,12 @@ python -B server/tests/scripts/test_gameplay_content.py
 python -B server/tests/scripts/test_assemble.py
 ```
 
-`--fixture` 同样接受规范 v4 JSON，生成独立 `Fixture.lua`；随后执行相同 Lua 校验并按
+`--fixture` 接受规范 v6 JSON，或经 `game.cfg_fixture` 明确升级的历史 v3/v4/v5 测试内容，
+生成独立 `Fixture.lua`；随后执行相同 Lua 校验并按
 独立配置目录组装测试脚本／Bundle。它不是生产来源的回退，也不存在运行时上下文注入。
 旧灰盒升级数值仅存在 `game.cfg_fixture`，生产 Python 不再维护一套玩法转换规则。
 
-验证覆盖真实生产数值与旧摘要一致、原字段 Lua 输出、源表数值变化、未选草稿、非法
+验证覆盖根目录全表全记录、锁文件和说明过滤、原字段 Lua 输出、源表数值变化、非法
 引用／单位／几何、显式夹具、发布异常回滚、data/factory 模块边界和 Windows 策划 EXE。
 通用序列化测试还可使用 `LUAXC` 指定固定编译器执行 strict 编译；这些可选单表检查不能
 替代正式导出必需的 Luax 配置加载校验。
@@ -181,6 +186,7 @@ python export/build.py
 ```
 
 `build.py` 将 Python、Tk、转换和发布模块打包到 `export/导出配置.exe`，中间文件位于
-已忽略的 `server/build/export-tool`。2026-09-26 实际使用 Windows 10 x64、Python 3.13.13、
-PyInstaller 6.20.0 重新打包，并在 PATH 无 Python 的环境通过草稿与生产校验。
+已忽略的 `server/build/export-tool`。当前 EXE 已按 2026-10-04 的目录来源重新打包，
+Windows 10 x64、Python 3.13.13 与 PyInstaller 6.20.0 为本轮打包环境；完整实际验证见
+[验证记录](../server/VERIFICATION.md)。
 修改工具源码后必须重打包；配置 Lua 校验模块从当前项目读取，与 CMake 使用同一份代码。

@@ -37,7 +37,7 @@ T take(Expect<T, Str> result)
 // 只在隔离夹具填写机制验证值，生产空白不以测试数值补齐。
 Json content()
 {
-    auto doc = hunter::test_content();
+    auto doc = hunter::test_combat_content();
     doc["skills"] = Json::object();
     for (const auto& [id, kind, effects] : Vec<std::tuple<Str, Str, Json>>{
         {"1", "once", {{{"stat", "revive_hp"}, {"op", "add"}, {"value", 25}},

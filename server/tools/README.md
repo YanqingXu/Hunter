@@ -18,14 +18,16 @@ py -3 server/tools/assemble.py `
 `deps["framework.state"]` 访问。`--cfg` 读取导表输出的 `Manifest.json`；`kind:data` 文件
 直接返回只读配置表，不调用工厂，也不执行 `require` 或 `dofile`。配置只能声明 `cfg.*`
 名字空间，不能覆盖玩法模块；数据模块不能声明依赖。生成的 `cfg.tables` 工厂聚合本次
-显式选中的表，`game.cfg` 执行字段转换、单位与引用校验、默认配装和玩法语义校验。
+根配置工作簿中的全部服务端表，`game.cfg` 按 `Server[1]` 选择地图和规则，执行字段转换、
+单位与引用校验、默认配装和玩法语义校验。
 入口必须传递依赖全部模块。清单顺序不会改变生成源码；相同就绪节点按模块名排序。
 清单不允许重名、依赖环、缺失依赖、目录穿越或链接逃逸。模块名和玩法 Lua 路径必须小写；
 校验包含未列入清单的脚本，并拒绝实际路径或源码依赖引用的大小写不一致。导表文件保留
 源表英文名大小写，例如 `Player.lua`，但仍执行真实路径、文件名大小写及目录边界检查。
 
-构建前由 `export/gameplay.py --source design/demo_sources.json --cfg <目录> --luax <工具>`
-导出并用固定 `luax.exe --profile strict` 执行相同的 `game.cfg` 依赖闭包。只有校验成功才
+构建前由 `export/gameplay.py --source design --luax <工具> --check` 校验全部根工作簿，
+完整发布命令见 [导表说明](../../export/README.md#正式导出)。工具使用固定
+`luax.exe --profile strict` 执行相同的 `game.cfg` 依赖闭包。只有校验成功才
 发布 Lua 数据、客户端派生的 `content.json` 和仅含摘要的 `ContentId.h`。服务端启动不读取
 共享 JSON、不内嵌配置头；源码模式与签名 Bundle 均加载组装进脚本的同一批 Lua 表。
 显式 `--fixture` 导出隔离配置目录，旧灰盒升级和当前夹具校验都在 Lua 中完成；测试配置
@@ -79,7 +81,8 @@ Hunter 契约；Runtime 身份包含预算成本模型、标准库和 VM 实现�
 生产程序以 `--bundle <game.luxb> --policy <policy.json>` 启动；不提供 policy、签名不符、
 身份不符或 Bundle 损坏都必须失败。测试公钥只用于测试，不能复制成发行公钥。
 宿主还将 policy 的 Host、capability、state、effect 摘要与编译时契约核对，旧 Bundle 和旧
-policy 即使彼此匹配，也不能与当前 v8 Host 混用。内部状态为 v8，网络为 v6，内容为 v5。
+policy 即使彼此匹配，也不能与当前 v9 Host 契约混用。上下文／内部状态为 v8，网络为 v6，
+内容为 v6，SQLite 为 V2。本轮未增加跨 Tick 状态。
 
 ## 发布失败与恢复边界
 

@@ -39,12 +39,44 @@ T take(Expect<T, Str> result)
 Json content()
 {
     auto value = hunter::test_content();
+    value["item_spawns"] = Json::array();
+    value["abilities"] = Json::object();
+    value["encounter"] = false;
+    value["exploration"] = false;
+    Json spawns = Json::array();
+    Json scenes = Json::array();
+
+    for (const auto& spawn : value["map"]["enemies"])
+    {
+        if (spawn["spawn_id"] == "12" || spawn["spawn_id"] == "13"
+            || spawn["spawn_id"] == "14")
+        {
+            spawns.push_back(spawn);
+        }
+    }
+
+    for (const auto& scene : value["scenes"])
+    {
+        if (scene["id"] == "1" || scene["id"] == "2" || scene["id"] == "3")
+        {
+            scenes.push_back(scene);
+        }
+    }
+
+    value["map"]["enemies"] = spawns;
+    value["scenes"] = scenes;
+
+    for (auto& ammo : value["ammo"])
+    {
+        ammo["prop_ids"] = Json::array();
+    }
 
     for (auto& monster : value["monsters"])
     {
         monster["speed"] = 1;
         monster["detect_range"] = 1;
         monster["attack_range"] = 1;
+        monster["ai"] = false;
     }
 
     return value;
@@ -181,6 +213,7 @@ void channels(const hunter::Cfg& cfg)
 void barrels(const hunter::Cfg& cfg)
 {
     auto doc = content();
+    doc["ammo"]["1"]["prop_damage"] = 10;
     for (i32 index = 0; index < 2; ++index)
     {
         doc["scenes"].push_back({{"id", std::to_string(4 + index)}, {"kind", "barrel"},
@@ -188,6 +221,18 @@ void barrels(const hunter::Cfg& cfg)
             {"penetrable", false}, {"interaction", false},
             {"barrel", {{"hp", 10}, {"fuse_ticks", 3}, {"radius", 1200}, {"damage", 10}}}});
     }
+
+    auto prop = doc;
+    prop["ammo"]["1"]["prop_damage"] = 3;
+    prop["ammo"]["1"]["pellets"] = 2;
+    prop["ammo"]["1"]["spread_deg"] = 0;
+    prop["scenes"][3]["barrel"]["hp"] = 20;
+    Game prop_hits(cfg, prop);
+    prop_hits.input(0, false, false, false, true);
+    prop_hits.steps();
+    check(prop_hits.script.world().barrel_hp(4) == 14
+        && prop_hits.script.world().barrel_fuse(4) == 0,
+        "each pellet applies prop damage independently from monster damage");
 
     Game game(cfg, doc);
     game.input(0, false, false, false, true);

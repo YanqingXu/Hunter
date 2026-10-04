@@ -158,7 +158,7 @@ Json ai(bool basic, const Json& abilities = Json::array())
 // 派生可重现的战斗内容，不改变真实工作簿。
 Json content()
 {
-    auto doc = hunter::test_content();
+    auto doc = hunter::test_combat_content();
     doc["legacy_ai"] = false;
     doc["abilities"] = Json::object();
     doc["encounter"] = false;

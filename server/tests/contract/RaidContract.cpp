@@ -15,6 +15,65 @@ void check(bool valid, const char* reason)
         throw std::runtime_error(reason);
     }
 }
+
+// 验证多枪补弹与箱子消费统一提交，旧弹量和非法后项不能造成局部修改。
+void weapon_batches()
+{
+    using Json = nlohmann::json;
+    hunter::World world;
+    hunter::test::configure(world);
+    world.access.writable = true;
+    world.login("1");
+    world.prepare_loadout(hunter::test::loadout());
+    world.begin("ammo", "0", "1", "1");
+    const auto id = hunter::test::spawn(world, "player");
+    auto& player = std::get<hunter::Player>(world.actors[world.slot(std::stoull(id))]->value);
+    check(player.switch_weapon(2), "fixture switches active weapon");
+    Json batch = {{"owner", "1"}, {"items", Json::array()}, {"tools", Json::array()},
+        {"weapons", {{{"slot", 1}, {"expected_ammo", 5}, {"expected_reserve", 10},
+            {"ammo", 5}, {"reserve", 13}}, {{"slot", 2}, {"expected_ammo", 6},
+            {"expected_reserve", 12}, {"ammo", 6}, {"reserve", 16}}}},
+        {"scene", {{"index", 2}, {"expected_used", false}, {"used", true}}}};
+    const auto before = world.save();
+    auto stale = batch;
+    stale["weapons"][1]["expected_reserve"] = 11;
+    check(world.commit(stale.dump()) == "stale_weapon" && world.save() == before,
+        "stale second weapon preserves first weapon and scene");
+    auto invalid = batch;
+    invalid["weapons"][1]["reserve"] = 100001;
+    bool rejected = false;
+
+    try
+    {
+        world.commit(invalid.dump());
+    }
+    catch (const std::exception&)
+    {
+        rejected = true;
+    }
+
+    check(rejected && world.save() == before, "invalid final value preserves entire batch");
+    invalid = batch;
+    invalid["weapons"][1]["slot"] = 1;
+    rejected = false;
+
+    try
+    {
+        world.commit(invalid.dump());
+    }
+    catch (const std::exception&)
+    {
+        rejected = true;
+    }
+
+    check(rejected && world.save() == before, "duplicate weapon slot is rejected atomically");
+    check(world.commit(batch.dump()).empty(), "all ammunition and scene commit together");
+    check(player.get_weapon_reserve(1) == 13 && player.get_weapon_reserve(2) == 16
+        && world.scene_used(2), "stable slots survive active weapon swap");
+    const auto committed = world.save();
+    check(world.commit(batch.dump()) == "stale_weapon" && world.save() == committed,
+        "replayed ammunition cannot add resources again");
+}
 }
 
 // 使用真实原生对象验证一次物品只能属于地面或背包中的一处。
@@ -22,6 +81,7 @@ int main()
 {
     try
     {
+        weapon_batches();
         hunter::World world;
         hunter::test::configure(world, 1);
         world.access.writable = true;

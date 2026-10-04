@@ -717,9 +717,10 @@ void read_world(World& world, const Json& doc)
             && !world.projectiles[index].reserved), "terminal_projectile");
     }
 
-    require((world.phase == "Dead" && !player->alive)
+    require(((world.phase == "Dead" && !player->alive)
         || (world.phase == "Cleared" && player->alive && alive == 0)
-        || (world.phase == "Playing" && (player->alive || player->downed))
+        || (world.phase == "Playing" && (player->alive || player->downed)))
+            && world.raid.player_state == "Alive"
         || ((world.phase == "Settling" || world.phase == "Finished" || world.phase == "Preparing")
             && world.raid.player_state != "Alive"
             && (world.raid.player_state == "Abandoned"

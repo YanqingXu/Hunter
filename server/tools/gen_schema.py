@@ -84,7 +84,7 @@ def validate_node(node, depth=0):
 
 # 校验冻结消息形状并生成唯一原生描述，合法边界改动会直接反映到产物。
 def generate(doc):
-    if not isinstance(doc, dict) or type(doc.get("version")) is not int or doc["version"] != 8:
+    if not isinstance(doc, dict) or type(doc.get("version")) is not int or doc["version"] != 9:
         raise ValueError("unsupported contract version")
     state = doc.get("state")
     if not isinstance(state, dict) or type(state.get("v")) is not int or state["v"] != 8:

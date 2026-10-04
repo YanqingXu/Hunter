@@ -27,7 +27,7 @@ def exercise(args, path):
     cli = Client(args, srv.start())
     try:
         assert srv.ready["protocol_version"] == 6
-        assert srv.ready["content_version"].startswith("gameplay-v5:")
+        assert srv.ready["content_version"].startswith("gameplay-v6:")
         cli.send({"cmd": "login", "req_id": "login"})
         cli.wait("login_rsp")
         invalid = {"player_cfg_id": 1, "health_segments": [50, 50, 25, 25],

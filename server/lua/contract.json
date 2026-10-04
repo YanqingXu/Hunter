@@ -1,5 +1,5 @@
 {
-  "version": 8,
+  "version": 9,
   "host_api": {
     "net.emit": {
       "args": [
@@ -444,12 +444,13 @@
           "owner": "当前玩家规范十进制 uint64 字符串",
           "items": "array <=64 of {id:string,expected_count:integer[1,2147483647],count:integer[0,2147483647],place:Ground|Bag}；id不重复，count=0删除",
           "tools": "array <=8 of {slot:integer[1,8],expected_instance:string,cfg_id:string,count:integer[0,100000]}；slot不重复，cfg_id=0要求count=0",
+          "weapons": "可选 array <=2 of {slot:integer[1,2],expected_ammo:integer[0,1000],expected_reserve:integer[0,100000],ammo:integer[0,1000],reserve:integer[0,100000]}；slot存在且不重复",
           "scene": "可选 {index:integer[1,32],expected_used:boolean,used:boolean}"
         },
         "extra_fields": false,
         "ownership": "items必须为Ground或本玩家Bag；Bag目标自动写当前owner并将x/y归零；不改变cfg_id",
-        "atomic": "核对所有旧count、工具实例、场景水位和背包容量后一次提交；失败返回错误字符串且无修改",
-        "returns": "空字符串为成功；invalid_state|invalid_player|stale_item|invalid_item_owner|stale_tool|stale_scene|bag_full；非法结构抛错"
+        "atomic": "核对所有旧count、枪槽弹匣及备弹、工具实例、场景水位和背包容量后一次提交；失败返回错误字符串且无修改",
+        "returns": "空字符串为成功；invalid_state|invalid_player|stale_item|invalid_item_owner|stale_tool|stale_weapon|stale_scene|bag_full；非法结构抛错"
       },
       "tool_use": {
         "start_use": "Lua 决定前摇和是否需要投掷物预留，原生绑定非空槽实例并原子预留容量",
@@ -521,7 +522,7 @@
     "event_id": "canonical decimal string [0,18446744073709551615]",
     "phase": "Unauthenticated|Lobby|Preparing|Playing|Settling|Finished|Aborted; Dead/Cleared only in combat regression fixture",
     "paused": "boolean",
-    "content_key": "gameplay-v5: 加规范内容 SHA-256 十六进制摘要；导入必须完全相同",
+    "content_key": "gameplay-v6: 加规范内容 SHA-256 十六进制摘要；导入必须完全相同",
     "entities": {
       "max": 64,
       "key": "positive canonical uint64 string, exactly matches instance id",
@@ -620,7 +621,7 @@
     "last_item_id": "canonical uint64 string; per-match high water, never reused",
     "owner": "C++ World; Lua retains immutable identity and generation-checked handles only",
     "loadout": "player_cfg_id, health_segments, weapon choices, regular tools and consumables; frozen for the match",
-    "scene_used": "boolean array matching selected scene order; maximum 32; only supply may become used",
+    "scene_used": "boolean array matching selected scene order; maximum 32; supply、ammo_supply和clue允许变为已用",
     "projectiles": "fixed 16 slots with unique id/cfg_id/x/y/vx/vy/remaining/active/reserved; reservations belong to an active bomb use",
     "last_projectile_id": "canonical uint64 high-water, never reused within a match",
     "action_seq": "canonical uint64 accepted action high-water; responses retained in Runtime bounded cache",

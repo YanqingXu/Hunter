@@ -32,32 +32,28 @@ return function(deps)
         return scene_api.reachable(player, scene, content)
     end
 
-    -- 补给先形成完整候选，再一次消耗箱子，不能增加任何可结算背包物品。
-    local function supply(world, content, player, index)
-        if World.scene_used(world, index) then
-            return "already_used"
-        end
-        local input = player.controls
-        local changes = {}
-        local present = {}
-        local free = 0
+    -- 收集可补常规工具与空消费品槽，预检不推进随机数。
+    local function supply_choices(content, input)
+        local regular, choices, free, full = {}, {}, 0, true
         for slot = 1, 4 + content.rules.consumable_slots do
             local cfg_id = Player.get_tool_cfg(input, slot)
-            if cfg_id ~= "0" then
-                present[cfg_id] = true
+            if cfg_id ~= "0" and slot <= content.rules.tool_slots then
                 local cfg = content.tools[cfg_id]
                 local count = Player.get_tool_count(input, slot)
-                if slot <= 4 and cfg.kind ~= "knife" and count < cfg.uses then
-                    changes[#changes + 1] = {slot = slot, cfg_id = cfg_id, count = count + 1}
+                if cfg.kind ~= "knife" and count < cfg.uses then
+                    full = false
+                    if cfg.refill_count > 0 then
+                        regular[#regular + 1] = {slot = slot, cfg_id = cfg_id,
+                            count = math.min(cfg.uses, count + cfg.refill_count)}
+                    end
                 end
-            elseif slot > 4 and free == 0 then
+            elseif cfg_id == "0" and slot > 4 and free == 0 then
                 free = slot
             end
         end
-        local choices = {}
-        if free ~= 0 then
+        if full and free ~= 0 then
             for cfg_id, cfg in pairs(content.tools) do
-                if (cfg.kind == "needle" or cfg.kind == "bomb") and not present[cfg_id] then
+                if (cfg.kind == "needle" or cfg.kind == "bomb") and cfg.supply_weight > 0 then
                     local at = #choices + 1
                     while at > 1 and state.newer(choices[at - 1], cfg_id) do
                         choices[at] = choices[at - 1]
@@ -67,19 +63,83 @@ return function(deps)
                 end
             end
         end
-        if #changes == 0 and #choices == 0 then
-            return "supply_full"
+        return regular, choices, free
+    end
+
+    -- 按弹种汇总装备总量，每种弹药只应用一次补给量并按稳定槽分配备弹。
+    local function ammo_changes(content, input)
+        local groups, order = {}, {}
+        for slot = 1, Player.get_weapon_count(input) do
+            local cfg = content.weapons[Player.get_weapon_cfg(input, slot)]
+            local id = cfg.ammo_cfg_id
+            if groups[id] == nil then
+                groups[id] = {held = 0, capacity = 0, slots = {}}
+                order[#order + 1] = id
+            end
+            local group = groups[id]
+            local ammo = Player.get_weapon_ammo(input, slot)
+            local reserve = Player.get_weapon_reserve(input, slot)
+            local capacity = cfg.magazine + cfg.reserve
+            group.held, group.capacity = group.held + ammo + reserve, group.capacity + capacity
+            group.slots[#group.slots + 1] = {slot = slot, ammo = ammo, reserve = reserve,
+                capacity = capacity}
         end
-        if #choices > 0 then
-            local cfg_id = choices[World.roll(world, #choices)]
-            changes[#changes + 1] = {slot = free, cfg_id = cfg_id, count = 1}
+        local changes = json.array({})
+        for _, id in ipairs(order) do
+            local group = groups[id]
+            local amount = math.min(content.ammo[id].refill_count,
+                math.max(0, group.capacity - group.held))
+            for _, gun in ipairs(group.slots) do
+                local added = math.min(amount, math.max(0, gun.capacity - gun.ammo - gun.reserve))
+                if added > 0 then
+                    changes[#changes + 1] = {slot = gun.slot, expected_ammo = gun.ammo,
+                        expected_reserve = gun.reserve, ammo = gun.ammo,
+                        reserve = gun.reserve + added}
+                    amount = amount - added
+                end
+            end
         end
-        for _, change in ipairs(changes) do
+        return changes
+    end
+
+    -- 补给完成时重新校验候选，再原子提交数量和箱子状态。
+    local function supply(world, content, player, index, check_only)
+        local input = player.controls
+        local batch = {owner = World.get_player_id(world), items = json.array({}),
+            tools = json.array({}), scene = {index = index, expected_used = false, used = true}}
+        if content.scenes[index].kind == "ammo_supply" then
+            batch.weapons = ammo_changes(content, input)
+            if #batch.weapons == 0 then
+                return "supply_full"
+            end
+            if check_only then return nil end
+        else
+            local regular, choices, free = supply_choices(content, input)
+            if #regular == 0 and #choices == 0 then
+                return "supply_full"
+            end
+            if check_only then return nil end
+            local change
+            if #regular > 0 then
+                change = regular[World.roll(world, #regular)]
+            else
+                local weight = 0
+                for _, id in ipairs(choices) do
+                    weight = weight + content.tools[id].supply_weight
+                end
+                local picked = World.roll(world, weight)
+                for _, id in ipairs(choices) do
+                    picked = picked - content.tools[id].supply_weight
+                    if picked <= 0 then
+                        change = {slot = free, cfg_id = id, count = 1}
+                        break
+                    end
+                end
+            end
             change.expected_instance = Player.get_tool_instance(input, change.slot)
+            batch.tools[1] = change
         end
-        local error = World.commit(world, json.encode({owner = World.get_player_id(world),
-            items = json.array({}), tools = json.array(changes),
-            scene = {index = index, expected_used = false, used = true}}))
+        local error = World.commit(world, json.encode(batch))
         return error ~= "" and error or nil
     end
 
@@ -124,12 +184,16 @@ return function(deps)
                 if scene.kind == "barrel" or scene.kind == "cover" then
                     return "invalid_target"
                 end
-                if (scene.kind == "supply" or scene.kind == "clue")
+                if (scene.kind == "supply" or scene.kind == "ammo_supply" or scene.kind == "clue")
                     and World.scene_used(world, index) then
                     return "already_used"
                 end
                 if not finished and scene.interaction ~= false
                     and scene.interaction.mode == "channel" then
+                    if scene.kind == "supply" or scene.kind == "ammo_supply" then
+                        local error = supply(world, content, player, index, true)
+                        if error ~= nil then return error end
+                    end
                     if Player.get_use_slot(player.controls) ~= 0 then
                         return "action_locked"
                     end
@@ -140,7 +204,7 @@ return function(deps)
                 end
                 if scene.kind == "ladder" then
                     return ladder(player, scene, content)
-                elseif scene.kind == "supply" then
+                elseif scene.kind == "supply" or scene.kind == "ammo_supply" then
                     return supply(world, content, player, index)
                 elseif scene.kind == "clue" then
                     return exploration.clue(world, content, index)

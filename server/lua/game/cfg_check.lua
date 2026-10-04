@@ -118,13 +118,27 @@ return function(deps)
             integer_value(cfg.type, 0, 2147483647, "item.type")
         end
         for _, cfg in pairs(doc.ammo) do
-            fields(cfg, "item_cfg_id pellets damage range spread_deg penetration loss", "ammo")
+            fields(cfg, "item_cfg_id pellets damage range spread_deg penetration loss "
+                .. "refill_count prop_ids prop_damage", "ammo")
             assert(ref(doc.items, cfg.item_cfg_id, "ammo.item").kind == 3,
                 "ammunition requires an ammunition item")
             for _, range in ipairs({{"pellets", 1, 16}, {"damage", 1, 1000000},
                 {"range", 1, 100000}, {"spread_deg", 0, 90}, {"penetration", 0, 32},
-                {"loss", 0, 1000000}}) do
+                {"loss", 0, 1000000}, {"refill_count", 0, 100000},
+                {"prop_damage", 0, 1000000}}) do
                 integer_value(cfg[range[1]], range[2], range[3], "ammo." .. range[1])
+            end
+            array(cfg.prop_ids, 0, doc.rules.max_scenes, "ammo.prop_ids")
+            local seen = {}
+            for _, id in ipairs(cfg.prop_ids) do
+                identity(id, seen, "ammo.prop_id")
+                local scene = nil
+                for _, candidate in ipairs(doc.scenes) do
+                    if candidate.id == id then
+                        scene = candidate
+                    end
+                end
+                assert(scene and scene.kind == "cover", "ammunition scene reference must be cover")
             end
         end
         for _, cfg in pairs(doc.weapons) do
@@ -137,6 +151,7 @@ return function(deps)
                 "weapon projection differs from default ammunition")
             integer_value(cfg.magazine, 1, 1000, "weapon.magazine")
             integer_value(cfg.reserve, 0, 100000, "weapon.reserve")
+            assert(cfg.magazine + cfg.reserve <= 100000, "weapon total ammunition exceeds limit")
             integer_value(cfg.reload_kind, 1, 2, "weapon.reload_kind")
             for _, name in ipairs({"fire_ticks", "reload_ticks"}) do
                 integer_value(cfg[name], 1, 3600, "weapon." .. name)
@@ -147,7 +162,7 @@ return function(deps)
         end
         for key, cfg in pairs(doc.tools) do
             fields(cfg, "kind uses use_ticks heal damage range radius throw_range speed stamina "
-                .. "cooldown_ticks", "tool")
+                .. "cooldown_ticks refill_count supply_weight", "tool")
             assert(ref(doc.items, key, "tool.item").kind == 4, "tool requires a tool item")
             assert(cfg.kind == "knife" or cfg.kind == "medkit" or cfg.kind == "needle"
                 or cfg.kind == "bomb", "unsupported tool kind")
@@ -155,6 +170,8 @@ return function(deps)
             integer_value(cfg.use_ticks, cfg.kind == "knife" and 0 or 1, 36000, "tool.use_ticks")
             integer_value(cfg.throw_range, 0, 100000, "tool.throw_range")
             integer_value(cfg.speed, 0, 1000, "tool.speed")
+            integer_value(cfg.refill_count, 0, 100, "tool.refill_count")
+            integer_value(cfg.supply_weight, 0, 1000000, "tool.supply_weight")
             for _, name in ipairs({"heal", "damage", "range", "radius",
                 "stamina", "cooldown_ticks"}) do
                 integer_value(cfg[name], 0, 1000000, "tool." .. name)
@@ -189,13 +206,31 @@ return function(deps)
             local values, seen = load[group[1]], {}
             array(values, 0, rules[group[2]], "loadout." .. group[1])
             for _, key in ipairs(values) do
-                identity(key, seen, "loadout.tool")
+                if group[1] == "tools" then
+                    identity(key, seen, "loadout.tool")
+                end
                 local cfg = ref(doc.tools, key, "loadout.tool")
                 assert(cfg.kind == group[3] or cfg.kind == group[4], "wrong tool category")
             end
         end
         assert(doc.map.spawn.cfg_id == load.player_cfg_id
             and doc.map.spawn.weapon_cfg_id == load.weapons[1], "map default loadout mismatch")
+    end
+
+    -- 地面来源仅接受已启用技能、消耗品或撤离战利品，数量不能溢出对应容量。
+    local function pickup_item(doc, key, count)
+        local item = ref(doc.items, key, "ground item")
+        local tool = doc.tools[key]
+        if item.skill_cfg_id ~= "0" then
+            assert(doc.skills[item.skill_cfg_id] and count == 1,
+                "ground skill must be enabled and singular")
+        elseif tool ~= nil then
+            assert((tool.kind == "needle" or tool.kind == "bomb") and count <= tool.uses,
+                "ground tool requires consumable capacity")
+        else
+            assert(item.kind == 5, "unsupported ground item")
+        end
+        return item
     end
 
     -- 校验怪物招式和掉落组，最坏情况掉落实例总数必须符合原生容量。
@@ -218,11 +253,10 @@ return function(deps)
             for _, drop in ipairs(cfg.drops) do
                 fields(drop, "cfg_id chance min_count max_count", "drop")
                 identity(drop.cfg_id, seen, "drop.item")
-                local item = ref(doc.items, drop.cfg_id, "drop.item")
-                assert(item.kind == 5, "only extraction loot may drop")
                 integer_value(drop.chance, 0, 10000, "drop.chance")
                 integer_value(drop.min_count, 1, 2147483647, "drop.min_count")
                 integer_value(drop.max_count, drop.min_count, 2147483647, "drop.max_count")
+                local item = pickup_item(doc, drop.cfg_id, drop.max_count)
                 if drop.chance > 0 then
                     total = total + (drop.max_count + item.max_stack - 1) // item.max_stack
                 end
@@ -234,7 +268,7 @@ return function(deps)
             ref(doc.monsters, spawn.cfg_id, "spawn.monster")
             maximum = maximum + totals[spawn.cfg_id]
         end
-        assert(maximum <= 64, "worst-case drop capacity exceeds 64")
+        assert(maximum + #doc.item_spawns <= 64, "worst-case ground item capacity exceeds 64")
     end
 
     -- 新怪物能力必须拥有完整时序、合法召唤引用及有限的实例闭包。
@@ -345,7 +379,7 @@ return function(deps)
             end
         end
         assert(count <= 63, "two-wave and summon actor capacity exceeds 63")
-        assert(drops <= 64, "two-wave drop capacity exceeds 64")
+        assert(drops + #doc.item_spawns <= 64, "two-wave ground item capacity exceeds 64")
     end
 
     -- 校验地图记录与场景身份，几何检查在类型检查全部通过后执行。
@@ -376,7 +410,8 @@ return function(deps)
         for _, scene in ipairs(doc.scenes) do
             fields(scene, "id kind x y w h penetrable interaction barrel", "scene")
             identity(scene.id, seen, "scene.id")
-            assert(scene.kind == "ladder" or scene.kind == "supply" or scene.kind == "cover"
+            assert(scene.kind == "ladder" or scene.kind == "supply" or scene.kind == "ammo_supply"
+                or scene.kind == "cover"
                 or scene.kind == "clue" or scene.kind == "barrel",
                 "invalid scene kind")
             assert(type(scene.penetrable) == "boolean"
@@ -384,7 +419,8 @@ return function(deps)
             if scene.interaction ~= false then
                 local cfg = scene.interaction
                 fields(cfg, "mode hold_ticks", "scene.interaction")
-                assert(scene.kind == "supply" or scene.kind == "ladder" or scene.kind == "clue",
+                assert(scene.kind == "supply" or scene.kind == "ammo_supply"
+                    or scene.kind == "ladder" or scene.kind == "clue",
                     "scene does not support interaction")
                 assert(cfg.mode == "instant" or cfg.mode == "channel", "invalid interaction mode")
                 integer_value(cfg.hold_ticks, 0, 36000, "interaction.hold_ticks")
@@ -399,6 +435,36 @@ return function(deps)
                 integer_value(cfg.fuse_ticks, 1, 36000, "barrel.fuse_ticks")
                 integer_value(cfg.radius, 1, 100000, "barrel.radius")
                 integer_value(cfg.damage, 1, 1000000, "barrel.damage")
+            end
+        end
+        array(doc.item_spawns, 0, 64, "item_spawns")
+        seen = {}
+        for _, spawn in ipairs(doc.item_spawns) do
+            fields(spawn, "id x y chance choices", "item_spawn")
+            identity(spawn.id, seen, "item_spawn.id")
+            integer_value(spawn.x, 0, map.width, "item_spawn.x")
+            integer_value(spawn.y, 0, map.height, "item_spawn.y")
+            integer_value(spawn.chance, 0, 10000, "item_spawn.chance")
+            array(spawn.choices, 1, 128, "item_spawn.choices")
+            local total = 0
+            for _, choice in ipairs(spawn.choices) do
+                fields(choice, "cfg_id count weight", "item_spawn.choice")
+                integer_value(choice.count, 1, 2147483647, "item_spawn.count")
+                integer_value(choice.weight, 1, 2147483647, "item_spawn.weight")
+                local item = pickup_item(doc, choice.cfg_id, choice.count)
+                assert(choice.count <= item.max_stack, "spawn count exceeds item stack")
+                total = total + choice.weight
+            end
+            assert(total <= 2147483647, "spawn pool weight sum exceeds limit")
+            for _, solid in ipairs(map.solids) do
+                assert(spawn.x <= solid.x or spawn.x >= solid.x + solid.w
+                    or spawn.y <= solid.y or spawn.y >= solid.y + solid.h,
+                    "item spawn inside solid")
+            end
+            for _, scene in ipairs(doc.scenes) do
+                assert(scene.kind ~= "cover" or spawn.x <= scene.x
+                    or spawn.x >= scene.x + scene.w or spawn.y <= scene.y
+                    or spawn.y >= scene.y + scene.h, "item spawn inside cover")
             end
         end
         array(doc.extracts, 0, 32, "extracts")
@@ -466,9 +532,9 @@ return function(deps)
     -- 正式源表和显式测试夹具共用完整的内容语义入口。
     function api.validate(doc)
         fields(doc, "v tick_hz map players monsters weapons items bag extracts ammo tools rules "
-            .. "scenes default_loadout skills abilities encounter legacy_ai career exploration",
+            .. "scenes item_spawns default_loadout skills abilities encounter legacy_ai career exploration",
             "content")
-        integer_value(doc.v, 5, 5, "content.v")
+        integer_value(doc.v, 6, 6, "content.v")
         assert(type(doc.legacy_ai) == "boolean", "invalid legacy AI flag")
         if doc.career ~= false then
             local cfg = doc.career

@@ -130,8 +130,10 @@ Str World::commit(const Str& text)
 
     require(text.size() <= 32768, "batch_too_large");
     const auto batch = nlohmann::json::parse(text);
+    const usize field_count = 3 + (batch.contains("scene") ? 1 : 0)
+        + (batch.contains("weapons") ? 1 : 0);
     require(batch.is_object() && batch.contains("owner") && batch.contains("items")
-        && batch.contains("tools") && batch.size() == (batch.contains("scene") ? 4 : 3),
+        && batch.contains("tools") && batch.size() == field_count,
         "invalid_batch");
     const auto owner = read_id(batch.at("owner").get<Str>());
     const auto actor = slot(read_id(find_player(std::to_string(owner))));
@@ -150,9 +152,44 @@ Str World::commit(const Str& text)
     auto next_items = items;
     auto next_tools = player.tools;
     auto next_instance = player.last_tool_instance;
+    Arr<i32, 2> next_ammo{};
+    Arr<i32, 2> next_reserve{};
     Set<u64> item_ids;
     Set<i32> tool_slots;
     bool cancel = false;
+
+    for (i32 slot = 1; slot <= player.weapon_count; ++slot)
+    {
+        const auto index = static_cast<usize>(slot - 1);
+        next_ammo[index] = static_cast<i32>(player.get_weapon_ammo(slot));
+        next_reserve[index] = static_cast<i32>(player.get_weapon_reserve(slot));
+    }
+
+    if (batch.contains("weapons"))
+    {
+        const auto& changes = batch.at("weapons");
+        require(changes.is_array() && changes.size() <= static_cast<usize>(player.weapon_count),
+            "batch_capacity");
+        Set<i32> weapon_slots;
+
+        for (const auto& change : changes)
+        {
+            read_fields(change, {"slot", "expected_ammo", "expected_reserve", "ammo", "reserve"});
+            const auto slot = read_integer(change.at("slot"), 1, player.weapon_count);
+            require(weapon_slots.insert(slot).second, "duplicate_batch_weapon");
+            const auto index = static_cast<usize>(slot - 1);
+            const auto ammo = read_integer(change.at("expected_ammo"), 0, 1000);
+            const auto reserve = read_integer(change.at("expected_reserve"), 0, 100000);
+
+            if (ammo != next_ammo[index] || reserve != next_reserve[index])
+            {
+                return "stale_weapon";
+            }
+
+            next_ammo[index] = read_integer(change.at("ammo"), 0, 1000);
+            next_reserve[index] = read_integer(change.at("reserve"), 0, 100000);
+        }
+    }
 
     for (const auto& change : item_changes)
     {
@@ -271,6 +308,13 @@ Str World::commit(const Str& text)
     items = std::move(next_items);
     player.tools = next_tools;
     player.last_tool_instance = next_instance;
+
+    for (i32 slot = 1; slot <= player.weapon_count; ++slot)
+    {
+        player.weapon_at(slot).ammo = next_ammo[static_cast<usize>(slot - 1)];
+        (slot == player.active_weapon ? player.reserve : player.other_reserve)
+            = next_reserve[static_cast<usize>(slot - 1)];
+    }
 
     if (scene_index > 0)
     {

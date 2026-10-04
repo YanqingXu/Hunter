@@ -1,5 +1,6 @@
 # 通过正式桌面 Runtime、生成客户端和 TCP 完成撤离、保存、重启与连续游玩。
 import argparse
+import hashlib
 import json
 import tempfile
 import time
@@ -7,11 +8,51 @@ from pathlib import Path
 from process_test import Server, Client
 
 
+# 只读取与当前服务端身份一致的已生成内容，源码和 Bundle 共用同一测试路径。
+def content_bytes(args):
+    candidates = []
+    if getattr(args, "content", None):
+        candidates.append(Path(args.content))
+    if args.source:
+        candidates.append(Path(args.source).parent / "content.json")
+    root = Path(args.exe).parent
+    candidates.extend((root / "generated/content.json", root.parent / "generated/content.json"))
+    path = next((value for value in candidates if value.is_file()), None)
+    assert path is not None, "generated production content.json is required for the TCP bot"
+    return path.read_bytes()
+
+
+# 射线瞄准实际身体中心，场景矩形只帮助测试决定移动，不代替服务端命中判定。
+def clear_shot(content, player, enemy):
+    x, y = player["x"], player["y"] + player["height"] / 2
+    dx = enemy["x"] - x
+    dy = enemy["y"] + enemy["height"] / 2 - y
+    solids = content["map"]["solids"] + [scene for scene in content["scenes"]
+                                               if scene["kind"] == "cover"]
+    for solid in solids:
+        near, far = 0.0, 1.0
+        for origin, delta, low, high in ((x, dx, solid["x"], solid["x"] + solid["w"]),
+                                       (y, dy, solid["y"], solid["y"] + solid["h"])):
+            if delta == 0:
+                if origin < low or origin > high:
+                    near, far = 1.0, 0.0
+                    break
+            else:
+                first, last = sorted(((low - origin) / delta, (high - origin) / delta))
+                near, far = max(near, first), min(far, last)
+        if near <= far and near < 1.0 and far > 0.0:
+            return False
+    return True
+
+
 class Demo:
     # 每次启动使用明确持久路径；保留宿主输出与正式协议身份。
     def __init__(self, args, path):
+        data = content_bytes(args)
+        self.content = json.loads(data)
         self.srv = Server(args, extra=["--save", str(path)])
         self.cli = Client(args, self.srv.start())
+        assert self.srv.ready["content_version"] == "gameplay-v6:" + hashlib.sha256(data).hexdigest()
         self.cli.send({"cmd": "login", "req_id": "login"})
         self.login = self.cli.wait("login_rsp")
         self.seq = 0
@@ -38,21 +79,35 @@ class Demo:
         assert self.cli.wait("start_rsp")["match_id"] == self.match
 
     # 每帧只发送控制意图；测试无传送、伤害或奖励注入接口。
-    def input(self, player, move=0, target=None, fire=False):
+    def input(self, player, move=0, target=None, fire=False, jump=None):
         self.seq += 1
         dx = target["x"] - player["x"] if target else 1000
-        dy = target["y"] - player["y"] - 100 if target else 0
+        dy = target["y"] + target["height"] / 2 - player["y"] - player["height"] / 2 \
+            if target else 0
         scale = max(1, abs(dx), abs(dy))
         ax, ay = int(dx * 1000 / scale), int(dy * 1000 / scale)
         self.cli.send({"cmd": "input", "seq": str(self.seq), "match_id": self.match,
                        "world_id": self.world, "move_x": move, "aim_x": ax or int(not ay),
-                       "aim_y": ay, "jump": bool(player["grounded"] and move),
+                       "aim_y": ay, "jump": bool(player["grounded"] and move)
+                           if jump is None else bool(player["grounded"] and jump),
                        "fire": fire, "reload": player["ammo"] == 0})
 
-    # 跑跳穿过灰盒地形，射杀普通怪和 Boss，拾取全部可达掉落后回到出口。
+    # 地面寻路只在前方体型会碰墙时起跳，避免在掉落正上方反复跳回平台。
+    def obstacle_jump(self, player, move):
+        edge = player["x"] + move * (player["width"] / 2 + 600)
+        solids = self.content["map"]["solids"] + [scene for scene in self.content["scenes"]
+                                                      if scene["kind"] == "cover"]
+        return any(player["y"] < solid["y"] + solid["h"]
+                   and player["y"] + player["height"] > solid["y"]
+                   and (player["x"] <= solid["x"] <= edge if move > 0
+                        else edge <= solid["x"] + solid["w"] <= player["x"])
+                   for solid in solids) if move else False
+
+    # 根据真实枪弹、掩体和波次持续清怪，拾取可容纳掉落后返回配置中的出口。
     def extract(self, confirm=True):
         deadline = time.monotonic() + 65
         picked = set()
+        descent = None
         while time.monotonic() < deadline:
             snap = self.cli.wait("snapshot")
             if snap["match_id"] != self.match:
@@ -64,13 +119,54 @@ class Demo:
             enemies = [v for v in snap["entities"] if v["kind"] == "enemy" and v["alive"]]
             if enemies:
                 enemy = min(enemies, key=lambda e: abs(e["x"] - player["x"]))
-                fire = enemy["cfg_id"] == "1002" and enemy["x"] < 15000 or player["x"] > 15800
-                self.input(player, 0 if fire else 1, enemy, fire)
+                if player["ammo"] == 0 and player["reserve"] == 0:
+                    other = next((weapon for weapon in player["weapons"]
+                                  if weapon["slot"] != player["active_weapon"]
+                                  and weapon["ammo"] + weapon["reserve"] > 0), None)
+                    assert other is not None, "both guns exhausted before clearing the raid"
+                    self.input(player)
+                    self.cli.send({"cmd": "switch_weapon", "req_id": "ammo-switch",
+                                   "world_id": self.world, "match_id": self.match,
+                                   "slot": other["slot"]})
+                    assert self.cli.wait(("action_rsp", "error"))["type"] == "action_rsp"
+                    continue
+                weapon = self.content["weapons"][str(next(w["cfg_id"] for w in player["weapons"]
+                    if w["slot"] == player["active_weapon"]))]
+                monster = self.content["monsters"][enemy["cfg_id"]]
+                distance = abs(enemy["x"] - player["x"])
+                direction = 1 if enemy["x"] >= player["x"] else -1
+                fire = distance <= weapon["range"] and clear_shot(self.content, player, enemy)
+                inside_exit = any(point["x"] <= player["x"] <= point["x"] + point["w"]
+                    and point["y"] <= player["y"] <= point["y"] + point["h"]
+                    for point in self.content["extracts"])
+                safe = monster["attack_range"] + 1500
+                move = direction if not fire or inside_exit else (-direction if distance < safe else 0)
+                self.input(player, move, enemy, fire)
                 continue
             ground = [v for v in snap["items"] if v["place"] == "Ground"
                       and v["item_id"] not in picked]
             if ground:
-                item = min(ground, key=lambda e: abs(e["x"] - player["x"]))
+                item = next((value for value in ground if descent
+                             and value["item_id"] == descent["item_id"]), None)
+                item = item or min(ground, key=lambda e: abs(e["x"] - player["x"]))
+                if descent and player["grounded"] and player["y"] <= item["y"]:
+                    descent = None
+                if not descent and player["y"] - item["y"] > 1450:
+                    platforms = [solid for solid in self.content["map"]["solids"]
+                                 if solid["y"] > item["y"]
+                                 and player["y"] >= solid["y"] + solid["h"]
+                                 and solid["x"] <= item["x"] <= solid["x"] + solid["w"]]
+                    if platforms:
+                        solid = max(platforms, key=lambda value: value["y"])
+                        edges = (solid["x"] - player["width"] // 2 - 100,
+                                 solid["x"] + solid["w"] + player["width"] // 2 + 100)
+                        descent = {"item_id": item["item_id"],
+                                   "x": min(edges, key=lambda x: abs(x - player["x"]))}
+                if descent:
+                    move = 0 if abs(player["x"] - descent["x"]) <= 100 \
+                        else (1 if player["x"] < descent["x"] else -1)
+                    self.input(player, move, jump=False)
+                    continue
                 if (item["x"] - player["x"]) ** 2 + (item["y"] - player["y"]) ** 2 <= 1450 ** 2:
                     self.input(player)
                     self.cli.send({"cmd": "pickup", "req_id": "pick-" + item["item_id"],
@@ -80,11 +176,19 @@ class Demo:
                     if response["type"] == "action_rsp":
                         picked.add(item["item_id"])
                     else:
-                        assert response["code"] == "out_of_range", response
+                        assert response["code"] in ("out_of_range", "already_known_skill",
+                                                    "consumable_full", "bag_full"), response
+                        if response["code"] != "out_of_range":
+                            picked.add(item["item_id"])
                 else:
-                    self.input(player, 1 if item["x"] > player["x"] else -1)
+                    move = 1 if item["x"] > player["x"] else -1
+                    self.input(player, move, jump=self.obstacle_jump(player, move))
             else:
-                self.input(player, -1 if player["x"] > 2500 else 0)
+                point = self.content["extracts"][0]
+                target_x = point["x"] + point["w"] // 2
+                move = 0 if point["x"] <= player["x"] <= point["x"] + point["w"] \
+                    else (1 if player["x"] < target_x else -1)
+                self.input(player, move, jump=self.obstacle_jump(player, move))
         else:
             raise AssertionError(f"extraction timeout: {snap}")
         if not confirm:
@@ -114,6 +218,7 @@ def main():
     parser.add_argument("--source")
     parser.add_argument("--bundle")
     parser.add_argument("--policy")
+    parser.add_argument("--content")
     parser.add_argument("--rounds", type=int, default=10)
     args = parser.parse_args()
     with tempfile.TemporaryDirectory(prefix="hunter-demo-") as directory:

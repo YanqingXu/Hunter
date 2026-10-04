@@ -37,7 +37,7 @@ def sample():
     return {"skills": skills, "key": "source-identity",
             "players": {"1": {"hp": 150, "stamina": 100, "weight": 3, "run_speed": 150,
                               "skill_points": 11}},
-            "weapons": {"1": {"melee_damage": 50, "reserve": 30, "fire_ticks": 10,
+            "weapons": {"1": {"melee_damage": 50, "magazine": 6, "reserve": 30, "fire_ticks": 10,
                               "reload_ticks": 90}},
             "tools": {"1": {"kind": "medkit", "use_ticks": 120, "heal": 25},
                       "2": {"kind": "bomb", "throw_range": 10000}}}
@@ -123,6 +123,60 @@ doc.skills["13"].effects[1]={stat="throw_range",op="add",value=90001}
 assert(not pcall(skill.effective,doc,load))
 doc.skills["13"].effects[1].value=90000
 assert(skill.effective(doc,load).tools["2"].throw_range==100000)
+load.skills=json.array({"8"})
+doc.skills["8"].effects[1]={stat="reserve",op="add",value=99970}
+assert(not pcall(skill.effective,doc,load))
+doc.skills["8"].effects[1].value=99964
+assert(skill.effective(doc,load).weapons["1"].reserve==99994)
+''')
+
+    # 全部源行必须校验，禁用仅隔离运行能力，不能掩盖错误外键和参数。
+    def test_attribute_sources_and_enabled_gate(self):
+        self.run_lua('''
+local source={Attribute={
+    [2]={Name="负重",Stat="weight",Target="player",Unit="weight_point",
+        AllowedOps="add|mul_bp",ValueMode="modifier"},
+    [1]={Name="奔跑体耗",Stat="run_cost",Target="player",Unit="stamina_per_second",
+        AllowedOps="add|mul_bp",ValueMode="modifier"}},
+    Skill={
+        [4]={Name="军需官",Target="player",Category="numeric",Lifetime="passive",Cost=1,Enabled=1},
+        [3]={Name="精力充沛",Target="player",Category="numeric",Lifetime="passive",Cost=1,Enabled=0}},
+    SkillEffect={
+        [401]={SkillIdx=4,AttributeId=2,Op="add",Value=1},
+        [301]={SkillIdx=3,AttributeId=1,Op="mul_bp",Value=7000}}}
+local projected=skill.sources(source)
+assert(projected["4"].effects[1].stat=="weight" and projected["3"]==nil)
+source.Skill[3].Enabled=1
+assert(not pcall(skill.sources,source))
+source.Skill[3].Enabled=0
+source.SkillEffect[301].AttributeId=999
+assert(not pcall(skill.sources,source))
+source.SkillEffect[301].AttributeId=1
+source.SkillEffect[301].Value=-1
+assert(not pcall(skill.sources,source))
+source.SkillEffect[301].Value=7000
+source.SkillEffect[301].SkillIdx=999
+assert(not pcall(skill.sources,source))
+source.SkillEffect[301].SkillIdx=3
+source.Attribute[1].AllowedOps="add||mul_bp"
+assert(not pcall(skill.sources,source))
+source.Attribute[1].AllowedOps="add"
+assert(not pcall(skill.sources,source))
+source.Attribute[1].AllowedOps="add|mul_bp"
+source.Attribute[1].Target="tool"
+assert(not pcall(skill.sources,source))
+source.Attribute[1].Target="player"
+source.Attribute[1].Unit="stamina"
+assert(not pcall(skill.sources,source))
+source.Attribute[1].Unit="stamina_per_second"
+source.Skill[3].Enabled=2
+assert(not pcall(skill.sources,source))
+source.Skill[3].Enabled=0
+source.SkillEffect[302]={SkillIdx=3,AttributeId=1,Op="add",Value=1}
+assert(not pcall(skill.sources,source))
+source.SkillEffect[302]=nil
+source.Attribute[1].Stat="weight"
+assert(not pcall(skill.sources,source))
 ''')
 
 

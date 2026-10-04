@@ -21,9 +21,9 @@ import gameplay
 def content_identity(data, header):
     value = json.loads(data.decode("utf-8"), object_pairs_hook=gameplay.unique_pairs)
     canonical, _ = gameplay.content_bytes(value)
-    if canonical != data or type(value) is not dict or value.get("v") != 5:
-        raise ValueError("content.json must be canonical content v5")
-    identity = "gameplay-v5:" + hashlib.sha256(data).hexdigest()
+    if canonical != data or type(value) is not dict or value.get("v") != 6:
+        raise ValueError("content.json must be canonical content v6")
+    identity = "gameplay-v6:" + hashlib.sha256(data).hexdigest()
     text = header.decode("utf-8")
     match = re.search(r'inline constexpr std::string_view version = "([^"]+)";', text)
     if not match or match.group(1) != identity or "json_text" in text:
@@ -61,8 +61,8 @@ def verify_bundle(args, build, source_hash):
         raise ValueError("Bundle source identity differs from generated/game.lua")
     policy = bundle.load_policy(args.policy)
     contract = json.loads((ROOT / "lua/contract.json").read_text(encoding="utf-8"))
-    if contract["version"] != 8:
-        raise ValueError("package requires Host/state contract v8")
+    if contract["version"] != 9:
+        raise ValueError("package requires Host contract v9")
     for key in bundle.KEYS[5:]:
         expected = bundle.digest({"identity": key, "source": {
             "contract_version": contract["version"], "schema": contract[key]}})
@@ -123,7 +123,7 @@ def files(args):
             "随后 login/start/input/switch_weapon/select_tool/melee/use/interact/pickup/"
             "revive/vision_on/vision_off/hunters/recruit/equip/buy_skill/remove_skill/retire/"
             "status/result/stash。\n"
-            "协议 v6、内容 v5、Host/状态 v8；SQLite V2。测试 Start 须显式 test_mode，"
+            "协议 v6、内容 v6、Host契约 v9/状态 v8；SQLite V2。测试 Start 须显式 test_mode，"
             "缺省使用默认配装。Action 重试必须保留原 action_seq。\n"
             "开局即可到出生地附近出口撤离，读条成功后等待 Committed。\n"
             "永久猎人出战需要完整经济配置和持有装备；停止使用宿主 Stop。"
@@ -138,7 +138,7 @@ def files(args):
     manifest = {
         "release": "hunter-server-v1-windows",
         "mode": "bundle" if args.bundle else "source",
-        "protocol": 5, "content": 4, "host_state": 7, "sqlite": 1,
+        "protocol": 6, "content": 6, "host_contract": 9, "host_state": 8, "sqlite": 2,
         "content_key": identity,
         "script_source_sha256": source_hash,
         "test_signature": args.test_signature,

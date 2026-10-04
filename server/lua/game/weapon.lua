@@ -41,7 +41,8 @@ return function(deps)
             local at = combat.ray(x, y, dx, dy, range, solid.x, solid.y, solid.w, solid.h)
             if at ~= nil then
                 insert_hit(hits, {distance = at, id = solid.id, solid = true,
-                    penetrable = solid.penetrable == true})
+                    penetrable = solid.penetrable == true,
+                    scene_id = solid.kind == "cover" and solid.id or nil})
             end
         end
         for _, id in ipairs(world_api.ids(world)) do
@@ -53,7 +54,7 @@ return function(deps)
                     shape.width, shape.height)
                 if at ~= nil then
                     insert_hit(hits, {distance = at, id = id, solid = false,
-                        enemy = enemy, boss = (shape.rank or 0) >= 3})
+                        enemy = enemy})
                 end
             end
         end
@@ -62,14 +63,22 @@ return function(deps)
                 local at = combat.ray(x, y, dx, dy, range, cfg.x, cfg.y, cfg.w, cfg.h)
                 if at ~= nil then
                     insert_hit(hits, {distance = at, id = cfg.id, solid = true,
-                        penetrable = false, barrel = index})
+                        penetrable = cfg.penetrable, scene_id = cfg.id, barrel = index})
                 end
             end
         end
         return hits
     end
 
-    -- 每颗弹丸独立伤害和穿透，掩体衰减伤害但不消费穿怪次数。
+    -- 按弹药允许清单判断场景身份，地图实心物不能因相同数字身份被穿透。
+    local function allowed_prop(ammo, id)
+        for _, allowed in ipairs(ammo.prop_ids) do
+            if allowed == id then return true end
+        end
+        return false
+    end
+
+    -- 每颗弹丸独立消费指定道具穿透次数及衰减，首次命中怪物即停止。
     local function pellet(world, content, player, ammo, x, y, dx, dy, range)
         local amount = ammo.damage
         local passes = ammo.penetration
@@ -79,18 +88,16 @@ return function(deps)
             last = hit.distance
             if hit.solid then
                 if hit.barrel ~= nil then
-                    scene_api.hit(world, content, hit.barrel, amount, false, player.id)
+                    scene_api.hit(world, content, hit.barrel, ammo.prop_damage, false, player.id)
                 end
-                if not hit.penetrable then
-                    break
-                end
-            else
-                target = hit.id
-                damage.apply(world, player, hit.enemy, amount)
-                if hit.boss or passes == 0 then
+                if not hit.penetrable or passes == 0 or not allowed_prop(ammo, hit.scene_id) then
                     break
                 end
                 passes = passes - 1
+            else
+                target = hit.id
+                damage.apply(world, player, hit.enemy, amount)
+                break
             end
             amount = math.max(0, amount - ammo.loss)
             if amount == 0 then

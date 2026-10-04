@@ -207,7 +207,7 @@
       "name": "game.cfg_build",
       "file": "game/cfg_build.lua",
       "kind": "factory",
-      "deps": []
+      "deps": ["game.skill"]
     },
     {
       "name": "game.cfg_check",

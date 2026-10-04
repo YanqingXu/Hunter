@@ -40,8 +40,9 @@ return function(deps)
                 resource_limit(original.fire_ticks, "shot_ticks", history, 3600))
             and state.integer(value.reload_ticks, 0,
                 resource_limit(original.reload_ticks, "reload_ticks", history, 3600))
-            and state.integer(reserve, 0,
-                resource_limit(original.reserve, "reserve", history, 100000)),
+            and state.integer(reserve, 0, 100000)
+            and value.ammo + reserve <= cfg.magazine
+                + resource_limit(original.reserve, "reserve", history, 100000),
             "invalid_weapon_state")
     end
 
@@ -85,9 +86,10 @@ return function(deps)
         for index, entry in ipairs(demo.tools) do
             if entry.cfg_id ~= "0" then
                 local cfg = content.tools[entry.cfg_id]
-                assert(cfg ~= nil and not seen[entry.cfg_id], "invalid_tool_cfg")
-                seen[entry.cfg_id] = true
+                assert(cfg ~= nil, "invalid_tool_cfg")
                 local consumable = cfg.kind == "needle" or cfg.kind == "bomb"
+                assert(consumable or not seen[entry.cfg_id], "invalid_tool_cfg")
+                seen[entry.cfg_id] = true
                 assert(consumable == (index > 4) and (index <= content.rules.tool_slots
                     or (index > 4 and index <= 4 + content.rules.consumable_slots)),
                     "invalid_tool_slot")
@@ -224,6 +226,9 @@ return function(deps)
     -- 冷路径执行完整配置语义校验；语义与结构校验全部成功后宿主才可替换状态。
     function api.validate(doc, content)
         assert(type(doc) == "table" and doc.v == 8, "invalid_state_version")
+        if doc.phase == "Playing" or doc.phase == "Dead" or doc.phase == "Cleared" then
+            assert(doc.raid.player_state == "Alive", "invalid_phase_state")
+        end
         local accepted = nil
         if doc.match_id ~= "0" then
             local reason
@@ -305,7 +310,8 @@ return function(deps)
         local clue_count = 0
         for index, used in ipairs(doc.scene_used) do
             local cfg = content.scenes[index]
-            assert(not used or cfg.kind == "supply" or cfg.kind == "clue",
+            assert(not used or cfg.kind == "supply" or cfg.kind == "ammo_supply"
+                or cfg.kind == "clue",
                 "invalid_scene_usage")
             clue_count = clue_count + (used and cfg.kind == "clue" and 1 or 0)
             local barrel = doc.scenes_state.barrels[index]

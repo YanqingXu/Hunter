@@ -1,6 +1,6 @@
 # 永久猎人客户端契约
 
-适用版本：协议 v6、内容 v5、Host／状态 v8、SQLite V2。消息唯一来源为
+适用版本：协议 v6、内容 v6、Host 契约 v9、上下文／内部状态 v8、SQLite V2。消息唯一来源为
 [`protobuf/hunter.proto`](../protobuf/hunter.proto)。本页说明已接入的单账号单人 PvE 路径，
 不定义账号登录服务或多人资产交易。
 

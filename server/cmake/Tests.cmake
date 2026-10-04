@@ -3,10 +3,11 @@ set(HUNTER_FIXTURE "${HUNTER_GEN}/fixture")
 add_custom_command(OUTPUT "${HUNTER_FIXTURE}/content.json" "${HUNTER_FIXTURE}/ContentId.h"
     "${HUNTER_FIXTURE}/cfg/Manifest.json"
     COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/../export/gameplay.py"
-        --fixture "${CMAKE_CURRENT_SOURCE_DIR}/../design/combat_demo.json"
+        --fixture "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/combat.json"
         --output "${HUNTER_FIXTURE}/content.json" --header "${HUNTER_FIXTURE}/ContentId.h"
         --cfg "${HUNTER_FIXTURE}/cfg" --luax "${HUNTER_LUAX}"
-    DEPENDS ../design/combat_demo.json ../export/gameplay.py ../export/export.py
+    DEPENDS tests/fixtures/combat.json ../export/gameplay.py ../export/export.py
+        lua/game/skill.lua lua/modules.json lua/framework/state.lua
         tools/assemble.py tools/publish.py ${HUNTER_CFG_LUA} ${HUNTER_LUAX_DEP} VERBATIM)
 add_custom_target(hunter_fixture_content DEPENDS "${HUNTER_FIXTURE}/ContentId.h"
     "${HUNTER_FIXTURE}/cfg/Manifest.json")

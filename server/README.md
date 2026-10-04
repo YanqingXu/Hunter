@@ -11,14 +11,16 @@ C++ 持有唯一世界、物品和计时状态，Luax 编写玩法规则；热�
 免费配装必须显式 `test_mode=true`，命令行测试客户端的普通 start 会补上该标志。
 Entity/Unit/Player/Monster/Item/Weapon/World 各有 C++ 类及同名小写 Lua 模块；
 实体按 ID 管理，玩家输入和枪械状态与怪物 AI 分离，支持不同配置怪物共存。
-正式内容从 [根目录 Excel 与显式来源清单](../design/DEMO内容说明.md) 生成；
-旧首版 Excel 和灰盒 JSON 仅用于回归。
+2026-10-04 用户授权补齐配置来源，正式内容从 [design 根工作簿](../design/配置表填写说明.md)
+读取：当前八本、37 张服务端表、186 条记录，`Server[1]` 选择地图及关联规则。
+生产不再使用 JSON 清单；独立灰盒 JSON 仅用于显式隔离回归。
 设计见 [规划](plan.md)，契约见 [intents](intents/README.md)，实际结果见 [验证记录](VERIFICATION.md)。
 
-协议为 v6、内容为 v5、Host／内部状态为 v8、SQLite 为 V2。实现与验证状态见
-[本轮任务表](V1_HUNT_TASKS.md)，永久接口见 [猎人接口](HUNTER_API.md)。新技能、怪物能力、
-区域和经济数值仍须策划完整填写并显式选入；正式内容保持原 19 张表，`career=false` 时
-允许免费招募、查询，但拒绝永久出战及退役。独立机制夹具不作为生产数值。
+协议为 v6、内容为 v6、Host 契约为 v9、上下文／内部状态为 v8、SQLite 为 V2。
+实现与验证状态见 [本轮任务表](V1_HUNT_TASKS.md)，永久接口见 [猎人接口](HUNTER_API.md)。
+根表已包含技能属性字典、怪物能力、第二波、区域、成长、掉落与道具刷新池，新增数值为
+可调整初版。技能 3/6/14/15 和未实现工具保持禁用；当前不推进 Unity 客户端。
+将 `Server.CareerIdx` 显式设为 0 时，允许免费招募、查询，但拒绝永久出战及退役。
 
 此前 [SRV-013](intents/modules/cfg.intent.md) 已完成 Windows 实现与验证：源表导出独立 Lua，
 由 Lua 加载配置、解析关联并决定配装、拾取、消耗、掉落和状态语义。C++ 保留权威状态、
@@ -137,7 +139,7 @@ Ready 之前必须完成存档打开和玩家加载；省略 `--save` 使用 `%L
 客户端连接 `127.0.0.1:<port>`；每帧为四字节大端正文长度加 Protobuf `hunter.wire.Envelope`。
 第一次消息必须为 Hello，逐项回传 Ready 的版本、实例和令牌，5 秒内完成握手。
 正式定义位于根目录 `protobuf/hunter.proto`，不能另建私有协议来源。
-网络协议为 v6，Host 契约、上下文和内部状态为 v8，内容为 v5，SQLite 为 V2。
+网络协议为 v6，Host 契约为 v9，上下文和内部状态为 v8，内容为 v6，SQLite 为 V2。
 旧协议客户端和旧内部状态拒绝接入／导入，不提供状态迁移；客户端仍按 `kind/cfg_id` 选择配置。
 
 Hello 后发送 LoginReq，再发送 StartReq。首个 StartReq 的 after_match_id 为 0，后续使用
@@ -165,11 +167,11 @@ InputAck 仅确认操作已处理；命中、伤害和死亡以事件与快照�
 
 ## Excel 配置与协议客户端
 
-正式共享源由 `../design/demo_sources.json` 选择根目录工作簿、工作表和记录；
-清单不保存数值覆盖。构建自动运行 `../export/gameplay.py --source`，每张表生成独立 Lua，
+正式共享源为 `../design` 根目录全部 `.xlsx`，跳过 Office 临时文件、无 `|` 的说明表和
+子目录，不再由 JSON 选择工作簿或数据行。构建自动运行 `../export/gameplay.py --source ../design`，每张表生成独立 Lua，
 保留原英文字段和数字主键。`generated/cfg/Manifest.json` 显式声明数据模块；组装器区分
 `data` 与 `factory`，通过依赖注入将数据交给 `game.cfg`，运行时不调用 `require/dofile`。
-Python 只做工作簿读取、字段类型、记录选择和序列化，字段映射、单位、引用、默认配装及
+Python 只做工作簿读取、字段类型和序列化，字段映射、单位、引用、默认配装及
 玩法语义在 Lua 中处理。正式发布前使用固定 Luax strict 执行同一个配置入口；全部通过才
 发布数据表、清单和客户端派生制品，失败保留上一份有效输出。
 
@@ -178,9 +180,19 @@ Python 只做工作簿读取、字段类型、记录选择和序列化，字段�
 内容摘要进入 Ready／Hello，客户端应使用同一派生数据；数值和语义不变时摘要保持一致。
 修改允许的源表数值后重新导出、组装脚本或签名 Bundle 即可改变玩法，不必重编服务端核心；
 协议客户端自身绑定内容身份，交付时应同步生成和构建客户端。
-唯一生产地图来源为地图表；旧怪物和 Boss 使用独立记录及 Attack 招式表，不读取天赋 Skill。
-所选记录缺值、单位或引用非法会阻止构建；未选草稿不进入内容摘要，禁止回退旧工作簿。
-具体导出和单位约定见 [导表说明](../export/README.md)。
+唯一生产地图来源为地图表，当前入口由 `Server.MapIdx` 选择；普通攻击使用 `Attack`，
+怪物能力使用 `Ability/MonsterAi/MonsterAbility`，不读取玩家天赋描述。
+所有源行必须符合字段类型；运行内容的单位、外键、启用状态和几何非法会阻止构建，
+不能回退旧工作簿或已有生成内容。具体字段见 [填表说明](../design/配置表填写说明.md)，
+手动导出命令见 [导表说明](../export/README.md)。
+
+`Ammunition.RefillCount` 控制每种弹药的单次补给；总量按同种已装备枪械的弹匣与备弹
+合计，上限来自有效枪械配置，每种一次补给只加一次，按槽序加入备弹。
+`Scene.Kind=ammo_supply` 是弹药补给，`supply` 优先随机补一个缺少的常规工具，
+使用 `Tool.RefillCount`；全部常规工具满且有消费品空槽时，再按 `Tool.SupplyWeight` 抽取。
+`Drop/DropEntry` 定义击杀掉落，`ItemSpawn/SpawnPoolEntry` 定义地图刷新点及权重池。
+技能道具用 `Item.SkillIdx` 关联技能；`SkillEffect.AttributeId` 从属性字典取得代码，
+只有启用且机制已实现的技能进入运行候选。
 
 配装先由只读 Lua 入口规范化并完整校验，再申请 SQLite 局号。拾取、叠堆、工具扣次与清槽、
 补给和掉落拆分由 Lua 决定，C++ 核对实例、容量及数据范围后原子修改。状态导入先由 Lua
@@ -216,8 +228,9 @@ PauseState 同步输入和动作的作废水位；暂停冻结前摇和恢复计
 客户端 EOF／对端正常 EOF 返回 0；协议错误或连接重置输出 client_error 并返回 1，均有界收尾。
 `hunter_process_integration` 自动管理两个真实进程，包含死亡／清怪／重开场景。
 
-Boss 前摇、恢复和冷却由 Attack 表驱动，快照提供 ai/attack_ticks。Boss 出生实例死亡仅解锁
-出口；回到出生地附近出口自动读条 180 Tick。快照提供资格、累计／剩余 Tick 和取消原因。
+普通攻击前摇、恢复和冷却由 Attack 表驱动；Boss 技能分组由 MonsterAbility 与 MonsterAi
+驱动。当前撤离开局可用，拾取赏金后标注出口并原子追加第二波；旧灰盒的杀 Boss 解锁
+保留在显式旧夹具中。进入撤离点后按配置自动读条，快照提供资格、剩余 Tick 和取消原因。
 正伤害、死亡、离区清零，暂停冻结。拾取必须在 1500 mm 内，整份成功或整份拒绝。
 地面 ItemId、配置 cfg_id 和永久 item_uid 分离；实体／物品引用须带本局 world_id/match_id。
 免费武器、工具、消费品拾取及补给进入局内装备槽，不进入奖励背包或永久仓库。
@@ -280,7 +293,7 @@ python tools/package_demo.py --build build/win-bundle `
 ```
 
 包内 START.txt 给出启动命令；内容、身份元数据、协议、C# 和客户端一起交付。
-源包附 `cfg/Manifest.json`、19 张原字段 Lua 表和聚合文件，供联调核对；运行仍加载聚合的
+源包附 `cfg/Manifest.json`、本次全部原字段 Lua 表（当前 37 张）和聚合文件，供联调核对；运行仍加载聚合的
 `game.lua`。Bundle 包的配置与玩法共同位于签名制品内，不包含散配置、编译器或私钥。
 打包前反向核对规范内容与身份头、实际 Lua 加载结果、生成源码与映射；Bundle 另验签并
 核对确切源码摘要和当前 Host 契约，任何错配都不替换已有包。可用 `--luax` 和

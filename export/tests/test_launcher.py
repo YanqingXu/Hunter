@@ -1,6 +1,5 @@
-# 验证策划清单选择、中文反馈和不依赖当前工作目录的双击入口。
+# 验证根配置目录、隔离草稿清单、中文反馈和不依赖当前工作目录的双击入口。
 from pathlib import Path
-import json
 import os
 import shutil
 import subprocess
@@ -34,18 +33,17 @@ class LauncherTest(unittest.TestCase):
     def targets(self, text, encoding="utf-8"):
         self.target.write_bytes(text.encode(encoding))
 
-    # 默认策划入口只使用生产清单，旧草稿选择不能改变正式内容来源。
+    # 默认入口读取全部根工作簿，旧草稿清单不能改变正式内容来源。
     def test_default_production_uses_lua_validation(self):
-        self.source.mkdir(parents=True)
-        manifest = ROOT / "design/demo_sources.json"
-        shutil.copyfile(manifest, self.source / manifest.name)
-        spec = json.loads(manifest.read_text(encoding="utf-8"))
-        for filename in {entry["file"] for entry in spec["sources"]}:
-            shutil.copyfile(ROOT / "design" / filename, self.source / filename)
+        write_book(self.source / "技能表.xlsx", [("技能|Skill", cells([[1, "技能", "", 1],
+                                                                  [2, "技能二", "", 2]]))])
+        write_book(self.source / "属性表.xlsx", [("属性|Attribute", cells())])
         self.targets("不存在的旧草稿.xlsx")
-        report = LAUNCHER.run_export(self.root)
+        with mock.patch.object(LAUNCHER.gameplay, "evaluate", return_value={"v": 6}) as validate:
+            report = LAUNCHER.run_export(self.root)
+        validate.assert_called_once()
         self.assertTrue(report.ok, report.detail)
-        self.assertIn("19 张表", report.detail)
+        self.assertIn("2 张表，共 3 条记录", report.detail)
         self.assertIn("Luax", report.detail)
         self.assertTrue((self.production / "Manifest.json").is_file())
         self.assertTrue((self.production.parent / "ContentId.h").is_file())
@@ -58,19 +56,21 @@ class LauncherTest(unittest.TestCase):
         self.assertTrue(report.ok, report.detail)
         self.assertTrue(report.draft)
         self.assertTrue((self.output / "Player.lua").is_file())
-        self.assertNotEqual((self.output / "Player.lua").read_bytes(),
-                            (self.production / "Player.lua").read_bytes())
+        self.assertFalse((self.production / "Player.lua").exists())
         self.assertEqual(before, {p.relative_to(self.production.parent): p.read_bytes()
                          for p in self.production.parent.rglob("*") if p.is_file()})
 
-    # 没有生产清单必须明确报错，不能回退成旧草稿导出并误报成功。
-    def test_missing_production_manifest_never_falls_back(self):
+    # Lua 拒绝缺少的玩法来源时必须报错，不回退草稿或发布未经校验的文件。
+    def test_lua_rejection_never_falls_back(self):
         write_book(self.source / "道具表.xlsx")
         self.targets("道具表")
-        report = LAUNCHER.run_export(self.root)
+        with mock.patch.object(LAUNCHER.gameplay, "evaluate", side_effect=ValueError(
+                "Lua configuration validation failed: missing Server")):
+            report = LAUNCHER.run_export(self.root)
         self.assertFalse(report.ok)
-        self.assertIn("demo_sources.json", report.detail)
+        self.assertIn("missing Server", report.detail)
         self.assertFalse(self.output.exists())
+        self.assertFalse(self.production.exists())
 
     def test_only_selected_workbooks_are_exported(self):
         write_book(self.source / "道具表.xlsx", [("道具|Item", cells()), ("装备|Equip", cells())])
@@ -181,6 +181,24 @@ class LauncherTest(unittest.TestCase):
         self.assertEqual(result.returncode, 1, result.stderr)
         self.assertIn("第 1 行", (self.target.parent / LAUNCHER.LOG_NAME).read_text(encoding="utf-8"))
         self.assertEqual({p.name: p.read_bytes() for p in self.output.iterdir()}, before)
+
+    # 新 EXE 默认读取根工作簿，再用固定 Luax 拒绝缺少玩法来源，不能仍依赖旧 JSON。
+    @unittest.skipUnless((ROOT / "export/导出配置.exe").is_file(), "尚未打包策划 EXE")
+    def test_packaged_default_uses_directory_and_lua_gate(self):
+        executable = self.target.parent / "导出配置.exe"
+        shutil.copy2(ROOT / "export/导出配置.exe", executable)
+        write_book(self.source / "道具表.xlsx", [("道具|Item", cells())])
+        shutil.copytree(ROOT / "server/lua", self.root / "server/lua")
+        environment = dict(os.environ)
+        environment["PATH"] = str(Path(os.environ["SystemRoot"]) / "System32")
+        environment["HUNTER_LUAX"] = str(LAUNCHER.gameplay.luax_cli())
+        result = subprocess.run([str(executable), "--no-ui", "--check"], cwd=self.temp.name,
+            env=environment, capture_output=True, timeout=60)
+        self.assertEqual(result.returncode, 1, result.stderr)
+        detail = (self.target.parent / LAUNCHER.LOG_NAME).read_text(encoding="utf-8")
+        self.assertIn("Lua configuration validation failed", detail)
+        self.assertNotIn("demo_sources.json", detail)
+        self.assertFalse(self.production.exists())
 
 
 if __name__ == "__main__":

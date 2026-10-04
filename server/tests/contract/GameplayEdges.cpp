@@ -39,12 +39,44 @@ T take(std::expected<T, Str> result)
 Json content()
 {
     auto value = hunter::test_content();
+    value["item_spawns"] = Json::array();
+    value["abilities"] = Json::object();
+    value["encounter"] = false;
+    value["exploration"] = false;
+    Json spawns = Json::array();
+    Json scenes = Json::array();
+
+    for (const auto& spawn : value["map"]["enemies"])
+    {
+        if (spawn["spawn_id"] == "12" || spawn["spawn_id"] == "13"
+            || spawn["spawn_id"] == "14")
+        {
+            spawns.push_back(spawn);
+        }
+    }
+
+    for (const auto& scene : value["scenes"])
+    {
+        if (scene["id"] == "1" || scene["id"] == "2" || scene["id"] == "3")
+        {
+            scenes.push_back(scene);
+        }
+    }
+
+    value["map"]["enemies"] = spawns;
+    value["scenes"] = scenes;
+
+    for (auto& ammo : value["ammo"])
+    {
+        ammo["prop_ids"] = Json::array();
+    }
 
     for (auto& monster : value["monsters"])
     {
         monster["speed"] = 1;
         monster["detect_range"] = 1;
         monster["attack_range"] = 1;
+        monster["ai"] = false;
     }
 
     return value;
@@ -241,19 +273,27 @@ void pause_aim(const hunter::Cfg& cfg)
     game.roundtrip();
 }
 
-// 掩体只衰减不消耗穿怪次数，Boss 和不可穿掩体都会终止射线。
+// 弹药允许清单、次数与掩体共同限制穿透，每颗弹丸首次命中怪物即停止。
 void barriers(const hunter::Cfg& cfg)
 {
     auto data = range_content();
     data["scenes"].push_back({{"id", "31"}, {"kind", "cover"}, {"x", 3000},
         {"y", 0}, {"w", 100}, {"h", 1600}, {"penetrable", true},
         {"interaction", false}, {"barrel", false}});
+    data["ammo"]["1"]["prop_ids"] = {"31"};
     Game soft(cfg, data);
     soft.input(0, false, false, false, true);
     soft.steps();
     check(soft.script.world().actors[1]->unit().hp == 924
-        && soft.script.world().actors[2]->unit().hp == 974,
-        "cover loss precedes first hit without spending monster penetration");
+        && soft.script.world().actors[2]->unit().hp == 1000,
+        "allowed cover spends one penetration and first monster stops pellet");
+    auto denied = data;
+    denied["ammo"]["1"]["prop_ids"] = Json::array();
+    Game disallowed(cfg, denied);
+    disallowed.input(0, false, false, false, true);
+    disallowed.steps();
+    check(disallowed.script.world().actors[1]->unit().hp == 1000,
+        "penetrable scene still blocks ammunition outside its allowed set");
     data["scenes"][0]["penetrable"] = false;
     Game hard(cfg, data);
     hard.input(0, false, false, false, true);
@@ -280,7 +320,51 @@ void barriers(const hunter::Cfg& cfg)
     boss.input(0, false, false, false, true);
     boss.steps();
     check(boss.script.world().actors[1]->unit().hp == 874
-        && boss.script.world().actors[2]->unit().hp == 1000, "boss ends penetration");
+        && boss.script.world().actors[2]->unit().hp == 1000, "first boss stops its pellet");
+
+    data = range_content();
+    for (i32 index = 0; index < 2; ++index)
+    {
+        data["scenes"].push_back({{"id", std::to_string(31 + index)}, {"kind", "cover"},
+            {"x", 2900 + index * 300}, {"y", 0}, {"w", 100}, {"h", 1600},
+            {"penetrable", true}, {"interaction", false}, {"barrel", false}});
+    }
+
+    data["ammo"]["1"]["prop_ids"] = {"31", "32"};
+    data["ammo"]["1"]["penetration"] = 2;
+    data["ammo"]["1"]["damage"] = 100;
+    data["ammo"]["1"]["loss"] = 20;
+    data["weapons"]["1"]["damage"] = 100;
+    Game two(cfg, data);
+    two.input(0, false, false, false, true);
+    two.steps();
+    check(two.script.world().actors[1]->unit().hp == 940
+        && two.script.world().actors[2]->unit().hp == 1000,
+        "two allowed props each spend a pass and independently reduce damage");
+    auto short_ammo = data;
+    short_ammo["ammo"]["1"]["penetration"] = 1;
+    Game short_range(cfg, short_ammo);
+    short_range.input(0, false, false, false, true);
+    short_range.steps();
+    check(short_range.script.world().actors[1]->unit().hp == 1000,
+        "exhausted prop penetration stops at the second cover");
+    auto other_ammo = data;
+    other_ammo["ammo"]["3"]["prop_ids"] = {"31"};
+    other_ammo["ammo"]["3"]["penetration"] = 2;
+    Game different(cfg, other_ammo);
+    check(different.action("switch_weapon", 2).empty(), "alternate ammunition selected");
+    different.input(0, false, false, false, true);
+    different.steps();
+    check(different.script.world().actors[1]->unit().hp == 1000,
+        "different ammunition cannot inherit another ammunition allowed scene");
+    data["ammo"]["1"]["pellets"] = 3;
+    data["ammo"]["1"]["spread_deg"] = 0;
+    Game multiple(cfg, data);
+    multiple.input(0, false, false, false, true);
+    multiple.steps();
+    check(multiple.script.world().actors[1]->unit().hp == 820
+        && multiple.player().weapon.ammo == 4,
+        "each pellet has independent prop passes and decay while consuming one cartridge");
 }
 
 // 医疗完成 Tick 的致命攻击必须先取消，玩家先击杀的怪物不能再反击。
@@ -340,7 +424,12 @@ void resource_edges(const hunter::Cfg& cfg)
     check(game.action("interact", 0, 2).empty(), "supply restores exhausted ordinary tool");
     check(game.player().get_tool_count(2) == 1, "supply adds exactly one charge");
     Game full(cfg);
-    full.setup([](hunter::Player& player, hunter::World&) { player.x = 3400; });
+    full.setup([](hunter::Player& player, hunter::World&)
+    {
+        player.x = 3400;
+        player.change_tool(7, "30004", 1);
+        player.change_tool(8, "30006", 1);
+    });
     const auto random = full.script.world().raid.random;
     check(!full.action("interact", 0, 2).empty(), "full equipment rejects supply");
     check(!full.script.world().scene_used(2) && full.script.world().raid.random == random,

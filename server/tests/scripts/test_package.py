@@ -17,7 +17,7 @@ class PackageContract(unittest.TestCase):
     # 真实配置只生成一次，各用例使用独立生成目录检查不一致资源。
     @classmethod
     def setUpClass(cls):
-        tables = package.gameplay.read_tables(ROOT.parent / "design/demo_sources.json")
+        tables = package.gameplay.read_tables(ROOT.parent / "design")
         cls.configs = package.gameplay.config_files(tables)
         cls.content, cls.header = package.gameplay.artifacts(tables)
 
@@ -49,15 +49,20 @@ class PackageContract(unittest.TestCase):
     def test_source_package_contains_selected_configuration(self):
         files = package.files(self.args)
         manifest = json.loads(files["manifest.json"])
-        self.assertEqual(manifest["host_state"], 7)
+        self.assertEqual(manifest["host_state"], 8)
+        self.assertEqual(manifest["host_contract"], 9)
+        self.assertEqual(manifest["content"], 6)
+        self.assertEqual(manifest["protocol"], 6)
+        self.assertEqual(manifest["sqlite"], 2)
         self.assertEqual(manifest["content_key"],
-                         "gameplay-v5:" + hashlib.sha256(self.content).hexdigest())
+                         "gameplay-v6:" + hashlib.sha256(self.content).hexdigest())
         self.assertEqual(manifest["script_source_sha256"],
                          hashlib.sha256(files["game.lua"]).hexdigest())
         self.assertIn("cfg/Manifest.json", files)
         self.assertIn("cfg/Player.lua", files)
         self.assertEqual(sum(name.startswith("cfg/") and name.endswith(".lua")
-                             for name in files), 20)
+                             for name in files),
+                         sum(name.endswith(".lua") for name in self.configs))
         self.assertNotIn("cfg/Unused.lua", files)
         self.assertFalse(any(name.endswith(".seed") or "luaxc" in name for name in files))
         self.assertIn("ContentId.h", files)

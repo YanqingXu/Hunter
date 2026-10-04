@@ -7,13 +7,33 @@ return function(deps)
         ["12"] = true, ["13"] = true}
     local stats = {weight = true, run_speed = true, melee_damage = true, reserve = true,
         shot_ticks = true, reload_ticks = true, medkit_ticks = true, medkit_heal = true,
-        throw_range = true, revive_hp = true, revive_stamina = true, revive_full_hp = true}
+        throw_range = true, revive_hp = true, revive_stamina = true, revive_full_hp = true,
+        run_cost = true, movement_noise_radius = true, crate_bonus_count = true,
+        tool_capacity = true}
+    local attributes = {
+        run_cost = {"player", "stamina_per_second", "modifier"},
+        weight = {"player", "weight_point", "modifier"},
+        run_speed = {"player", "mm_per_tick", "modifier"},
+        movement_noise_radius = {"player", "mm", "modifier"},
+        melee_damage = {"weapon", "hp", "modifier"},
+        reserve = {"weapon", "round", "modifier"},
+        shot_ticks = {"weapon", "tick", "modifier"},
+        reload_ticks = {"weapon", "tick", "modifier"},
+        medkit_heal = {"tool", "hp", "modifier"},
+        throw_range = {"tool", "mm", "modifier"},
+        medkit_ticks = {"tool", "tick", "modifier"},
+        revive_hp = {"player", "hp", "absolute"},
+        revive_stamina = {"player", "stamina", "absolute"},
+        revive_full_hp = {"player", "bool", "flag"},
+        crate_bonus_count = {"player", "item", "modifier"},
+        tool_capacity = {"tool", "use", "modifier"}}
 
-    -- 技能效果必须完整填写，尚无运行规则的天赋不能进入生产内容。
-    function api.validate(skills)
+    -- 所有技能检查结构与参数，只有启用候选需要通过已实现处理器门禁。
+    function api.validate(skills, implemented)
         assert(type(skills) == "table", "skills must be a table")
         for id, cfg in pairs(skills) do
-            assert(supported[id], "unsupported player skill: " .. tostring(id))
+            assert(implemented == false or supported[id],
+                "unsupported player skill: " .. tostring(id))
             assert(state.fields(cfg, {"name", "target", "category", "kind", "cost", "effects"}),
                 "invalid skill fields")
             assert(type(cfg.name) == "string" and #cfg.name > 0, "skill name is required")
@@ -29,6 +49,10 @@ return function(deps)
             for _, effect in ipairs(cfg.effects) do
                 assert(state.fields(effect, {"stat", "op", "value"}) and stats[effect.stat],
                     "unsupported skill effect")
+                assert(implemented == false or (effect.stat ~= "run_cost"
+                    and effect.stat ~= "movement_noise_radius"
+                    and effect.stat ~= "crate_bonus_count" and effect.stat ~= "tool_capacity"),
+                    "unimplemented skill effect")
                 assert(not seen[effect.stat], "duplicate skill effect")
                 seen[effect.stat] = true
                 assert(effect.op == "add" or effect.op == "mul_bp", "invalid skill operation")
@@ -43,6 +67,13 @@ return function(deps)
                 if effect.stat == "revive_full_hp" then
                     assert(effect.value == 1, "full revive effect must be one")
                 end
+                if effect.stat == "revive_hp" then
+                    assert(effect.value > 0, "revive health must be positive")
+                end
+                if effect.stat == "crate_bonus_count" then
+                    assert(effect.op == "add" and effect.value >= 0,
+                        "crate bonus requires a nonnegative count")
+                end
             end
             assert((seen.revive_hp == nil) == (seen.revive_stamina == nil),
                 "revive health and stamina must both be configured")
@@ -52,6 +83,79 @@ return function(deps)
             end
         end
         return skills
+    end
+
+    -- 属性字典与全部源行先验证，禁用行仍检查外键，但不进入运行候选。
+    function api.sources(tables)
+        local result, dictionary, codes = json.object({}), {}, {}
+        assert(tables.Skill ~= nil and tables.Attribute ~= nil and tables.SkillEffect ~= nil,
+            "skills require Attribute and SkillEffect tables")
+        for id, value in pairs(tables.Attribute) do
+            assert(state.integer(integer.create(id), 1, 2147483647), "invalid attribute ID")
+            local registered = attributes[value.Stat]
+            assert(registered and not codes[value.Stat], "unknown or duplicate attribute code")
+            assert(type(value.Name) == "string" and #value.Name > 0,
+                "attribute name is required")
+            assert(value.Target == registered[1] and value.Unit == registered[2]
+                and value.ValueMode == registered[3], "attribute semantics mismatch")
+            assert(type(value.AllowedOps) == "string" and #value.AllowedOps > 0,
+                "attribute operations are required")
+            local ops, start = {}, 1
+            for index = 1, #value.AllowedOps + 1 do
+                if index > #value.AllowedOps
+                    or string.sub(value.AllowedOps, index, index) == "|" then
+                    local op = string.sub(value.AllowedOps, start, index - 1)
+                    assert((op == "add" or op == "mul_bp") and not ops[op],
+                        "invalid attribute operation")
+                    assert(value.ValueMode == "modifier" or op == "add",
+                        "absolute attributes require add")
+                    ops[op], start = true, index + 1
+                end
+            end
+            dictionary[id] = {source = value, ops = ops}
+            codes[value.Stat] = true
+        end
+        local candidates = {}
+        for id, value in pairs(tables.Skill) do
+            assert(state.integer(integer.create(id), 1, 2147483647), "invalid skill ID")
+            assert(value.Enabled == 0 or value.Enabled == 1, "invalid Skill.Enabled")
+            candidates[id] = {name = value.Name, target = value.Target,
+                category = value.Category, kind = value.Lifetime, cost = value.Cost,
+                effects = json.array({})}
+        end
+        local ids = {}
+        for id, value in pairs(tables.SkillEffect) do
+            assert(state.integer(integer.create(id), 1, 2147483647), "invalid skill effect ID")
+            ids[#ids + 1] = id
+        end
+        table.sort(ids)
+        for _, id in ipairs(ids) do
+            local value = tables.SkillEffect[id]
+            assert(state.integer(value.SkillIdx, 1, 2147483647)
+                and state.integer(value.AttributeId, 1, 2147483647),
+                "invalid skill effect reference")
+            local cfg = assert(candidates[value.SkillIdx], "unknown skill effect skill")
+            local attribute = assert(dictionary[value.AttributeId], "unknown skill attribute")
+            local source = attribute.source
+            assert(cfg.target == source.Target, "skill attribute target mismatch")
+            assert(attribute.ops[value.Op], "skill operation is not allowed by attribute")
+            if source.ValueMode == "flag" then
+                assert(value.Op == "add" and value.Value == 1, "invalid flag effect")
+            elseif source.ValueMode == "absolute" then
+                assert(value.Op == "add" and state.integer(value.Value, 0, 1000000),
+                    "invalid absolute effect")
+            end
+            cfg.effects[#cfg.effects + 1] = {stat = source.Stat, op = value.Op, value = value.Value}
+        end
+        for id, cfg in pairs(candidates) do
+            local key = tostring(id)
+            api.validate({[key] = cfg}, false)
+            if tables.Skill[id].Enabled == 1 then
+                api.validate({[key] = cfg})
+                result[key] = cfg
+            end
+        end
+        return result
     end
 
     -- 校验所选天赋唯一性、支持范围和技能点，总是返回独立且稳定排序的列表。
@@ -121,6 +225,8 @@ return function(deps)
                 local cfg = result.weapons[choice.cfg_id]
                 cfg.melee_damage = apply(values, "melee_damage", cfg.melee_damage, 1, 1000000)
                 cfg.reserve = apply(values, "reserve", cfg.reserve, 0, 100000)
+                assert(cfg.magazine + cfg.reserve <= 100000,
+                    "effective ammunition total exceeds limit")
                 cfg.fire_ticks = apply(values, "shot_ticks", cfg.fire_ticks, 1, 3600)
                 cfg.reload_ticks = apply(values, "reload_ticks", cfg.reload_ticks, 1, 3600)
             end

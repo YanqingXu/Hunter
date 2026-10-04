@@ -3,6 +3,27 @@ return function(deps)
     local state = deps["framework.state"]
     local api = {}
 
+    -- 补充历史夹具的补给字段；生产表必须提供显式值，不经过此路径。
+    local function version_six(doc)
+        doc.v = 6
+        doc.item_spawns = json.array({})
+        for _, cfg in pairs(doc.ammo) do
+            cfg.refill_count = 1
+            cfg.prop_ids = json.array({})
+            cfg.prop_damage = cfg.damage
+            for _, scene in ipairs(doc.scenes) do
+                if scene.kind == "cover" and scene.penetrable then
+                    cfg.prop_ids[#cfg.prop_ids + 1] = scene.id
+                end
+            end
+        end
+        for _, cfg in pairs(doc.tools) do
+            cfg.refill_count = cfg.kind == "medkit" and 1 or 0
+            cfg.supply_weight = (cfg.kind == "needle" or cfg.kind == "bomb") and 100 or 0
+        end
+        return doc
+    end
+
     -- 历史夹具显式保留旧 AI，生产表不经过本升级路径。
     local function version_five(doc)
         doc.v = 5
@@ -28,14 +49,17 @@ return function(deps)
         for _, cfg in ipairs(doc.scenes) do
             cfg.interaction, cfg.barrel = false, false
         end
-        return doc
+        return version_six(doc)
     end
 
     -- 旧版本仅保留历史地图与战斗数值，补充当前契约要求的测试字段。
     function api.upgrade(source)
         local doc = json.decode(json.encode(source))
-        if doc.v == 5 then
+        if doc.v == 6 then
             return doc
+        end
+        if doc.v == 5 then
+            return version_six(doc)
         end
         if doc.v == 4 then
             return version_five(doc)

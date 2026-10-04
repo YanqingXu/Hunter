@@ -39,12 +39,44 @@ T take(std::expected<T, Str> result)
 Json content()
 {
     auto value = hunter::test_content();
+    value["item_spawns"] = Json::array();
+    value["abilities"] = Json::object();
+    value["encounter"] = false;
+    value["exploration"] = false;
+    Json spawns = Json::array();
+    Json scenes = Json::array();
+
+    for (const auto& spawn : value["map"]["enemies"])
+    {
+        if (spawn["spawn_id"] == "12" || spawn["spawn_id"] == "13"
+            || spawn["spawn_id"] == "14")
+        {
+            spawns.push_back(spawn);
+        }
+    }
+
+    for (const auto& scene : value["scenes"])
+    {
+        if (scene["id"] == "1" || scene["id"] == "2" || scene["id"] == "3")
+        {
+            scenes.push_back(scene);
+        }
+    }
+
+    value["map"]["enemies"] = spawns;
+    value["scenes"] = scenes;
+
+    for (auto& ammo : value["ammo"])
+    {
+        ammo["prop_ids"] = Json::array();
+    }
 
     for (auto& monster : value["monsters"])
     {
         monster["speed"] = 1;
         monster["detect_range"] = 1;
         monster["attack_range"] = 1;
+        monster["ai"] = false;
     }
 
     for (auto& point : value["extracts"])
@@ -264,8 +296,8 @@ void weapons(const hunter::Cfg& cfg)
     game.input(0, false, false, false, true);
     game.steps();
     const auto& world = game.script.world();
-    check(world.actors[1]->unit().hp == 874 && world.actors[2]->unit().hp == 924,
-        "rifle penetration applies fixed loss after first monster");
+    check(world.actors[1]->unit().hp == 874 && world.actors[2]->unit().hp == 1000,
+        "rifle pellet stops at its first monster");
     check(game.player().weapon.ammo == 4, "one shot consumes one round");
     game.input(0, false, false, false, false, true);
     game.steps();
@@ -349,6 +381,252 @@ void tools(const hunter::Cfg& cfg)
     game.roundtrip();
 }
 
+// 构造单个即时或读条补给箱，补给参数独立于生产工作簿数值。
+Json supply_content(const Str& kind, i32 ticks = 0)
+{
+    auto value = content();
+    value["scenes"] = {{{"id", "2"}, {"kind", kind}, {"x", 1800}, {"y", 0},
+        {"w", 400}, {"h", 400}, {"penetrable", false}, {"barrel", false},
+        {"interaction", ticks == 0 ? Json(false)
+            : Json{{"mode", "channel"}, {"hold_ticks", ticks}}}}};
+
+    for (auto& ammo : value["ammo"])
+    {
+        ammo["refill_count"] = 4;
+    }
+
+    for (auto& tool : value["tools"])
+    {
+        tool["refill_count"] = tool["kind"] == "medkit" ? 2 : 0;
+        tool["supply_weight"] = tool["kind"] == "needle" ? 7 : 0;
+    }
+
+    return value;
+}
+
+// 验证按弹种一次补给、稳定槽分配、总量上限和读条开始及完成门禁。
+void ammunition_supply(const hunter::Cfg& cfg)
+{
+    auto data = supply_content("ammo_supply");
+    data["ammo"]["3"]["refill_count"] = 2;
+    Game mixed(cfg, data);
+    mixed.setup([](hunter::Player& player, hunter::World&)
+    {
+        player.set_weapon_reserve(1, 0);
+        player.set_weapon_reserve(2, 0);
+    });
+    check(mixed.action("interact", 0, 2).empty(), "ammo supply accepts both equipped types");
+    check(mixed.player().get_weapon_reserve(1) == 4
+        && mixed.player().get_weapon_reserve(2) == 2,
+        "each ammunition type receives its own amount");
+    const auto saved = take(mixed.script.export_state());
+    check(mixed.action("interact", 0, 2) == "already_used"
+        && take(mixed.script.export_state()) == saved, "ammo box cannot be consumed twice");
+    mixed.roundtrip();
+
+    data = supply_content("ammo_supply");
+    data["weapons"]["3"]["ammo_cfg_id"] = "1";
+    data["weapons"]["3"]["range"] = data["ammo"]["1"]["range"];
+    data["weapons"]["3"]["damage"] = data["ammo"]["1"]["damage"];
+    data["default_loadout"]["ammo"][1] = "1";
+    const auto first_cap = data["weapons"]["1"]["magazine"].get<i32>()
+        + data["weapons"]["1"]["reserve"].get<i32>();
+    const auto second_cap = data["weapons"]["3"]["magazine"].get<i32>()
+        + data["weapons"]["3"]["reserve"].get<i32>();
+    Game shared(cfg, data);
+    shared.setup([&](hunter::Player& player, hunter::World&)
+    {
+        player.set_weapon_ammo(1, 0);
+        player.set_weapon_ammo(2, 0);
+        player.set_weapon_reserve(1, first_cap - 2);
+        player.set_weapon_reserve(2, second_cap - 5);
+    });
+    check(shared.action("interact", 0, 2).empty(), "same-type weapons accept one refill");
+    check(shared.player().get_weapon_reserve(1) == first_cap
+        && shared.player().get_weapon_reserve(2) == second_cap - 3,
+        "shared type grants four once and fills lower stable slot first");
+    shared.roundtrip();
+
+    data = supply_content("ammo_supply", 2);
+    const auto reserve = data["weapons"]["1"]["reserve"].get<i32>();
+    Game full(cfg, data);
+    const auto seed = full.script.world().raid.random;
+    check(full.action("interact", 0, 2) == "supply_full"
+        && full.script.world().scene_state.index == 0 && !full.script.world().scene_used(1)
+        && full.script.world().raid.random == seed,
+        "full ammunition refuses before channel starts");
+    full.setup([&](hunter::Player& player, hunter::World&)
+    {
+        player.set_weapon_reserve(1, reserve - 1);
+    });
+    check(full.action("interact", 0, 2).empty(), "missing round begins channel");
+    full.setup([&](hunter::Player& player, hunter::World&)
+    {
+        player.set_weapon_reserve(1, reserve);
+    });
+    full.steps(2);
+    check(!full.script.world().scene_used(1), "channel completion rechecks full ammunition");
+    full.setup([&](hunter::Player& player, hunter::World&)
+    {
+        player.set_weapon_reserve(1, reserve - 1);
+    });
+    check(full.action("interact", 0, 2).empty(), "unconsumed box can start again");
+    full.input(1);
+    full.steps();
+    check(!full.script.world().scene_used(1) && full.player().get_weapon_reserve(1) == reserve - 1,
+        "movement interruption does not grant ammunition or consume box");
+}
+
+// 验证道具固定增量、单工具优先、权重奖励以及同类消费品占用新空槽。
+void tool_supply(const hunter::Cfg& cfg)
+{
+    auto data = supply_content("supply");
+    data["tools"]["30002"]["uses"] = 5;
+    Game regular(cfg, data);
+    regular.setup([](hunter::Player& player, hunter::World&)
+    {
+        player.change_tool(2, "30002", 1);
+        player.change_tool(5, "0", 0);
+    });
+    check(regular.action("interact", 0, 2).empty(), "tool supply prefers deficient regular tool");
+    check(regular.player().get_tool_count(2) == 3 && regular.player().get_tool_cfg(5) == "0",
+        "configured increment does not also grant consumable");
+    regular.roundtrip();
+
+    Game exhausted(cfg, data);
+    const auto tool_id = exhausted.player().get_tool_instance(2);
+    exhausted.setup([](hunter::Player& player, hunter::World&)
+    {
+        player.change_tool(2, "30002", 0);
+    });
+    check(exhausted.action("interact", 0, 2).empty()
+        && exhausted.player().get_tool_count(2) == 2
+        && exhausted.player().get_tool_instance(2) == tool_id,
+        "zero-charge regular tool remains equipped and receives configured increment");
+    exhausted.roundtrip();
+
+    Game capped(cfg, data);
+    capped.setup([](hunter::Player& player, hunter::World&)
+    {
+        player.change_tool(2, "30002", 4);
+    });
+    check(capped.action("interact", 0, 2).empty() && capped.player().get_tool_count(2) == 5,
+        "tool fixed refill clips to effective maximum");
+
+    auto disabled = data;
+    disabled["tools"]["30002"]["refill_count"] = 0;
+    Game unavailable(cfg, disabled);
+    unavailable.setup([](hunter::Player& player, hunter::World&)
+    {
+        player.change_tool(2, "30002", 1);
+        player.change_tool(5, "0", 0);
+    });
+    const auto seed_before = unavailable.script.world().raid.random;
+    check(unavailable.action("interact", 0, 2) == "supply_full"
+        && !unavailable.script.world().scene_used(1)
+        && unavailable.script.world().raid.random == seed_before,
+        "zero refill does not bypass deficient regular tools to grant consumable");
+
+    data["items"]["30007"] = data["items"]["30002"];
+    data["tools"]["30007"] = data["tools"]["30002"];
+    data["default_loadout"]["tools"].push_back("30007");
+    Game multiple(cfg, data);
+    multiple.setup([](hunter::Player& player, hunter::World&)
+    {
+        player.change_tool(2, "30002", 1);
+        player.change_tool(3, "30007", 1);
+        player.change_tool(5, "0", 0);
+    });
+    check(multiple.action("interact", 0, 2).empty(), "multiple deficient tools accept one refill");
+    check(multiple.player().get_tool_count(2) + multiple.player().get_tool_count(3) == 4
+        && (multiple.player().get_tool_count(2) == 1 || multiple.player().get_tool_count(3) == 1)
+        && multiple.player().get_tool_cfg(5) == "0", "exactly one random regular tool is refilled");
+    multiple.roundtrip();
+
+    data = supply_content("supply");
+    data["tools"]["30002"]["uses"] = 5;
+    data["tools"]["30006"]["supply_weight"] = 1;
+    Game duplicate(cfg, data);
+    duplicate.setup([](hunter::Player& player, hunter::World& world)
+    {
+        player.change_tool(2, "30002", 5);
+        player.change_tool(6, "0", 0);
+        world.raid.random = 2;
+    });
+    check(duplicate.action("interact", 0, 2).empty(), "full regular tools enable weighted reward");
+    check(duplicate.player().get_tool_cfg(5) == "30004"
+        && duplicate.player().get_tool_cfg(6) == "30004",
+        "seven-to-one weighted pool permits same consumable in another free slot");
+    duplicate.roundtrip();
+
+    data = supply_content("supply", 2);
+    Game full(cfg, data);
+    full.setup([](hunter::Player& player, hunter::World&)
+    {
+        player.change_tool(7, "30004", 1);
+        player.change_tool(8, "30006", 1);
+    });
+    const auto seed = full.script.world().raid.random;
+    check(full.action("interact", 0, 2) == "supply_full"
+        && full.script.world().scene_state.index == 0 && !full.script.world().scene_used(1)
+        && full.script.world().raid.random == seed,
+        "full tools refuse without channel or random draw");
+    full.roundtrip();
+}
+
+// 验证开局刷新概率、固定奖池、随机状态一致和技能凭证的即时权威效果。
+void item_spawns(const hunter::Cfg& cfg)
+{
+    auto data = content();
+    data["default_loadout"]["skills"] = Json::array();
+    data["skills"]["5"] = {{"name", "刷新测试技能"}, {"target", "player"},
+        {"category", "numeric"}, {"kind", "passive"}, {"cost", 0},
+        {"effects", {{{"stat", "run_speed"}, {"op", "add"}, {"value", 25}}}}};
+    data["items"]["2900001"] = {{"name", "刷新测试凭证"}, {"max_stack", 1},
+        {"kind", 5}, {"type", 0}, {"skill_cfg_id", "5"}};
+    data["item_spawns"] = {
+        {{"id", "901"}, {"x", 2000}, {"y", 0}, {"chance", 0},
+            {"choices", {{{"cfg_id", "2800001"}, {"count", 1}, {"weight", 1}}}}},
+        {{"id", "902"}, {"x", 2000}, {"y", 0}, {"chance", 10000},
+            {"choices", {{{"cfg_id", "30004"}, {"count", 1}, {"weight", 3}}}}},
+        {{"id", "903"}, {"x", 2000}, {"y", 0}, {"chance", 10000},
+            {"choices", {{{"cfg_id", "2900001"}, {"count", 1}, {"weight", 7}}}}}};
+    Game game(cfg, data);
+    const auto initial_items = Json::parse(game.script.world().inventory());
+    check(initial_items.size() == 2 && initial_items[0]["cfg_id"] == "30004"
+        && initial_items[1]["cfg_id"] == "2900001"
+        && initial_items[0]["count"] == 1 && initial_items[1]["count"] == 1,
+        "zero chance never spawns while guaranteed fixed pools produce exact ground items");
+    Game replay(cfg, data);
+    check(Json::parse(replay.script.world().inventory()) == initial_items
+        && replay.script.world().raid.random == game.script.world().raid.random,
+        "same match and source produce the same item identities and random state");
+    const auto before = take(game.script.export_state());
+    take(game.script.event(3, R"({"v":8,"req_id":"start","after_match_id":"0",
+        "match_id":"1","world_id":"1"})"));
+    check(take(game.script.export_state()) == before,
+        "replayed start does not refresh ground items or consume random state");
+    const auto reserve = game.player().reserve;
+    check(game.action("pickup", 0, 2).empty() && game.player().get_skill_count() == 1
+        && game.player().get_skill_id(1) == "5" && !game.script.world().has_item("2")
+        && game.player().reserve == reserve,
+        "spawned skill proof is consumed and immediately granted");
+    const auto speed = data["players"]["1"]["run_speed"].get<i32>() + 25;
+    game.input(1, true);
+    game.steps();
+    check(game.player().vx == speed, "spawned skill changes next authoritative movement tick");
+    game.roundtrip();
+    game.input();
+    game.steps();
+    game.setup([](hunter::Player& player, hunter::World&)
+    {
+        player.change_tool(7, "0", 0);
+    });
+    check(game.action("pickup", 0, 1).empty() && game.player().get_tool_cfg(7) == "30004",
+        "spawned consumable enters free slot beside matching full consumable");
+    game.roundtrip();
+}
+
 // 通过正式动作验证拾取语义与原生批量提交，拒绝操作不能改变物品或工具实例。
 void inventory(const hunter::Cfg& cfg)
 {
@@ -390,9 +668,14 @@ void inventory(const hunter::Cfg& cfg)
     });
     check(game.action("pickup", 0, 3) == "unsupported_pickup",
         "regular tool does not enter reward inventory");
-    const auto equipment = take(game.script.export_state());
+    game.setup([](hunter::Player& player, hunter::World&)
+    {
+        player.change_tool(7, "30004", 1);
+        player.change_tool(8, "30006", 1);
+    });
+    const auto full_equipment = take(game.script.export_state());
     check(game.action("pickup", 0, 4) == "consumable_full", "full consumable rejects pickup");
-    check(take(game.script.export_state()) == equipment, "consumable refusal is atomic");
+    check(take(game.script.export_state()) == full_equipment, "consumable refusal is atomic");
     game.setup([](hunter::Player& player, hunter::World&)
     {
         player.change_tool(5, "0", 0);
@@ -400,7 +683,29 @@ void inventory(const hunter::Cfg& cfg)
     check(game.action("pickup", 0, 4).empty(), "consumable enters dedicated empty slot");
     check(game.player().get_tool_cfg(5) == "30004" && !game.script.world().has_item("4"),
         "consumable transfer keeps reward bag separate");
+    game.setup([](hunter::Player& player, hunter::World& world)
+    {
+        player.change_tool(7, "0", 0);
+        world.drop("30004", "[1]", 2000, 0);
+    });
+    check(game.action("pickup", 0, 5).empty() && game.player().get_tool_cfg(7) == "30004"
+        && !game.script.world().has_item("5"),
+        "full matching consumable slot does not block a later free slot");
     game.roundtrip();
+
+    auto stacking_data = content();
+    stacking_data["tools"]["30004"]["uses"] = 3;
+    Game stacking(cfg, stacking_data);
+    stacking.setup([](hunter::Player& player, hunter::World& world)
+    {
+        player.change_tool(5, "30004", 1);
+        player.change_tool(7, "30004", 3);
+        world.drop("30004", "[1]", 2000, 0);
+    });
+    check(stacking.action("pickup", 0, 1).empty() && stacking.player().get_tool_count(5) == 2
+        && stacking.player().get_tool_cfg(8) == "0",
+        "partially filled matching slot takes priority over free slot");
+    stacking.roundtrip();
 
     Game ladder(cfg);
     ladder.setup([](hunter::Player& player, hunter::World&)
@@ -425,11 +730,27 @@ void state_semantics(const hunter::Cfg& cfg)
     const auto saved = take(game.script.export_state());
     const auto& original = game.script.world();
     const auto serial = original.serial;
+    const auto revision = original.revision;
+    const auto player_slot = original.slot(original.player_entity_id);
+    const auto generation = original.actors[player_slot]->generation;
     auto invalid = Json::parse(saved);
     invalid["entities"]["1"]["weapon"]["ammo"] = 999;
     check(!game.script.import_state(invalid.dump()), "Lua rejects magazine overflow");
     check(original.document().dump() == saved && original.serial == serial,
         "invalid configuration semantics preserves world and generations");
+
+    for (const Str outcome : {"Extracted", "Abandoned"})
+    {
+        invalid = Json::parse(saved);
+        invalid["raid"]["player_state"] = outcome;
+        check(!original.can_load(invalid.dump()), "native rejects terminal outcome while playing");
+        check(!game.script.import_state(invalid.dump()),
+            "state import rejects terminal outcome while playing");
+        check(take(game.script.export_state()) == saved && original.serial == serial
+            && original.revision == revision
+            && original.actors[player_slot]->generation == generation,
+            "outcome mismatch preserves active state, random and generations");
+    }
 
     Game shape(cfg);
     invalid = Json::parse(take(shape.script.export_state()));
@@ -540,6 +861,12 @@ int main(int argc, char** argv)
         weapons(cfg);
         stage = "tools";
         tools(cfg);
+        stage = "ammunition supply";
+        ammunition_supply(cfg);
+        stage = "tool supply";
+        tool_supply(cfg);
+        stage = "item spawns";
+        item_spawns(cfg);
         stage = "ladders";
         ladders(cfg);
         stage = "explosives";

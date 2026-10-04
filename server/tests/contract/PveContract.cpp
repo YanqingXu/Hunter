@@ -3,6 +3,7 @@
 #include "core/Cfg.h"
 #include "game/World.h"
 #include "script/Script.h"
+#include "../fixtures/ScriptCfg.h"
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
@@ -52,16 +53,46 @@ int main(int argc, char** argv)
         take(game.event(2, R"({"v":8,"req_id":"login","player_id":"73"})"));
         take(game.event(3, R"({"v":8,"req_id":"start","after_match_id":"0",
             "match_id":"101","world_id":"9"})"));
+        const auto content = hunter::test_content();
+        u64 boss_id = 0;
+        u32 boss_spawn = 0;
+        i32 guaranteed_drops = 0;
+        for (const auto& actor : game.world().actors)
+        {
+            if (actor && actor->unit().kind == "monster")
+            {
+                const auto& monster = std::get<hunter::Monster>(actor->value);
+                const auto& value = content.at("monsters").at(std::to_string(monster.cfg_id));
+                if (value.at("rank") == 3)
+                {
+                    check(boss_id == 0, "production selects exactly one Boss instance");
+                    boss_id = monster.id;
+                    boss_spawn = monster.spawn_id;
+                }
+                for (const auto& drop : value.at("drops"))
+                {
+                    guaranteed_drops += drop.at("chance") == 10000 ? 1 : 0;
+                }
+            }
+        }
+        check(boss_id != 0 && (game.world().boss_spawn == 0
+            || game.world().boss_spawn == boss_spawn), "runtime Boss matches selected spawn");
+        const auto& exit = content.at("extracts").at(0);
+        const auto exit_x = exit.at("x").get<i32>() + exit.at("w").get<i32>() / 2;
+        const auto exit_outside = exit.at("x").get<i32>() + exit.at("w").get<i32>() + 1000;
+        const auto hold_ticks = exit.at("hold_ticks").get<i32>();
+        const auto combat_x = content.at("map").at("width").get<i32>() - 3000;
+        const auto initial_items = game.world().last_item_id;
         u64 tick = 0;
         const auto step = [&] { take(game.tick(++tick, 1.0 / 60)); };
         const auto setup = [&](const Func<void(hunter::World&)>& fn)
         {
             take(game.change(fn));
         };
-        setup([](hunter::World& w)
+        setup([&](hunter::World& w)
         {
             auto& player = w.actors[w.slot(w.player_entity_id)]->unit();
-            player.x = 21000;
+            player.x = combat_x;
             player.y = 0;
 
             for (auto& actor : w.actors)
@@ -69,17 +100,21 @@ int main(int argc, char** argv)
                 if (actor && actor->unit().kind == "monster")
                 {
                     auto& monster = std::get<hunter::Monster>(actor->value);
-                    monster.x = monster.spawn_id == 14 ? 22000 : 10000;
+                    monster.x = monster.id == boss_id ? combat_x + 1000 : combat_x - 11000;
                 }
             }
         });
         step();
-        check(std::get<hunter::Monster>(game.world().actors[3]->value).state == "windup",
+        const auto& boss = std::get<hunter::Monster>(
+            game.world().actors[game.world().slot(boss_id)]->value);
+        check(boss.state == "windup",
             "boss telegraphs before damage");
+        const auto windup = boss.ability_phase == "windup" ? boss.ability_ticks
+            : content.at("monsters").at(std::to_string(boss.cfg_id)).at("windup").get<i32>();
         const auto hp = game.world().actors[0]->unit().hp;
-        setup([](hunter::World& w) { w.actors[0]->unit().x = 18000; });
+        setup([&](hunter::World& w) { w.actors[0]->unit().x = combat_x - 3000; });
 
-        for (i32 i = 0; i < 35; ++i)
+        for (i32 i = 0; i < windup + 5; ++i)
         {
             step();
         }
@@ -99,13 +134,13 @@ int main(int argc, char** argv)
             }
         });
         step();
-        check(game.world().phase == "Playing", "Boss death only unlocks exit");
+        check(game.world().phase == "Playing", "Boss death leaves the raid active");
         check(game.world().raid.extract_reason == "outside", "exit unlocked");
         const auto count = game.world().last_item_id;
-        check(count >= 2, "boss guaranteed loot generated");
+        check(count >= initial_items + guaranteed_drops, "guaranteed death loot adds to spawn loot");
         step();
         check(game.world().last_item_id == count, "death does not duplicate loot");
-        setup([](hunter::World& w) { w.actors[0]->unit().x = 2000; });
+        setup([&](hunter::World& w) { w.actors[0]->unit().x = exit_x; });
         step();
         check(game.world().raid.extract_ticks == 1, "automatic extraction begins");
         take(game.event(4, R"({"v":8,"paused":true})"));
@@ -117,13 +152,13 @@ int main(int argc, char** argv)
         check(game.world().raid.extract_ticks == 0 && game.world().raid.extract_reason == "hurt",
             "positive damage cancels extraction");
         step();
-        setup([](hunter::World& w) { w.actors[0]->unit().x = 4000; });
+        setup([&](hunter::World& w) { w.actors[0]->unit().x = exit_outside; });
         step();
         check(game.world().raid.extract_ticks == 0, "leaving cancels extraction");
-        setup([](hunter::World& w)
+        setup([&](hunter::World& w)
         {
-            w.actors[0]->unit().x = 2000;
-            w.raid.extract_ticks = 179;
+            w.actors[0]->unit().x = exit_x;
+            w.raid.extract_ticks = hold_ticks - 1;
             w.actors[0]->unit().hp = 0;
             w.actors[0]->unit().alive = false;
         });

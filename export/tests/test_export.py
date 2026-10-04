@@ -307,29 +307,31 @@ class ExportTest(unittest.TestCase):
         self.assertEqual(production.read_bytes(), b"production config")
 
 
-# 真实配置回归用例与引擎检查分开，使未安装 Lua 的机器也能运行通用测试。
+# 临时工作簿与真实引擎验证输出字节，不依赖已移除的历史设计目录。
 class RepositoryTest(unittest.TestCase):
-    # 通用导出用冻结工作簿回归；根表的显式生产选择由 gameplay 内容测试覆盖。
-    def test_frozen_demo_tables(self):
-        tables = EXPORT.collect_tables(ROOT / "design/demo")
-        counts = {"Bag": 1, "Item": 3, "Equip": 1, "Map": 1, "MapSolid": 3,
-                  "PlayerSpawn": 1, "MonsterSpawn": 3, "ExtractPoint": 1, "Player": 1,
-                  "Monster": 2, "MonsterSkill": 2, "Weapon": 1, "Skill": 3, "Drop": 2, "DropEntry": 3}
-        self.assertEqual({t.name: len(t.rows) for t in tables}, counts)
-        self.assertEqual(len({t.sheet.path for t in tables}), 1)
-        self.assertEqual(sum(len(t.rows) for t in tables), 28)
-        by_name = {t.name: t for t in tables}
-        self.assertEqual(by_name["Item"].rows[2800001]["Type"], 0)
-        self.assertNotIn("IconId", by_name["Item"].rows[2800001])
-        self.assertNotIn("Name", by_name["Equip"].rows[100000001])
-        self.assertEqual(by_name["Skill"].rows[1]["Damage"], 20)
-        self.assertEqual(by_name["Weapon"].rows[1]["Magazine"], 6)
+    # 最小临时来源覆盖多表、数字排序与客户端字段过滤，生产玩法另行集成验证。
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix="hunter-lua-books-")
+        self.addCleanup(self.temp.cleanup)
+        self.source = Path(self.temp.name) / "source"
+        write_book(self.source / "内容.xlsx", [
+            ("玩家|Player", cells([[2, "玩家二", "资源二", 2], [1, "玩家一", "资源一", 1]])),
+            ("道具|Item", cells([[2800001, "道具", "资源", 0]]))])
+
+    # 完整工作簿读取保留所有主键和服务端字段，不依赖旧首版冻结记录。
+    def test_workbook_records_and_server_fields(self):
+        tables = EXPORT.collect_tables(self.source)
+        self.assertEqual({table.name: len(table.rows) for table in tables}, {"Item": 1, "Player": 2})
+        by_name = {table.name: table for table in tables}
+        self.assertEqual(by_name["Item"].rows[2800001]["Count"], 0)
+        self.assertNotIn("Icon", by_name["Item"].rows[2800001])
+        self.assertEqual(by_name["Player"].rows[1]["Name"], "玩家一")
 
     @unittest.skipUnless(shutil.which("lua"), "需要 Lua 5.1 进行加载及字符串字节校验")
     def test_lua_loads_all_records_and_escaped_strings(self):
         with tempfile.TemporaryDirectory(prefix="hunter-lua-test-") as folder:
             folder = Path(folder)
-            tables = EXPORT.export_config(ROOT / "design/demo", folder)
+            tables = EXPORT.export_config(self.source, folder)
             text = '中文😀"\\\n\r\t' + "".join(chr(i) for i in range(32)) + '\x7f9_x0041_"}; error("injected"); --'
             source = folder / "source"
             # 控制字符先按 OOXML 转义，保证测试输入是合法 XML。
@@ -366,7 +368,7 @@ class RepositoryTest(unittest.TestCase):
             self.skipTest("需要 luaxc；可通过 LUAXC 指定，未运行 strict 编译检查")
         with tempfile.TemporaryDirectory(prefix="hunter-luax-test-") as folder:
             folder = Path(folder)
-            tables = EXPORT.export_config(ROOT / "design/demo", folder)
+            tables = EXPORT.export_config(self.source, folder)
             for table in tables:
                 with self.subTest(table=table.name):
                     run = subprocess.run([compiler, "--profile", "strict", "-o", str(folder / (table.name + ".lux")),

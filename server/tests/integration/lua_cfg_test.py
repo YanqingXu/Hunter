@@ -26,24 +26,18 @@ def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-# 临时复制显式来源闭包，禁止测试修改工作区中的真实工作簿。
+# 临时复制全部根工作簿，禁止测试修改工作区中的真实来源。
 def copy_sources(target):
-    manifest = ROOT / "design/demo_sources.json"
-    document = json.loads(manifest.read_text(encoding="utf-8"))
     target.mkdir(parents=True)
-    for name in {source["file"] for source in document["sources"]}:
-        shutil.copyfile(manifest.parent / name, target / name)
-    shutil.copyfile(manifest, target / manifest.name)
-    return target / manifest.name
+    for source in gameplay.sheets.scan_workbooks(ROOT / "design", recursive=False):
+        shutil.copyfile(source, target / source.name)
+    return target
 
 
 # 在自动回归夹具内改一个数值单元格，保留原工作簿其他 ZIP 部件与样式。
-def change_speed(manifest, value):
-    source = next(row for row in json.loads(manifest.read_text(encoding="utf-8"))["sources"]
-                  if row["sheet"].endswith("|Player"))
-    path = manifest.parent / source["file"]
-    sheet = next(item for item in gameplay.sheets.read_workbook(path)
-                 if item.name == source["sheet"])
+def change_speed(source, value):
+    table = gameplay.read_tables(source)["Player"]
+    path, sheet = table.sheet.path, table.sheet
     columns = gameplay.sheets.read_fields(sheet)
     key = next(field for field in columns if "key" in field.flags)
     speed = next(field for field in columns if field.name == "Speed")
@@ -107,9 +101,9 @@ def assemble_config(target, tools, args):
 
 
 # 生产导表、组装及签名全部在临时目录完成。
-def build(manifest, target, tools, args):
+def build(source, target, tools, args):
     target.mkdir(parents=True)
-    command = [sys.executable, "-B", ROOT / "export/gameplay.py", "--source", manifest,
+    command = [sys.executable, "-B", ROOT / "export/gameplay.py", "--source", source,
                "--output", target / "content.json", "--header", target / "ContentId.h",
                "--cfg", target / "cfg", "--luax", tools["luax"]]
     run(command)
@@ -125,7 +119,7 @@ def measure(args, artifact, expected, content):
     server = Server(options)
     try:
         ready = server.start()
-        assert ready["content_version"] == "gameplay-v5:" + digest(content)
+        assert ready["content_version"] == "gameplay-v6:" + digest(content)
         conn = server.connect()
         initial = enter_game(conn)
         conn.sendall(input_frame(1, -1, match=initial[4], world=initial[7]))
@@ -148,10 +142,10 @@ def measure(args, artifact, expected, content):
 
 
 # 验证失败导出与缺失 Lua 表都不能覆盖上一份有效制品。
-def reject_incomplete(manifest, target, export_command, assemble_command):
+def reject_incomplete(source, target, export_command, assemble_command):
     before = {path.relative_to(target): path.read_bytes()
               for path in target.rglob("*") if path.is_file()}
-    change_speed(manifest, None)
+    change_speed(source, None)
     run(export_command, False)
     assert before == {path.relative_to(target): path.read_bytes()
                       for path in target.rglob("*") if path.is_file()}
@@ -208,17 +202,17 @@ def main():
     original = digest(args.exe)
     with tempfile.TemporaryDirectory(prefix="hunter-lua-source-") as folder:
         root = Path(folder)
-        manifest = copy_sources(root / "design")
-        baseline, _, _ = build(manifest, root / "baseline", tools, args)
+        source = copy_sources(root / "design")
+        baseline, _, _ = build(source, root / "baseline", tools, args)
         initial = json.loads((root / "baseline/content.json").read_text(encoding="utf-8"))
         speed = initial["players"]["1"]["speed"]
         assert speed != 37
         first = measure(args, baseline, speed, root / "baseline/content.json")
-        change_speed(manifest, 37)
-        changed, command, assemble = build(manifest, root / "changed", tools, args)
+        change_speed(source, 37)
+        changed, command, assemble = build(source, root / "changed", tools, args)
         second = measure(args, changed, 37, root / "changed/content.json")
         assert first != second, "selected source value must change content identity"
-        reject_incomplete(manifest, root / "changed", command, assemble)
+        reject_incomplete(source, root / "changed", command, assemble)
         reject_corrupt_config(root / "changed", root / "corrupt", tools, args)
     assert digest(args.exe) == original, "configuration update changed the server executable"
     print(json.dumps({"mode": args.mode, "server_sha256": original,

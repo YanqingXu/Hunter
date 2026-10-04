@@ -274,6 +274,9 @@ def parse_table(sheet):
     data_rows = sorted({row for (row, col), cell in sheet.cells.items()
                         if row >= 5 and col <= len(fields) and (cell.text or cell.formula)})
     for row in data_rows:
+        cell = checked_cell(sheet, row, key.column)
+        if cell.kind == "text" and cell.text.startswith("#"):
+            continue
         identity = convert(sheet, row, key)
         if identity <= 0 or identity in rows:
             detail = f"，与第 {positions[identity]} 行重复" if identity in rows else ""
@@ -284,11 +287,12 @@ def parse_table(sheet):
 
 
 # 全目录读取、校验完毕后才允许发布，表名按大小写不敏感规则判重。
-def scan_workbooks(source):
+def scan_workbooks(source, *, recursive=True):
     source = Path(source)
     if not source.is_dir():
         raise ConfigError(f"输入目录不存在或不是目录: {source}")
-    return sorted((p for p in source.rglob("*") if p.is_file() and p.suffix.lower() == ".xlsx"
+    paths = source.rglob("*") if recursive else source.iterdir()
+    return sorted((p for p in paths if p.is_file() and p.suffix.lower() == ".xlsx"
                    and not p.name.startswith("~$")), key=lambda p: p.as_posix())
 
 

@@ -138,6 +138,23 @@ return function(deps)
                     "monster spawn failed")
             end
         end
+        for _, spawn in ipairs(content.item_spawns) do
+            if World.roll(world, 10000) <= spawn.chance then
+                local total = 0
+                for _, choice in ipairs(spawn.choices) do
+                    total = total + choice.weight
+                end
+                local selected = World.roll(world, total)
+                for _, choice in ipairs(spawn.choices) do
+                    selected = selected - choice.weight
+                    if selected <= 0 then
+                        World.drop(world, choice.cfg_id, json.encode(json.array({choice.count})),
+                            spawn.x, spawn.y)
+                        break
+                    end
+                end
+            end
+        end
     end
 
     -- 通过标量接口暂存事件，身份分配和协议编码均由 C++ 完成。
