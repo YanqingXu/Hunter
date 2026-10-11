@@ -1,0 +1,1985 @@
+{
+  "version": 1,
+  "style": "hard-edge pixel clusters; muted frontier-fantasy materials",
+  "generationMode": "built-in ImageGen",
+  "cropPolicy": {
+    "silhouetteAlphaThreshold": 8,
+    "paddingRatio": 0.03,
+    "preserveCroppedRGBA": true
+  },
+  "resizeFilter": "NEAREST",
+  "iconCanvas": [
+    256,
+    256
+  ],
+  "iconMaxExtent": 224,
+  "runtimeMinimumMargin": 4,
+  "weaponAnchorCoordinates": "runtime sprite pixels from top left; attach the independent weapon to character grip",
+  "items": [
+    {
+      "id": "rifle",
+      "name": "步枪",
+      "category": "weapons",
+      "categoryName": "武器",
+      "style": "hard-edge pixel clusters; muted frontier-fantasy materials",
+      "difference": "保留旧木长托与银灰枪管，改用深胡桃木、红皮束带、黄铜菱牌和三道刻纹，去掉原骷髅与蜡状挂饰。",
+      "cropBox": [
+        0,
+        347,
+        1536,
+        742
+      ],
+      "reference": {
+        "path": "../道具参考素材/步枪.png"
+      },
+      "native": {
+        "path": "sources/步枪.png",
+        "size": [
+          1536,
+          1024
+        ],
+        "mode": "RGBA",
+        "alpha": {
+          "min": 0,
+          "max": 254,
+          "transparentPixels": 1403628,
+          "nonzeroPixels": 169236,
+          "bounds": [
+            30,
+            23,
+            1506,
+            999
+          ],
+          "silhouetteBounds": [
+            32,
+            392,
+            1502,
+            697
+          ],
+          "rgbaPixelsSha256": "ba943e89c9e392430a0ddde47863bb87cc9803e2fb9221e9f179687000a7c045"
+        },
+        "sha256": "b24e0cc90459c53da6d8a40452f3d59a24b921e9e1cd10da1d32d3f8dfa7f82b"
+      },
+      "icon": {
+        "path": "icons/步枪.png",
+        "size": [
+          256,
+          256
+        ],
+        "transform": {
+          "scale": 0.14583333333333334,
+          "contentSize": [
+            224,
+            58
+          ],
+          "offset": [
+            16,
+            99
+          ],
+          "margin": 16
+        },
+        "alpha": {
+          "min": 0,
+          "max": 254,
+          "transparentPixels": 61915,
+          "nonzeroPixels": 3621,
+          "bounds": [
+            20,
+            105,
+            235,
+            154
+          ],
+          "silhouetteBounds": [
+            21,
+            106,
+            235,
+            150
+          ],
+          "rgbaPixelsSha256": "3a0e069f336e85994b59904f016b9655dffa5f37fccc92a45b144054cc0efc2e"
+        },
+        "sha256": "aebcc1a38466bf5a87742b7a5d75c8425ec48a7532a2b4a9d049d472284f80ad"
+      },
+      "sprite": {
+        "path": "sprites/步枪.png",
+        "size": [
+          192,
+          64
+        ],
+        "transform": {
+          "scale": 0.11979166666666667,
+          "contentSize": [
+            184,
+            47
+          ],
+          "offset": [
+            4,
+            8
+          ],
+          "margin": 4
+        },
+        "alpha": {
+          "min": 0,
+          "max": 254,
+          "transparentPixels": 9857,
+          "nonzeroPixels": 2431,
+          "bounds": [
+            8,
+            13,
+            184,
+            52
+          ],
+          "silhouetteBounds": [
+            8,
+            13,
+            184,
+            50
+          ],
+          "rgbaPixelsSha256": "25f97a167cd6a5155e16a7f5ae4db0e1441896f000f5b70668fab91351f7d44e"
+        },
+        "sha256": "b94439f703e53711c9748051ece97590bd5dc8d98703f6d3252632b4e848f0f2"
+      },
+      "weaponAnchors": {
+        "sprite": "sprites/步枪.png",
+        "size": [
+          192,
+          64
+        ],
+        "width": 192,
+        "height": 64,
+        "grip": [
+          66,
+          28
+        ],
+        "front_hand": [
+          126,
+          25
+        ],
+        "muzzle": [
+          182,
+          19
+        ],
+        "angle": 0,
+        "facing": "right",
+        "estimated": true,
+        "coordinateSystem": "top-left pixels",
+        "pivotNormalized": [
+          0.34375,
+          0.5625
+        ],
+        "frontHandNormalized": [
+          0.65625,
+          0.609375
+        ],
+        "muzzleNormalized": [
+          0.947917,
+          0.703125
+        ],
+        "notes": "Visual grip pivot at stock neck adjacent to trigger guard; front_hand on wooden fore-end. Estimated visual attachment points; fine tune hand overlap in animation preview."
+      }
+    },
+    {
+      "id": "shotgun",
+      "name": "霰弹枪",
+      "category": "weapons",
+      "categoryName": "武器",
+      "style": "hard-edge pixel clusters; muted frontier-fantasy materials",
+      "difference": "保留长双管和雕花木托，改为更方的叶纹木托、几何黄铜板和简化金属箍。",
+      "cropBox": [
+        0,
+        330,
+        1536,
+        771
+      ],
+      "reference": {
+        "path": "../道具参考素材/霰弹枪.png"
+      },
+      "native": {
+        "path": "sources/霰弹枪.png",
+        "size": [
+          1536,
+          1024
+        ],
+        "mode": "RGBA",
+        "alpha": {
+          "min": 0,
+          "max": 254,
+          "transparentPixels": 1361251,
+          "nonzeroPixels": 211613,
+          "bounds": [
+            23,
+            99,
+            1511,
+            990
+          ],
+          "silhouetteBounds": [
+            28,
+            375,
+            1507,
+            726
+          ],
+          "rgbaPixelsSha256": "16d4374259879c4225eb1c2a54fc36e10bccaa494ab3ddaf59f53eb1f3ea962a"
+        },
+        "sha256": "2c707d24351e61caf9cfe77ebfb5168271accb8ce83fec6c0b25f58e76cc8896"
+      },
+      "icon": {
+        "path": "icons/霰弹枪.png",
+        "size": [
+          256,
+          256
+        ],
+        "transform": {
+          "scale": 0.14583333333333334,
+          "contentSize": [
+            224,
+            64
+          ],
+          "offset": [
+            16,
+            96
+          ],
+          "margin": 16
+        },
+        "alpha": {
+          "min": 0,
+          "max": 254,
+          "transparentPixels": 61055,
+          "nonzeroPixels": 4481,
+          "bounds": [
+            19,
+            102,
+            236,
+            155
+          ],
+          "silhouetteBounds": [
+            20,
+            103,
+            236,
+            153
+          ],
+          "rgbaPixelsSha256": "e8161610ad0d99f936e3fbb55d1af603b96a40eba02c95a0edf81e5ca8e14423"
+        },
+        "sha256": "4ff7de926504b3548a468ccee6e8eaa2f5359fc7a68a14622a112e74348df84a"
+      },
+      "sprite": {
+        "path": "sprites/霰弹枪.png",
+        "size": [
+          192,
+          64
+        ],
+        "transform": {
+          "scale": 0.11979166666666667,
+          "contentSize": [
+            184,
+            53
+          ],
+          "offset": [
+            4,
+            5
+          ],
+          "margin": 4
+        },
+        "alpha": {
+          "min": 0,
+          "max": 254,
+          "transparentPixels": 9263,
+          "nonzeroPixels": 3025,
+          "bounds": [
+            7,
+            5,
+            185,
+            53
+          ],
+          "silhouetteBounds": [
+            7,
+            10,
+            185,
+            53
+          ],
+          "rgbaPixelsSha256": "62efbd2863eb6c00aaeac79fbcd2763352eaf349e206ffd3edb7cb89f8eb91ba"
+        },
+        "sha256": "4705ebc8465b0e2e891c879398939af31dfb7e9e582079fbb835990cedff229e"
+      },
+      "weaponAnchors": {
+        "sprite": "sprites/霰弹枪.png",
+        "size": [
+          192,
+          64
+        ],
+        "width": 192,
+        "height": 64,
+        "grip": [
+          66,
+          28
+        ],
+        "front_hand": [
+          118,
+          25
+        ],
+        "muzzle": [
+          182,
+          15
+        ],
+        "angle": 0,
+        "facing": "right",
+        "estimated": true,
+        "coordinateSystem": "top-left pixels",
+        "pivotNormalized": [
+          0.34375,
+          0.5625
+        ],
+        "frontHandNormalized": [
+          0.614583,
+          0.609375
+        ],
+        "muzzleNormalized": [
+          0.947917,
+          0.765625
+        ],
+        "notes": "Visual grip pivot at stock neck adjacent to trigger guard; front_hand on underside of wooden fore-end. Estimated visual attachment points; fine tune hand overlap in animation preview."
+      }
+    },
+    {
+      "id": "pistol",
+      "name": "手枪",
+      "category": "weapons",
+      "categoryName": "武器",
+      "style": "hard-edge pixel clusters; muted frontier-fantasy materials",
+      "difference": "保留棕木握把与复古左轮轮廓，缩短分段枪管、改为单皮箍，并去掉原皮套及外挂弹药。",
+      "cropBox": [
+        11,
+        363,
+        1247,
+        1044
+      ],
+      "reference": {
+        "path": "../道具参考素材/手枪.png"
+      },
+      "native": {
+        "path": "sources/手枪.png",
+        "size": [
+          1254,
+          1254
+        ],
+        "mode": "RGBA",
+        "alpha": {
+          "min": 0,
+          "max": 255,
+          "transparentPixels": 1294702,
+          "nonzeroPixels": 277814,
+          "bounds": [
+            44,
+            47,
+            1219,
+            1230
+          ],
+          "silhouetteBounds": [
+            46,
+            398,
+            1212,
+            1009
+          ],
+          "rgbaPixelsSha256": "1d8cd57b93fabeaabffb83f15e13595b888c67901bdf98370bb092e1e3b4b6c8"
+        },
+        "sha256": "d271f563cfd86963c32b9f1d214d19a40fe4a53497823995054e79ede79cee85"
+      },
+      "icon": {
+        "path": "icons/手枪.png",
+        "size": [
+          256,
+          256
+        ],
+        "transform": {
+          "scale": 0.18122977346278318,
+          "contentSize": [
+            224,
+            123
+          ],
+          "offset": [
+            16,
+            66
+          ],
+          "margin": 16
+        },
+        "alpha": {
+          "min": 0,
+          "max": 255,
+          "transparentPixels": 56462,
+          "nonzeroPixels": 9074,
+          "bounds": [
+            22,
+            72,
+            234,
+            183
+          ],
+          "silhouetteBounds": [
+            22,
+            72,
+            234,
+            183
+          ],
+          "rgbaPixelsSha256": "12a1cd250cfef13d9632219a84cfe52c7c38408c556ccb13fb604860801b2eef"
+        },
+        "sha256": "711b37a844dfb20ecb60489ec73033a07bcadcf818034a92a4975534f0197600"
+      },
+      "sprite": {
+        "path": "sprites/手枪.png",
+        "size": [
+          96,
+          64
+        ],
+        "transform": {
+          "scale": 0.07119741100323625,
+          "contentSize": [
+            88,
+            48
+          ],
+          "offset": [
+            4,
+            8
+          ],
+          "margin": 4
+        },
+        "alpha": {
+          "min": 0,
+          "max": 255,
+          "transparentPixels": 4746,
+          "nonzeroPixels": 1398,
+          "bounds": [
+            6,
+            10,
+            90,
+            54
+          ],
+          "silhouetteBounds": [
+            6,
+            10,
+            90,
+            54
+          ],
+          "rgbaPixelsSha256": "5dccb6ea0d8901b79d3745b18632e9241dec1166db917a82ca1d1d6be0861379"
+        },
+        "sha256": "5ef98beb30fa389251b4a797183dd0afb918f4b3fb4a7e230248c4e17c34de5e"
+      },
+      "weaponAnchors": {
+        "sprite": "sprites/手枪.png",
+        "size": [
+          96,
+          64
+        ],
+        "width": 96,
+        "height": 64,
+        "grip": [
+          33,
+          31
+        ],
+        "front_hand": null,
+        "muzzle": [
+          88,
+          17
+        ],
+        "angle": 0,
+        "facing": "right",
+        "estimated": true,
+        "coordinateSystem": "top-left pixels",
+        "pivotNormalized": [
+          0.34375,
+          0.515625
+        ],
+        "frontHandNormalized": null,
+        "muzzleNormalized": [
+          0.916667,
+          0.734375
+        ],
+        "notes": "Visual grip pivot on upper wooden grip near trigger guard. No rifle-style foregrip; a support hand should share the rear grip region if needed. Estimated visual attachment points."
+      }
+    },
+    {
+      "id": "dagger",
+      "name": "匕首",
+      "category": "weapons",
+      "categoryName": "武器",
+      "style": "hard-edge pixel clusters; muted frontier-fantasy materials",
+      "difference": "保留宽叶形银灰刀刃与棕木铆钉柄，增加菱形开孔、几何刀面与黄铜护手。",
+      "cropBox": [
+        29,
+        123,
+        1250,
+        1157
+      ],
+      "reference": {
+        "path": "../道具参考素材/匕首.png"
+      },
+      "native": {
+        "path": "sources/匕首.png",
+        "size": [
+          1254,
+          1254
+        ],
+        "mode": "RGBA",
+        "alpha": {
+          "min": 0,
+          "max": 255,
+          "transparentPixels": 1261774,
+          "nonzeroPixels": 310742,
+          "bounds": [
+            41,
+            85,
+            1220,
+            1230
+          ],
+          "silhouetteBounds": [
+            64,
+            158,
+            1215,
+            1122
+          ],
+          "rgbaPixelsSha256": "dee0b17de3556fe7f4ea0cad8ae6bd6d8e6527807542ecf138ded713b95d536a"
+        },
+        "sha256": "31750de0de58113f79c1176531c0bef4f58dce95fe818e25041ab63c6c095f81"
+      },
+      "icon": {
+        "path": "icons/匕首.png",
+        "size": [
+          256,
+          256
+        ],
+        "transform": {
+          "scale": 0.18345618345618345,
+          "contentSize": [
+            224,
+            190
+          ],
+          "offset": [
+            16,
+            33
+          ],
+          "margin": 16
+        },
+        "alpha": {
+          "min": 0,
+          "max": 255,
+          "transparentPixels": 55059,
+          "nonzeroPixels": 10477,
+          "bounds": [
+            22,
+            39,
+            234,
+            221
+          ],
+          "silhouetteBounds": [
+            22,
+            39,
+            234,
+            217
+          ],
+          "rgbaPixelsSha256": "a4961ebbaf28e88a9d6300a16c548e63ef85a0df3884ca0ac30bed06eebfd18b"
+        },
+        "sha256": "4dfe421d1b25af9dc41fcec09fdda83d1f651a1fbc726c5c75505f30b8a7c9fa"
+      },
+      "sprite": {
+        "path": "sprites/匕首.png",
+        "size": [
+          64,
+          128
+        ],
+        "transform": {
+          "scale": 0.04586404586404586,
+          "contentSize": [
+            56,
+            47
+          ],
+          "offset": [
+            4,
+            40
+          ],
+          "margin": 4
+        },
+        "alpha": {
+          "min": 0,
+          "max": 255,
+          "transparentPixels": 7537,
+          "nonzeroPixels": 655,
+          "bounds": [
+            5,
+            41,
+            59,
+            87
+          ],
+          "silhouetteBounds": [
+            6,
+            42,
+            58,
+            85
+          ],
+          "rgbaPixelsSha256": "661fe03b05359a9c0a05ca95a556c2367309aad7e735ebec067ada3346461347"
+        },
+        "sha256": "9d8fb50310ef22e6a864a7a4bc794bb567b6c7e246f7efa54cc503ed4728ba0e"
+      },
+      "weaponAnchors": null
+    },
+    {
+      "id": "rifle_ammo",
+      "name": "步枪弹药",
+      "category": "ammunition",
+      "categoryName": "弹药",
+      "style": "hard-edge pixel clusters; muted frontier-fantasy materials",
+      "difference": "保留细长铜壳弹药的识别特征，改为5枚新排列，使用尖头和分节底带。",
+      "cropBox": [
+        287,
+        179,
+        968,
+        1088
+      ],
+      "reference": {
+        "path": "../道具参考素材/步枪弹药.png"
+      },
+      "native": {
+        "path": "sources/步枪弹药.png",
+        "size": [
+          1254,
+          1254
+        ],
+        "mode": "RGBA",
+        "alpha": {
+          "min": 0,
+          "max": 255,
+          "transparentPixels": 1273829,
+          "nonzeroPixels": 298687,
+          "bounds": [
+            0,
+            21,
+            1218,
+            1222
+          ],
+          "silhouetteBounds": [
+            313,
+            205,
+            942,
+            1062
+          ],
+          "rgbaPixelsSha256": "4b15698ef7de3fd724940deaaad88719e084a6de46080e40f56a24589be55716"
+        },
+        "sha256": "23bc3dd4e7bbe3b4dfa1cdf6a39c8d5162275585c482b08b5d9c4571376b4855"
+      },
+      "icon": {
+        "path": "icons/步枪弹药.png",
+        "size": [
+          256,
+          256
+        ],
+        "transform": {
+          "scale": 0.24642464246424642,
+          "contentSize": [
+            168,
+            224
+          ],
+          "offset": [
+            44,
+            16
+          ],
+          "margin": 16
+        },
+        "alpha": {
+          "min": 0,
+          "max": 255,
+          "transparentPixels": 47535,
+          "nonzeroPixels": 18001,
+          "bounds": [
+            49,
+            16,
+            207,
+            234
+          ],
+          "silhouetteBounds": [
+            50,
+            22,
+            206,
+            234
+          ],
+          "rgbaPixelsSha256": "d697e169b8fe2113b762d5e9ec4a2fc5d843d7145e37567a820a2d296ab8ea1a"
+        },
+        "sha256": "02fa7ef0ae43ef2ad5750f528862a982aa003ad609144065d6512e0e5a91174f"
+      },
+      "sprite": {
+        "path": "sprites/步枪弹药.png",
+        "size": [
+          64,
+          64
+        ],
+        "transform": {
+          "scale": 0.061606160616061605,
+          "contentSize": [
+            42,
+            56
+          ],
+          "offset": [
+            11,
+            4
+          ],
+          "margin": 4
+        },
+        "alpha": {
+          "min": 0,
+          "max": 254,
+          "transparentPixels": 2970,
+          "nonzeroPixels": 1126,
+          "bounds": [
+            12,
+            5,
+            52,
+            59
+          ],
+          "silhouetteBounds": [
+            13,
+            6,
+            51,
+            58
+          ],
+          "rgbaPixelsSha256": "bb8448c20f7e303d8735327a7fcb63d1aa66f4b014c2dffa5d9a8f9d145af405"
+        },
+        "sha256": "9c8c1f90582c53ee79cf4f354f70b1c300a696541ec2378d606e2ffccd03914d"
+      },
+      "weaponAnchors": null
+    },
+    {
+      "id": "pistol_ammo",
+      "name": "手枪弹药",
+      "category": "ammunition",
+      "categoryName": "弹药",
+      "style": "hard-edge pixel clusters; muted frontier-fantasy materials",
+      "difference": "保留短粗圆头铜壳弹药，改为5枚新排列、双底槽与无文字底部印记。",
+      "cropBox": [
+        176,
+        220,
+        1082,
+        1046
+      ],
+      "reference": {
+        "path": "../道具参考素材/手枪弹药.png"
+      },
+      "native": {
+        "path": "sources/手枪弹药.png",
+        "size": [
+          1254,
+          1254
+        ],
+        "mode": "RGBA",
+        "alpha": {
+          "min": 0,
+          "max": 255,
+          "transparentPixels": 1210677,
+          "nonzeroPixels": 361839,
+          "bounds": [
+            0,
+            19,
+            1240,
+            1240
+          ],
+          "silhouetteBounds": [
+            202,
+            246,
+            1056,
+            1020
+          ],
+          "rgbaPixelsSha256": "f1681b20f3da4b9ec65768b7e70e01e1ed6023105466babf174931a2322350e1"
+        },
+        "sha256": "149d350697122e93d45432df63246f9f08234b3f7d01c1504b245eab6f1f1128"
+      },
+      "icon": {
+        "path": "icons/手枪弹药.png",
+        "size": [
+          256,
+          256
+        ],
+        "transform": {
+          "scale": 0.24724061810154527,
+          "contentSize": [
+            224,
+            204
+          ],
+          "offset": [
+            16,
+            26
+          ],
+          "margin": 16
+        },
+        "alpha": {
+          "min": 0,
+          "max": 255,
+          "transparentPixels": 43472,
+          "nonzeroPixels": 22064,
+          "bounds": [
+            16,
+            32,
+            235,
+            230
+          ],
+          "silhouetteBounds": [
+            22,
+            32,
+            234,
+            223
+          ],
+          "rgbaPixelsSha256": "073f6fe97a7b7cc5510dd2798960c4a4038fb36baa5476a609e2b1c672030b4b"
+        },
+        "sha256": "71bbaa5927b7773493a1d37d25587dcf193073d907fc508916034b33c5c75dba"
+      },
+      "sprite": {
+        "path": "sprites/手枪弹药.png",
+        "size": [
+          64,
+          64
+        ],
+        "transform": {
+          "scale": 0.06181015452538632,
+          "contentSize": [
+            56,
+            51
+          ],
+          "offset": [
+            4,
+            6
+          ],
+          "margin": 4
+        },
+        "alpha": {
+          "min": 0,
+          "max": 255,
+          "transparentPixels": 2717,
+          "nonzeroPixels": 1379,
+          "bounds": [
+            6,
+            7,
+            59,
+            56
+          ],
+          "silhouetteBounds": [
+            6,
+            8,
+            58,
+            55
+          ],
+          "rgbaPixelsSha256": "f362d31518f2c3c0bef1bba9ca126f9e6b2fd4ffb1cddd03ba38ddea8017a36a"
+        },
+        "sha256": "6cbfe7dfc35f13ed82e23047571ad95d73cbfa58b79070ebc6ecc5b824fa9058"
+      },
+      "weaponAnchors": null
+    },
+    {
+      "id": "shotgun_shell",
+      "name": "霰弹",
+      "category": "ammunition",
+      "categoryName": "弹药",
+      "style": "hard-edge pixel clusters; muted frontier-fantasy materials",
+      "difference": "保留纸壳和黄铜底座，改为5枚扇形组合、粗铜环与小菱形记号。",
+      "cropBox": [
+        111,
+        213,
+        1147,
+        1041
+      ],
+      "reference": {
+        "path": "../道具参考素材/霰弹.png"
+      },
+      "native": {
+        "path": "sources/霰弹.png",
+        "size": [
+          1254,
+          1254
+        ],
+        "mode": "RGBA",
+        "alpha": {
+          "min": 0,
+          "max": 255,
+          "transparentPixels": 1203110,
+          "nonzeroPixels": 369406,
+          "bounds": [
+            0,
+            65,
+            1226,
+            1220
+          ],
+          "silhouetteBounds": [
+            141,
+            243,
+            1117,
+            1011
+          ],
+          "rgbaPixelsSha256": "84e354965da6b5d71e7119f00c07c62c7ef2354097466f471ff0f3e11d5a875e"
+        },
+        "sha256": "7874534e78c6a5b535c6b7f34d7a23be75f0cb2abbd2356668e9ad72ed65fe78"
+      },
+      "icon": {
+        "path": "icons/霰弹.png",
+        "size": [
+          256,
+          256
+        ],
+        "transform": {
+          "scale": 0.21621621621621623,
+          "contentSize": [
+            224,
+            179
+          ],
+          "offset": [
+            16,
+            38
+          ],
+          "margin": 16
+        },
+        "alpha": {
+          "min": 0,
+          "max": 255,
+          "transparentPixels": 48320,
+          "nonzeroPixels": 17216,
+          "bounds": [
+            16,
+            44,
+            239,
+            211
+          ],
+          "silhouetteBounds": [
+            22,
+            45,
+            234,
+            211
+          ],
+          "rgbaPixelsSha256": "a8942b9a34ffa177ac57fafaee49c5448400a7f5d48ba8a697b8487d44d76591"
+        },
+        "sha256": "5334c411a69ef1b608cdfae0b783de4b938f1635e7e9134dd172c89939e3aea9"
+      },
+      "sprite": {
+        "path": "sprites/霰弹.png",
+        "size": [
+          64,
+          64
+        ],
+        "transform": {
+          "scale": 0.05405405405405406,
+          "contentSize": [
+            56,
+            45
+          ],
+          "offset": [
+            4,
+            9
+          ],
+          "margin": 4
+        },
+        "alpha": {
+          "min": 0,
+          "max": 255,
+          "transparentPixels": 3018,
+          "nonzeroPixels": 1078,
+          "bounds": [
+            6,
+            11,
+            59,
+            53
+          ],
+          "silhouetteBounds": [
+            6,
+            11,
+            58,
+            52
+          ],
+          "rgbaPixelsSha256": "31081d8507141b1aaf180934341b4d86ed2d7fc287a6332f9a61753dbf39951f"
+        },
+        "sha256": "d0481ca84834fa2f822a8432c87c3cecb10e1e67e12b8d34731816dcb7be27ec"
+      },
+      "weaponAnchors": null
+    },
+    {
+      "id": "ammo_crate",
+      "name": "弹药箱",
+      "category": "ammunition",
+      "categoryName": "弹药",
+      "style": "hard-edge pixel clusters; muted frontier-fantasy materials",
+      "difference": "保留棕皮弹药箱，改为宽翻盖、双绑带、中央锁扣、金属护角和单提手。",
+      "cropBox": [
+        96,
+        311,
+        1188,
+        1030
+      ],
+      "reference": {
+        "path": "../道具参考素材/弹药箱.png"
+      },
+      "native": {
+        "path": "sources/弹药箱.png",
+        "size": [
+          1254,
+          1254
+        ],
+        "mode": "RGBA",
+        "alpha": {
+          "min": 0,
+          "max": 255,
+          "transparentPixels": 1059034,
+          "nonzeroPixels": 513482,
+          "bounds": [
+            0,
+            39,
+            1236,
+            1254
+          ],
+          "silhouetteBounds": [
+            127,
+            342,
+            1157,
+            999
+          ],
+          "rgbaPixelsSha256": "bea79389cd11ef671fe0a241e0c505357d23e7262974fa698e4fc5003fd0a478"
+        },
+        "sha256": "a99c2558d3484b8fd92739b062d2f4e2926fc55d76da4696c5ad5432d8790f7b"
+      },
+      "icon": {
+        "path": "icons/弹药箱.png",
+        "size": [
+          256,
+          256
+        ],
+        "transform": {
+          "scale": 0.20512820512820512,
+          "contentSize": [
+            224,
+            147
+          ],
+          "offset": [
+            16,
+            54
+          ],
+          "margin": 16
+        },
+        "alpha": {
+          "min": 0,
+          "max": 255,
+          "transparentPixels": 44042,
+          "nonzeroPixels": 21494,
+          "bounds": [
+            18,
+            54,
+            234,
+            195
+          ],
+          "silhouetteBounds": [
+            22,
+            60,
+            234,
+            195
+          ],
+          "rgbaPixelsSha256": "91b731e9779faa3ac0e7d74a0881a53a311150e1e1eae6734bb808ba401e2aa5"
+        },
+        "sha256": "ea2bd94c7b94e1f56f11f56be4c4f1f754e412a83ce65521a3895c3211518d1a"
+      },
+      "sprite": {
+        "path": "sprites/弹药箱.png",
+        "size": [
+          96,
+          64
+        ],
+        "transform": {
+          "scale": 0.07788595271210014,
+          "contentSize": [
+            85,
+            56
+          ],
+          "offset": [
+            5,
+            4
+          ],
+          "margin": 4
+        },
+        "alpha": {
+          "min": 0,
+          "max": 255,
+          "transparentPixels": 3043,
+          "nonzeroPixels": 3101,
+          "bounds": [
+            7,
+            6,
+            90,
+            59
+          ],
+          "silhouetteBounds": [
+            7,
+            6,
+            88,
+            58
+          ],
+          "rgbaPixelsSha256": "69d9a5efb0368f14a768e4b5434337e9ae4316daf9e4105fd288376e948123da"
+        },
+        "sha256": "7ed42353dc0d17331c52f7bfa020e1a559c13b66cbfbd1350f2ec053a06c7a72"
+      },
+      "weaponAnchors": null
+    },
+    {
+      "id": "medkit",
+      "name": "医疗包",
+      "category": "medical",
+      "categoryName": "医疗",
+      "style": "hard-edge pixel clusters; muted frontier-fantasy materials",
+      "difference": "紧凑沙色皮革翻盖包，双小铜扣、菱形布片和白布环带。",
+      "cropBox": [
+        207,
+        204,
+        1086,
+        1070
+      ],
+      "reference": {
+        "path": "../道具参考素材/医疗包.png"
+      },
+      "native": {
+        "path": "sources/医疗包.png",
+        "size": [
+          1254,
+          1254
+        ],
+        "mode": "RGBA",
+        "alpha": {
+          "min": 0,
+          "max": 255,
+          "transparentPixels": 1027789,
+          "nonzeroPixels": 544727,
+          "bounds": [
+            0,
+            31,
+            1242,
+            1254
+          ],
+          "silhouetteBounds": [
+            232,
+            229,
+            1061,
+            1045
+          ],
+          "rgbaPixelsSha256": "c59386dcc2d79ee8d689f434bd382d96edd133b31f6ba8d0daf55c063fc843de"
+        },
+        "sha256": "a60544996731439f625c31ff88fa39c5d45f27f48ec944019cf3b55b00281ee9"
+      },
+      "icon": {
+        "path": "icons/医疗包.png",
+        "size": [
+          256,
+          256
+        ],
+        "transform": {
+          "scale": 0.25483503981797495,
+          "contentSize": [
+            224,
+            221
+          ],
+          "offset": [
+            16,
+            17
+          ],
+          "margin": 16
+        },
+        "alpha": {
+          "min": 0,
+          "max": 255,
+          "transparentPixels": 30187,
+          "nonzeroPixels": 35349,
+          "bounds": [
+            21,
+            17,
+            234,
+            232
+          ],
+          "silhouetteBounds": [
+            22,
+            23,
+            234,
+            232
+          ],
+          "rgbaPixelsSha256": "01c8673dcf4184df3369d9a5c012ba2928f93c31f1e7444b1269f17ccde58e79"
+        },
+        "sha256": "a01e5c13fe2a53dd582c29ddec843fbc5a580f36d2ca97fab813f9c50dd726e1"
+      },
+      "sprite": {
+        "path": "sprites/医疗包.png",
+        "size": [
+          64,
+          64
+        ],
+        "transform": {
+          "scale": 0.06370875995449374,
+          "contentSize": [
+            56,
+            55
+          ],
+          "offset": [
+            4,
+            4
+          ],
+          "margin": 4
+        },
+        "alpha": {
+          "min": 0,
+          "max": 255,
+          "transparentPixels": 1903,
+          "nonzeroPixels": 2193,
+          "bounds": [
+            5,
+            5,
+            59,
+            58
+          ],
+          "silhouetteBounds": [
+            6,
+            6,
+            58,
+            57
+          ],
+          "rgbaPixelsSha256": "78a1462ae0c3587a407ad81bdea5e7b4af4f4fcff8710fecb561fea89f459327"
+        },
+        "sha256": "90d02d63196cdf5e56130bfe40bf2f72843bf7065e7189ed9620818c1162692e"
+      },
+      "weaponAnchors": null
+    },
+    {
+      "id": "strong_medkit",
+      "name": "强效医疗包",
+      "category": "medical",
+      "categoryName": "医疗",
+      "style": "hard-edge pixel clusters; muted frontier-fantasy materials",
+      "difference": "更大的灰布硬箱，双铜锁、皮革护角和附着侧袋绷带，与普通包区分等级。",
+      "cropBox": [
+        54,
+        221,
+        1230,
+        1052
+      ],
+      "reference": {
+        "path": "../道具参考素材/强效医疗包.png"
+      },
+      "native": {
+        "path": "sources/强效医疗包.png",
+        "size": [
+          1254,
+          1254
+        ],
+        "mode": "RGBA",
+        "alpha": {
+          "min": 0,
+          "max": 255,
+          "transparentPixels": 896595,
+          "nonzeroPixels": 675921,
+          "bounds": [
+            0,
+            25,
+            1204,
+            1254
+          ],
+          "silhouetteBounds": [
+            88,
+            255,
+            1196,
+            1018
+          ],
+          "rgbaPixelsSha256": "f049811fc5c33f3738a284c2858494ddeccbf934ea62c822f06ca22143da8614"
+        },
+        "sha256": "858f9db7d5c490134cc7421049d7d15c890b2175ebc4bd7507ad706f678f1389"
+      },
+      "icon": {
+        "path": "icons/强效医疗包.png",
+        "size": [
+          256,
+          256
+        ],
+        "transform": {
+          "scale": 0.19047619047619047,
+          "contentSize": [
+            224,
+            158
+          ],
+          "offset": [
+            16,
+            49
+          ],
+          "margin": 16
+        },
+        "alpha": {
+          "min": 0,
+          "max": 255,
+          "transparentPixels": 41134,
+          "nonzeroPixels": 24402,
+          "bounds": [
+            20,
+            54,
+            235,
+            201
+          ],
+          "silhouetteBounds": [
+            22,
+            55,
+            234,
+            201
+          ],
+          "rgbaPixelsSha256": "295da3ba3ba6a3a53a2c2f50c9c7ada5573c0f4327e9e73cd4e3260e1c3d0b55"
+        },
+        "sha256": "244648c6725e04b855a32dd4a08b0db0862444aaf6b62c3f65fef5fb09256cec"
+      },
+      "sprite": {
+        "path": "sprites/强效医疗包.png",
+        "size": [
+          80,
+          64
+        ],
+        "transform": {
+          "scale": 0.061224489795918366,
+          "contentSize": [
+            72,
+            51
+          ],
+          "offset": [
+            4,
+            6
+          ],
+          "margin": 4
+        },
+        "alpha": {
+          "min": 0,
+          "max": 255,
+          "transparentPixels": 2558,
+          "nonzeroPixels": 2562,
+          "bounds": [
+            6,
+            8,
+            74,
+            55
+          ],
+          "silhouetteBounds": [
+            6,
+            8,
+            74,
+            55
+          ],
+          "rgbaPixelsSha256": "dddf249b0500a97e86c086918d8ebd6a784d8a2b8f5d285eef58297327c1a17e"
+        },
+        "sha256": "93e5bceb24c1662deb139e1f2007b4ed5d9cf68ab6f208f3acd7e551f17fd139"
+      },
+      "weaponAnchors": null
+    },
+    {
+      "id": "syringe",
+      "name": "恢复针剂",
+      "category": "medical",
+      "categoryName": "医疗",
+      "style": "hard-edge pixel clusters; muted frontier-fantasy materials",
+      "difference": "紫色液体代表恢复针剂；保留紫色玻璃药仓、实用铜环、空白八角握环与方形手指托。",
+      "cropBox": [
+        0,
+        429,
+        1254,
+        852
+      ],
+      "reference": {
+        "path": "../道具参考素材/针剂.png"
+      },
+      "native": {
+        "path": "sources/恢复针剂.png",
+        "size": [
+          1254,
+          1254
+        ],
+        "mode": "RGBA",
+        "alpha": {
+          "min": 0,
+          "max": 255,
+          "transparentPixels": 1442770,
+          "nonzeroPixels": 129746,
+          "bounds": [
+            0,
+            0,
+            1238,
+            1212
+          ],
+          "silhouetteBounds": [
+            27,
+            466,
+            1231,
+            815
+          ],
+          "rgbaPixelsSha256": "2de8600c341345159c72381d36ab9d5e9eaf5b6b3b29bbaf451747ed56e9f78e"
+        },
+        "sha256": "b464b56c0d8c6f8caa40f557b1fb527d81e1837055f003fb41550a53c866a133"
+      },
+      "icon": {
+        "path": "icons/恢复针剂.png",
+        "size": [
+          256,
+          256
+        ],
+        "transform": {
+          "scale": 0.17862838915470494,
+          "contentSize": [
+            224,
+            76
+          ],
+          "offset": [
+            16,
+            90
+          ],
+          "margin": 16
+        },
+        "alpha": {
+          "min": 0,
+          "max": 255,
+          "transparentPixels": 61358,
+          "nonzeroPixels": 4178,
+          "bounds": [
+            21,
+            97,
+            237,
+            162
+          ],
+          "silhouetteBounds": [
+            21,
+            97,
+            236,
+            159
+          ],
+          "rgbaPixelsSha256": "91ee98a7441b70fbc2c65aefea42bb8eb5ec744b710f127b78bed065d8a8effb"
+        },
+        "sha256": "c25f9b409fd238edea21355eca2a950b71667f320823ac4f8d240c66cfb5f548"
+      },
+      "sprite": {
+        "path": "sprites/恢复针剂.png",
+        "size": [
+          96,
+          48
+        ],
+        "transform": {
+          "scale": 0.07017543859649122,
+          "contentSize": [
+            88,
+            30
+          ],
+          "offset": [
+            4,
+            9
+          ],
+          "margin": 4
+        },
+        "alpha": {
+          "min": 0,
+          "max": 255,
+          "transparentPixels": 3955,
+          "nonzeroPixels": 653,
+          "bounds": [
+            6,
+            11,
+            91,
+            37
+          ],
+          "silhouetteBounds": [
+            6,
+            12,
+            90,
+            36
+          ],
+          "rgbaPixelsSha256": "64a44345deee68e6285f8b8776577520cf9d6871f657e174a4b4df4ef5ce22c9"
+        },
+        "sha256": "5397cf65e6a457d0867734af41ff26ceb10b7c1a4a65b486a6986e1335057aa3"
+      },
+      "weaponAnchors": null
+    },
+    {
+      "id": "health_syringe",
+      "name": "生命针剂",
+      "category": "medical",
+      "categoryName": "医疗",
+      "style": "hard-edge pixel clusters; muted frontier-fantasy materials",
+      "difference": "红色液体代表生命针剂；沿用恢复针剂的针筒、铜环和握环结构，形成可识别的同系列医疗道具。",
+      "cropBox": [
+        0,
+        425,
+        1254,
+        854
+      ],
+      "reference": {
+        "path": "../道具参考素材/针剂.png"
+      },
+      "native": {
+        "path": "sources/生命针剂.png",
+        "size": [
+          1254,
+          1254
+        ],
+        "mode": "RGBA",
+        "alpha": {
+          "min": 0,
+          "max": 255,
+          "transparentPixels": 1434571,
+          "nonzeroPixels": 137945,
+          "bounds": [
+            23,
+            21,
+            1238,
+            1228
+          ],
+          "silhouetteBounds": [
+            26,
+            462,
+            1232,
+            817
+          ],
+          "rgbaPixelsSha256": "cad39ff3554d6034ee91fbf65f540d68aec751c53c7cc3f4ce7d8e8875fe731a"
+        },
+        "sha256": "bff069e521360c8c319850d528a7dd69fc8fa7f771a515264a8a68f600a670a8"
+      },
+      "icon": {
+        "path": "icons/生命针剂.png",
+        "size": [
+          256,
+          256
+        ],
+        "transform": {
+          "scale": 0.17862838915470494,
+          "contentSize": [
+            224,
+            77
+          ],
+          "offset": [
+            16,
+            89
+          ],
+          "margin": 16
+        },
+        "alpha": {
+          "min": 0,
+          "max": 255,
+          "transparentPixels": 61155,
+          "nonzeroPixels": 4381,
+          "bounds": [
+            20,
+            95,
+            237,
+            166
+          ],
+          "silhouetteBounds": [
+            21,
+            96,
+            236,
+            159
+          ],
+          "rgbaPixelsSha256": "633d4ed122f4ffa46002ed62576e3f7df604263e58b039da2dc6a7d8ba920196"
+        },
+        "sha256": "4e7ffd7c234786c210668d94c98eaeb49ee347863c946e6eb11312afd11763e2"
+      },
+      "sprite": {
+        "path": "sprites/生命针剂.png",
+        "size": [
+          96,
+          48
+        ],
+        "transform": {
+          "scale": 0.07017543859649122,
+          "contentSize": [
+            88,
+            30
+          ],
+          "offset": [
+            4,
+            9
+          ],
+          "margin": 4
+        },
+        "alpha": {
+          "min": 0,
+          "max": 255,
+          "transparentPixels": 3928,
+          "nonzeroPixels": 680,
+          "bounds": [
+            6,
+            11,
+            91,
+            37
+          ],
+          "silhouetteBounds": [
+            6,
+            12,
+            90,
+            36
+          ],
+          "rgbaPixelsSha256": "0582dae2434a75d9519a58202087b05b17e5c161e13d9a47c9bbd63d445b7adb"
+        },
+        "sha256": "e06d30d67281fa0527b0ab90979b8f5945226ede9861008b8c28c41487e233cc"
+      },
+      "weaponAnchors": null
+    },
+    {
+      "id": "bomb_bundle",
+      "name": "炸药束",
+      "category": "utility",
+      "categoryName": "工具",
+      "style": "hard-edge pixel clusters; muted frontier-fantasy materials",
+      "difference": "保留浅色纸筒与暗红束带，改为3筒三角组合、宽窄两条布带、橄榄色封口贴与短绳头。",
+      "cropBox": [
+        44,
+        280,
+        1233,
+        1073
+      ],
+      "reference": {
+        "path": "../道具参考素材/炸药束.png"
+      },
+      "native": {
+        "path": "sources/炸药束.png",
+        "size": [
+          1254,
+          1254
+        ],
+        "mode": "RGBA",
+        "alpha": {
+          "min": 0,
+          "max": 255,
+          "transparentPixels": 1130849,
+          "nonzeroPixels": 441667,
+          "bounds": [
+            0,
+            36,
+            1234,
+            1230
+          ],
+          "silhouetteBounds": [
+            78,
+            314,
+            1199,
+            1039
+          ],
+          "rgbaPixelsSha256": "94ecb3599f6573fb0215cd907e79a9e9c8705a66f71b67810726a14e23345843"
+        },
+        "sha256": "3ab04e42a902ffa51f1c3dd4e756c34bb11660e52343abf7097642ea7ed9ce76"
+      },
+      "icon": {
+        "path": "icons/炸药束.png",
+        "size": [
+          256,
+          256
+        ],
+        "transform": {
+          "scale": 0.1883936080740118,
+          "contentSize": [
+            224,
+            149
+          ],
+          "offset": [
+            16,
+            53
+          ],
+          "margin": 16
+        },
+        "alpha": {
+          "min": 0,
+          "max": 255,
+          "transparentPixels": 49915,
+          "nonzeroPixels": 15621,
+          "bounds": [
+            22,
+            56,
+            235,
+            202
+          ],
+          "silhouetteBounds": [
+            22,
+            59,
+            234,
+            196
+          ],
+          "rgbaPixelsSha256": "777637da9b8bde606c85b977ce6d0ca3403e00012961727d9efb03704dc3f745"
+        },
+        "sha256": "5f01a9408102c3ab94bc148cca9384f430c7405f0a5994afb67686a635066937"
+      },
+      "sprite": {
+        "path": "sprites/炸药束.png",
+        "size": [
+          96,
+          64
+        ],
+        "transform": {
+          "scale": 0.07061790668348046,
+          "contentSize": [
+            84,
+            56
+          ],
+          "offset": [
+            6,
+            4
+          ],
+          "margin": 4
+        },
+        "alpha": {
+          "min": 0,
+          "max": 255,
+          "transparentPixels": 3939,
+          "nonzeroPixels": 2205,
+          "bounds": [
+            8,
+            6,
+            88,
+            58
+          ],
+          "silhouetteBounds": [
+            8,
+            6,
+            87,
+            58
+          ],
+          "rgbaPixelsSha256": "d07a2c46e9cfb669d21c2fa9da2a6a4c6385e5f01cb4e7e14ab1335643a4edd4"
+        },
+        "sha256": "e6a26e0aa149428065680521e4afab4eb66748d21f1e2cfef7a8b0ea5366550f"
+      },
+      "weaponAnchors": null
+    },
+    {
+      "id": "glow_stick",
+      "name": "照明棒",
+      "category": "utility",
+      "categoryName": "工具",
+      "style": "hard-edge pixel clusters; muted frontier-fantasy materials",
+      "difference": "保留旧纸圆筒及紫橙装饰，改为几何折线面板、深皮绑带、黄铜端盖、短布条和端部暖光像素。",
+      "cropBox": [
+        66,
+        275,
+        1472,
+        802
+      ],
+      "reference": {
+        "path": "../道具参考素材/照明棒.png"
+      },
+      "native": {
+        "path": "sources/照明棒.png",
+        "size": [
+          1536,
+          1024
+        ],
+        "mode": "RGBA",
+        "alpha": {
+          "min": 0,
+          "max": 254,
+          "transparentPixels": 1226302,
+          "nonzeroPixels": 346562,
+          "bounds": [
+            0,
+            29,
+            1516,
+            984
+          ],
+          "silhouetteBounds": [
+            106,
+            315,
+            1432,
+            762
+          ],
+          "rgbaPixelsSha256": "4b692b7c34a0d44f4da6d319df8158164fd9889cc53d12efc767ff8769df944d"
+        },
+        "sha256": "a27488a5df646e304499815a140b398abd40a1ce4b2dcb1742c4eae19a1100df"
+      },
+      "icon": {
+        "path": "icons/照明棒.png",
+        "size": [
+          256,
+          256
+        ],
+        "transform": {
+          "scale": 0.1593172119487909,
+          "contentSize": [
+            224,
+            84
+          ],
+          "offset": [
+            16,
+            86
+          ],
+          "margin": 16
+        },
+        "alpha": {
+          "min": 0,
+          "max": 254,
+          "transparentPixels": 56806,
+          "nonzeroPixels": 8730,
+          "bounds": [
+            21,
+            86,
+            240,
+            169
+          ],
+          "silhouetteBounds": [
+            22,
+            92,
+            234,
+            164
+          ],
+          "rgbaPixelsSha256": "8016560dd10ef126d46628eeb674f4fbff2539f0ddc3b01a003fe7e2058b3866"
+        },
+        "sha256": "4337ca714349bad11769fd40d049965c52c27da54e18f0b5d6a0fafc93b29fcb"
+      },
+      "sprite": {
+        "path": "sprites/照明棒.png",
+        "size": [
+          96,
+          32
+        ],
+        "transform": {
+          "scale": 0.04554079696394687,
+          "contentSize": [
+            64,
+            24
+          ],
+          "offset": [
+            16,
+            4
+          ],
+          "margin": 4
+        },
+        "alpha": {
+          "min": 0,
+          "max": 254,
+          "transparentPixels": 2358,
+          "nonzeroPixels": 714,
+          "bounds": [
+            18,
+            4,
+            80,
+            28
+          ],
+          "silhouetteBounds": [
+            18,
+            6,
+            78,
+            26
+          ],
+          "rgbaPixelsSha256": "c3e826d86071c24c677936d1f46dd1aa9c667419afbce229799be8dbf77fe85d"
+        },
+        "sha256": "17d5605a25c4f1e4cf1808f913b2b87ecb14734e61ed15a855f8ca7554f0c267"
+      },
+      "weaponAnchors": null
+    },
+    {
+      "id": "boss_badge",
+      "name": "首领徽标",
+      "category": "trophy",
+      "categoryName": "战利品",
+      "style": "hard-edge pixel clusters; muted frontier-fantasy materials",
+      "difference": "保留浅色圆盘与旧金属外框，改为六边形铜框、角钉、裂纹和叉角图腾，替换原双刀符号。",
+      "cropBox": [
+        101,
+        48,
+        1175,
+        1223
+      ],
+      "reference": {
+        "path": "../道具参考素材/首领徽标.png"
+      },
+      "native": {
+        "path": "sources/首领徽标.png",
+        "size": [
+          1254,
+          1254
+        ],
+        "mode": "RGBA",
+        "alpha": {
+          "min": 0,
+          "max": 255,
+          "transparentPixels": 733682,
+          "nonzeroPixels": 838834,
+          "bounds": [
+            0,
+            19,
+            1246,
+            1254
+          ],
+          "silhouetteBounds": [
+            135,
+            82,
+            1141,
+            1189
+          ],
+          "rgbaPixelsSha256": "d8cac2a20b5142cd334428684d2e910dabf7117e326cc42e1e6b6f538ac5d83b"
+        },
+        "sha256": "bf57439bad3488795503e1208619909b013b5923f54d958b4822a7f0ac6178d0"
+      },
+      "icon": {
+        "path": "icons/首领徽标.png",
+        "size": [
+          256,
+          256
+        ],
+        "transform": {
+          "scale": 0.19063829787234043,
+          "contentSize": [
+            205,
+            224
+          ],
+          "offset": [
+            25,
+            16
+          ],
+          "margin": 16
+        },
+        "alpha": {
+          "min": 0,
+          "max": 255,
+          "transparentPixels": 35020,
+          "nonzeroPixels": 30516,
+          "bounds": [
+            31,
+            18,
+            230,
+            239
+          ],
+          "silhouetteBounds": [
+            31,
+            22,
+            224,
+            234
+          ],
+          "rgbaPixelsSha256": "004e55a7b3af49abca4202b1c43a52fc06768d5457a9f45f971c5b529e455996"
+        },
+        "sha256": "a42a7714ba88a5653ffc6101586f4b8d72e97e53c8942426ca719e97be046a4e"
+      },
+      "sprite": {
+        "path": "sprites/首领徽标.png",
+        "size": [
+          64,
+          64
+        ],
+        "transform": {
+          "scale": 0.04765957446808511,
+          "contentSize": [
+            51,
+            56
+          ],
+          "offset": [
+            6,
+            4
+          ],
+          "margin": 4
+        },
+        "alpha": {
+          "min": 0,
+          "max": 255,
+          "transparentPixels": 2194,
+          "nonzeroPixels": 1902,
+          "bounds": [
+            7,
+            5,
+            55,
+            59
+          ],
+          "silhouetteBounds": [
+            8,
+            6,
+            55,
+            58
+          ],
+          "rgbaPixelsSha256": "bb07ae3e8a37718d98d2b80e8889348b619478874decc769201a326a48309940"
+        },
+        "sha256": "59bc8058bc9ccc22ecf1623814b0d8321317c767e31eb314e7972a31533db889"
+      },
+      "weaponAnchors": null
+    }
+  ]
+}

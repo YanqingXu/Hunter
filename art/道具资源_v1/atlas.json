@@ -1,0 +1,303 @@
+{
+  "image": "atlas.png",
+  "size": [
+    1024,
+    1024
+  ],
+  "columns": 4,
+  "rows": 4,
+  "cell": [
+    256,
+    256
+  ],
+  "frames": {
+    "rifle": {
+      "name": "步枪",
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 256,
+        "h": 256
+      },
+      "sourceSize": [
+        256,
+        256
+      ],
+      "iconPath": "icons/步枪.png",
+      "spritePath": "sprites/步枪.png",
+      "spriteSize": [
+        192,
+        64
+      ]
+    },
+    "shotgun": {
+      "name": "霰弹枪",
+      "rect": {
+        "x": 256,
+        "y": 0,
+        "w": 256,
+        "h": 256
+      },
+      "sourceSize": [
+        256,
+        256
+      ],
+      "iconPath": "icons/霰弹枪.png",
+      "spritePath": "sprites/霰弹枪.png",
+      "spriteSize": [
+        192,
+        64
+      ]
+    },
+    "pistol": {
+      "name": "手枪",
+      "rect": {
+        "x": 512,
+        "y": 0,
+        "w": 256,
+        "h": 256
+      },
+      "sourceSize": [
+        256,
+        256
+      ],
+      "iconPath": "icons/手枪.png",
+      "spritePath": "sprites/手枪.png",
+      "spriteSize": [
+        96,
+        64
+      ]
+    },
+    "dagger": {
+      "name": "匕首",
+      "rect": {
+        "x": 768,
+        "y": 0,
+        "w": 256,
+        "h": 256
+      },
+      "sourceSize": [
+        256,
+        256
+      ],
+      "iconPath": "icons/匕首.png",
+      "spritePath": "sprites/匕首.png",
+      "spriteSize": [
+        64,
+        128
+      ]
+    },
+    "rifle_ammo": {
+      "name": "步枪弹药",
+      "rect": {
+        "x": 0,
+        "y": 256,
+        "w": 256,
+        "h": 256
+      },
+      "sourceSize": [
+        256,
+        256
+      ],
+      "iconPath": "icons/步枪弹药.png",
+      "spritePath": "sprites/步枪弹药.png",
+      "spriteSize": [
+        64,
+        64
+      ]
+    },
+    "pistol_ammo": {
+      "name": "手枪弹药",
+      "rect": {
+        "x": 256,
+        "y": 256,
+        "w": 256,
+        "h": 256
+      },
+      "sourceSize": [
+        256,
+        256
+      ],
+      "iconPath": "icons/手枪弹药.png",
+      "spritePath": "sprites/手枪弹药.png",
+      "spriteSize": [
+        64,
+        64
+      ]
+    },
+    "shotgun_shell": {
+      "name": "霰弹",
+      "rect": {
+        "x": 512,
+        "y": 256,
+        "w": 256,
+        "h": 256
+      },
+      "sourceSize": [
+        256,
+        256
+      ],
+      "iconPath": "icons/霰弹.png",
+      "spritePath": "sprites/霰弹.png",
+      "spriteSize": [
+        64,
+        64
+      ]
+    },
+    "ammo_crate": {
+      "name": "弹药箱",
+      "rect": {
+        "x": 768,
+        "y": 256,
+        "w": 256,
+        "h": 256
+      },
+      "sourceSize": [
+        256,
+        256
+      ],
+      "iconPath": "icons/弹药箱.png",
+      "spritePath": "sprites/弹药箱.png",
+      "spriteSize": [
+        96,
+        64
+      ]
+    },
+    "medkit": {
+      "name": "医疗包",
+      "rect": {
+        "x": 0,
+        "y": 512,
+        "w": 256,
+        "h": 256
+      },
+      "sourceSize": [
+        256,
+        256
+      ],
+      "iconPath": "icons/医疗包.png",
+      "spritePath": "sprites/医疗包.png",
+      "spriteSize": [
+        64,
+        64
+      ]
+    },
+    "strong_medkit": {
+      "name": "强效医疗包",
+      "rect": {
+        "x": 256,
+        "y": 512,
+        "w": 256,
+        "h": 256
+      },
+      "sourceSize": [
+        256,
+        256
+      ],
+      "iconPath": "icons/强效医疗包.png",
+      "spritePath": "sprites/强效医疗包.png",
+      "spriteSize": [
+        80,
+        64
+      ]
+    },
+    "syringe": {
+      "name": "恢复针剂",
+      "rect": {
+        "x": 512,
+        "y": 512,
+        "w": 256,
+        "h": 256
+      },
+      "sourceSize": [
+        256,
+        256
+      ],
+      "iconPath": "icons/恢复针剂.png",
+      "spritePath": "sprites/恢复针剂.png",
+      "spriteSize": [
+        96,
+        48
+      ]
+    },
+    "health_syringe": {
+      "name": "生命针剂",
+      "rect": {
+        "x": 768,
+        "y": 512,
+        "w": 256,
+        "h": 256
+      },
+      "sourceSize": [
+        256,
+        256
+      ],
+      "iconPath": "icons/生命针剂.png",
+      "spritePath": "sprites/生命针剂.png",
+      "spriteSize": [
+        96,
+        48
+      ]
+    },
+    "bomb_bundle": {
+      "name": "炸药束",
+      "rect": {
+        "x": 0,
+        "y": 768,
+        "w": 256,
+        "h": 256
+      },
+      "sourceSize": [
+        256,
+        256
+      ],
+      "iconPath": "icons/炸药束.png",
+      "spritePath": "sprites/炸药束.png",
+      "spriteSize": [
+        96,
+        64
+      ]
+    },
+    "glow_stick": {
+      "name": "照明棒",
+      "rect": {
+        "x": 256,
+        "y": 768,
+        "w": 256,
+        "h": 256
+      },
+      "sourceSize": [
+        256,
+        256
+      ],
+      "iconPath": "icons/照明棒.png",
+      "spritePath": "sprites/照明棒.png",
+      "spriteSize": [
+        96,
+        32
+      ]
+    },
+    "boss_badge": {
+      "name": "首领徽标",
+      "rect": {
+        "x": 512,
+        "y": 768,
+        "w": 256,
+        "h": 256
+      },
+      "sourceSize": [
+        256,
+        256
+      ],
+      "iconPath": "icons/首领徽标.png",
+      "spritePath": "sprites/首领徽标.png",
+      "spriteSize": [
+        64,
+        64
+      ]
+    }
+  },
+  "emptyCells": [
+    15
+  ]
+}

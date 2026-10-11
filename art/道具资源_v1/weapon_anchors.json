@@ -1,0 +1,116 @@
+{
+  "version": 1,
+  "description": "Visual attachment estimates for independent right-facing game weapon sprites. Original sprite textures are unchanged.",
+  "coordinateSystem": "top-left pixels",
+  "pivotNormalizedConvention": "Unity bottom-left normalized: [x / width, 1 - y / height]",
+  "weapons": {
+    "rifle": {
+      "sprite": "sprites/步枪.png",
+      "size": [
+        192,
+        64
+      ],
+      "width": 192,
+      "height": 64,
+      "grip": [
+        66,
+        28
+      ],
+      "front_hand": [
+        126,
+        25
+      ],
+      "muzzle": [
+        182,
+        19
+      ],
+      "angle": 0,
+      "facing": "right",
+      "estimated": true,
+      "coordinateSystem": "top-left pixels",
+      "pivotNormalized": [
+        0.34375,
+        0.5625
+      ],
+      "frontHandNormalized": [
+        0.65625,
+        0.609375
+      ],
+      "muzzleNormalized": [
+        0.947917,
+        0.703125
+      ],
+      "notes": "Visual grip pivot at stock neck adjacent to trigger guard; front_hand on wooden fore-end. Estimated visual attachment points; fine tune hand overlap in animation preview."
+    },
+    "shotgun": {
+      "sprite": "sprites/霰弹枪.png",
+      "size": [
+        192,
+        64
+      ],
+      "width": 192,
+      "height": 64,
+      "grip": [
+        66,
+        28
+      ],
+      "front_hand": [
+        118,
+        25
+      ],
+      "muzzle": [
+        182,
+        15
+      ],
+      "angle": 0,
+      "facing": "right",
+      "estimated": true,
+      "coordinateSystem": "top-left pixels",
+      "pivotNormalized": [
+        0.34375,
+        0.5625
+      ],
+      "frontHandNormalized": [
+        0.614583,
+        0.609375
+      ],
+      "muzzleNormalized": [
+        0.947917,
+        0.765625
+      ],
+      "notes": "Visual grip pivot at stock neck adjacent to trigger guard; front_hand on underside of wooden fore-end. Estimated visual attachment points; fine tune hand overlap in animation preview."
+    },
+    "pistol": {
+      "sprite": "sprites/手枪.png",
+      "size": [
+        96,
+        64
+      ],
+      "width": 96,
+      "height": 64,
+      "grip": [
+        33,
+        31
+      ],
+      "front_hand": null,
+      "muzzle": [
+        88,
+        17
+      ],
+      "angle": 0,
+      "facing": "right",
+      "estimated": true,
+      "coordinateSystem": "top-left pixels",
+      "pivotNormalized": [
+        0.34375,
+        0.515625
+      ],
+      "frontHandNormalized": null,
+      "muzzleNormalized": [
+        0.916667,
+        0.734375
+      ],
+      "notes": "Visual grip pivot on upper wooden grip near trigger guard. No rifle-style foregrip; a support hand should share the rear grip region if needed. Estimated visual attachment points."
+    }
+  }
+}

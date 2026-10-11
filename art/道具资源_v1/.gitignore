@@ -1,0 +1,18 @@
+# Commit only finalized prop assets and the metadata required to use them.
+/*
+!/.gitignore
+!/sources/
+!/icons/
+!/sprites/
+!/atlas.png
+!/atlas.json
+!/manifest.json
+!/weapon_anchors.json
+!/使用说明.txt
+
+/sources/*
+!/sources/*.png
+/icons/*
+!/icons/*.png
+/sprites/*
+!/sprites/*.png
