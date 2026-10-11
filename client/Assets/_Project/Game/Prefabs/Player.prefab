@@ -325,7 +325,58 @@ MonoBehaviour:
   Shoot: {fileID: 11400000, guid: 3037f7b74dcc3b545b52c5319fcf6374, type: 2}
   Melee: {fileID: 11400000, guid: 99572d71190847545a6b0763f0242175, type: 2}
   ReadKeyboard: 1
+  WeaponWeightLimit: 3
+  Guns:
+  - Name: 步枪
+    AmmoType: 0
+    Weight: 2
+    MagazineCapacity: 6
+    ReloadSeconds: 2
+    FireInterval: 0.8
+    Damage: 25
+    MeleeDamage: 25
+    DefaultRound:
+      Pellets: 1
+      Damage: 25
+      SpreadAngle: 0
+      Distance: 12
+      PenetrationPower: 2
+      DamageRetainedPerProp: 0.75
+      PenetrablePropKinds:
+      - 1
+  - Name: 手枪
+    AmmoType: 0
+    Weight: 1
+    MagazineCapacity: 8
+    ReloadSeconds: 1.2
+    FireInterval: 0.35
+    Damage: 15
+    MeleeDamage: 15
+    DefaultRound:
+      Pellets: 1
+      Damage: 15
+      SpreadAngle: 0
+      Distance: 12
+      PenetrationPower: 0
+      DamageRetainedPerProp: 0.75
+      PenetrablePropKinds: []
+  Ammunition:
+  - Type: 0
+    MaximumTotal: 72
+    RefillAmount: 12
   MoveSpeed: 6
+  WalkSpeed: 3
+  MaxStamina: 100
+  StaminaRecoveryDelay: 2
+  StaminaRecoveryRate: 20
+  MeleeStaminaCost: 25
+  HealthRecoveryDelay: 6
+  HealthRecoveryRate: 5
+  HealthSegments:
+  - 25
+  - 25
+  - 25
+  - 25
   GroundAcceleration: 60
   GroundDeceleration: 75
   AirAcceleration: 30

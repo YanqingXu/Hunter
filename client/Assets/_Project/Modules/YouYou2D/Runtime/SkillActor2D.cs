@@ -15,6 +15,8 @@ namespace BigWorld.YouYou2D
         [Min(0)] public float BaseAttack = 10;
         [Min(0), Tooltip("接受一次伤害后的无敌时间；0 保持原有连续受击行为。")]
         public float InvulnerabilitySeconds;
+        [Range(0, 1), Tooltip("最终受到的伤害倍率；默认1，不改变攻击者和共享技能资产。")]
+        public float IncomingDamageMultiplier = 1;
         public Transform Model;
         public Transform ModelTransform => Model ? Model : transform;
         public int SkillTeamId => Team;
@@ -28,6 +30,8 @@ namespace BigWorld.YouYou2D
         private float health;
         private bool initialized;
         private float invulnerableUntil;
+        private float? skillAttackOverride;
+        private bool skillAttackIsFinal;
         private readonly Dictionary<SkillClip, float> cooldowns = new Dictionary<SkillClip, float>();
 
         private void Awake() { InitializeOnce(); }
@@ -45,25 +49,41 @@ namespace BigWorld.YouYou2D
             Player.StartPlaySkillBehaviour(new SkillBehaviourBase());
         }
 
-        public bool TryPlay(SkillClip clip, float cooldownSeconds = .3f)
+        public bool TryPlay(SkillClip clip, float cooldownSeconds = .3f, float? attackOverride = null, bool attackOverrideIsFinal = false,
+            Vector2? projectileDirection2D = null, float projectileHeightMultiplier2D = 1, ISkillProjectileSettings projectileSettings = null)
         {
             InitializeOnce();
             if (!IsAlive || !Player || !clip || clip.Space != SkillSpace.TwoD || Time.timeScale <= 0 ||
                 (GameServices2D.Instance && GameServices2D.Instance.IsPaused)) return false;
             if (Player.IsPlaying || (cooldowns.TryGetValue(clip, out float until) && Time.time < until)) return false;
-            Player.PlaySkillClip(clip);
+            if (attackOverride.HasValue && (float.IsNaN(attackOverride.Value) || float.IsInfinity(attackOverride.Value) || attackOverride.Value <= 0)) return false;
+            // Snapshot the host's weapon damage for this cast without changing BaseAttack or the shared SkillClip.
+            float? previousAttack = skillAttackOverride;
+            bool previousIsFinal = skillAttackIsFinal;
+            skillAttackOverride = attackOverride;
+            skillAttackIsFinal = attackOverride.HasValue && attackOverrideIsFinal;
+            if (!Player.TryPlaySkillClip(clip, projectileDirection2D, projectileHeightMultiplier2D, projectileSettings)) { skillAttackOverride = previousAttack; skillAttackIsFinal = previousIsFinal; return false; }
             cooldowns[clip] = Time.time + Mathf.Max(0, cooldownSeconds);
             GameServices2D.Publish(GameEvents2D.SkillStarted, new SkillStarted2D(this, clip));
             return true;
         }
 
-        public float GetAttackValue(SkillAttackDetectionEvent attack) => BaseAttack * (attack?.AttackHitConfig?.AttackMultiply ?? 1);
+        public float GetAttackValue(SkillAttackDetectionEvent attack)
+        {
+            // Tool definitions can specify final hit damage while reusing an authored weapon timeline.
+            if (Player && Player.IsPlaying && skillAttackIsFinal && skillAttackOverride.HasValue) return skillAttackOverride.Value;
+            return (Player && Player.IsPlaying ? skillAttackOverride ?? BaseAttack : BaseAttack) * (attack?.AttackHitConfig?.AttackMultiply ?? 1);
+        }
 
         public void BeHit(SkillHitData hit)
         {
             InitializeOnce();
             if (!IsAlive || IsInvulnerable || Time.timeScale <= 0 ||
                 float.IsNaN(hit.attackValue) || float.IsInfinity(hit.attackValue) || hit.attackValue <= 0) return;
+            if (float.IsNaN(IncomingDamageMultiplier) || float.IsInfinity(IncomingDamageMultiplier) ||
+                IncomingDamageMultiplier < 0 || IncomingDamageMultiplier > 1) return;
+            hit.attackValue *= IncomingDamageMultiplier;
+            if (hit.attackValue <= 0) return;
             float before = Health;
             var state = streamed ? streamed.State : null;
             string id = state?.Id;
@@ -89,9 +109,19 @@ namespace BigWorld.YouYou2D
             if (streamed) return;
             if (Player) Player.StopSkillClip(false);
             cooldowns.Clear();
+            skillAttackOverride = null;
+            skillAttackIsFinal = false;
             health = Mathf.Max(1, MaxHealth) * (float.IsNaN(fraction) ? 1 : Mathf.Clamp01(fraction));
             invulnerableUntil = 0;
             GrantInvulnerability(invulnerableSeconds);
+        }
+
+        /// <summary>Non-reviving healing; unlike RestoreHealth this preserves the active skill and cooldowns.</summary>
+        public void Heal(float amount)
+        {
+            InitializeOnce();
+            if (streamed || !IsAlive || float.IsNaN(amount) || float.IsInfinity(amount) || amount <= 0) return;
+            health = Mathf.Min(Mathf.Max(1, MaxHealth), health + amount);
         }
 
         public void GrantInvulnerability(float seconds)
@@ -104,6 +134,8 @@ namespace BigWorld.YouYou2D
         {
             if (Player) { Player.StopSkillClip(false); Player.SetAimContext(null); }
             cooldowns.Clear();
+            skillAttackOverride = null;
+            skillAttackIsFinal = false;
             health = Mathf.Max(1, MaxHealth);
             invulnerableUntil = 0;
         }

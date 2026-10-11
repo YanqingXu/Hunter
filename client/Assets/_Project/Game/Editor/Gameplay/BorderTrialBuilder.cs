@@ -266,8 +266,16 @@ namespace BigWorld.Editor
                 world.Map = renderer; world.Player = player.transform; world.HudResourceKey = "ui.game";
                 player.World = world;
                 var session = new GameObject("Level Session").AddComponent<LevelSession2D>();
+                var hunt = session.gameObject.AddComponent<HunterMission2D>();
+                session.gameObject.AddComponent<HunterSkillLoot2D>();
+                session.gameObject.AddComponent<HunterItemLoot2D>();
+                session.gameObject.AddComponent<HunterSceneInteractions2D>();
+                session.gameObject.AddComponent<HunterEliteDirector2D>();
+                hunt.EnemySprite = Required<Sprite>(Art + "/SoldierIdle.png"); hunt.MarkerSprite = pixel;
+                hunt.EnemyMaterial = Required<PhysicsMaterial2D>("Assets/_Project/Game/Data/Physics/ActorMovement.physicsMaterial2D");
                 session.World = world; session.Player = player; session.FollowCamera = follow;
                 session.StartPoint = Marker("Start Point", new Vector3(4.5f, 2.05f));
+                MakeAmmoSupply(pixel);
                 MakeCheckpoint(pixel, 31, 1, "断桥营地");
                 MakeCheckpoint(pixel, 57, 2, "边境前哨");
                 var exit = new GameObject("Exit Gate"); exit.transform.position = new Vector3(74, 2, 0);
@@ -304,6 +312,14 @@ namespace BigWorld.Editor
             checkpoint.SpawnPoint = Marker("Respawn " + order, new Vector3(x - 1.5f, 2.05f)); checkpoint.SpawnPoint.SetParent(root.transform, true);
             Rect(pixel, "Pole", root.transform, new Vector2(0, 1), new Vector2(.1f, 2), new Color(.7f, .8f, .85f), 10);
             checkpoint.Flag = Rect(pixel, "Flag", root.transform, new Vector2(.4f, 1.7f), new Vector2(.8f, .55f), new Color(.45f, .55f, .65f), 11);
+        }
+        private static void MakeAmmoSupply(Sprite pixel)
+        {
+            var root = new GameObject("Ammo Supply");
+            root.transform.position = new Vector3(8, 2.4f, 0);
+            root.transform.localScale = new Vector3(.9f, .75f, 1);
+            var sprite = root.AddComponent<SpriteRenderer>(); sprite.sprite = pixel; sprite.sortingOrder = 15;
+            root.AddComponent<AmmoSupply2D>().Visual = sprite;
         }
         private static void MakeBackdrop(Sprite pixel)
         {

@@ -59,7 +59,12 @@ namespace BigWorld.Gameplay
         {
             hitFlashUntil = float.NegativeInfinity;
             if (!cached) return;
-            if (Visual) { Visual.localPosition = restPosition; Visual.localScale = restScale; }
+            if (Visual)
+            {
+                Visual.localPosition = restPosition;
+                Visual.localScale = controller && controller.IsProne
+                    ? Vector3.Scale(restScale, new Vector3(1.2f, HunterPostureRules.ProneHeightMultiplier, 1)) : restScale;
+            }
             if (Sprite) Sprite.color = restColor;
         }
 
@@ -74,7 +79,13 @@ namespace BigWorld.Gameplay
             Vector3 position = restPosition;
             Vector3 stretch = Vector3.one;
             bool playingSkill = actor.Player && actor.Player.IsPlaying;
-            if (!playingSkill || controller.State == PlayerMotionState.Dead || controller.IsHurt)
+            if (controller.IsProne && !dead)
+            {
+                stretch = new Vector3(1.2f, HunterPostureRules.ProneHeightMultiplier, 1);
+                if (controller.IsGrounded && controller.State == PlayerMotionState.Run)
+                    position.y += Mathf.Abs(Mathf.Sin(Time.time * 10)) * RunBobHeight * .35f;
+            }
+            else if (!playingSkill || controller.State == PlayerMotionState.Dead || controller.IsHurt)
             {
                 switch (controller.State)
                 {

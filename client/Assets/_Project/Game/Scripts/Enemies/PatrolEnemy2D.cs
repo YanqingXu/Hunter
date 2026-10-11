@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace BigWorld.Gameplay
 {
-    public enum PatrolEnemyState { Patrol, Chase, Windup, Recover, Dead }
+    public enum PatrolEnemyState { Patrol, Chase, Windup, Recover, Dead, Searching }
 
     /// <summary>A grounded melee enemy whose identity and health belong to the map streamer.</summary>
     [DisallowMultipleComponent]
@@ -24,10 +24,13 @@ namespace BigWorld.Gameplay
         [Min(.1f)] public float AttackCooldown = 1.2f;
         [Min(.05f)] public float AttackWindup = .4f;
         [Min(.1f)] public float AttackHeightTolerance = .85f;
+        [Min(0)] public float AlertForgetSeconds = 1;
         public LayerMask GroundLayers = 1;
 
         public PatrolEnemyState State { get; private set; } = PatrolEnemyState.Dead;
         public Transform Target { get; private set; }
+        public bool IsAlerted => alert.IsAlerted;
+        public float AlertUnseenSeconds => alert.UnseenSeconds;
 
         private Rigidbody2D body;
         private BoxCollider2D shape;
@@ -40,6 +43,7 @@ namespace BigWorld.Gameplay
         private int direction = 1;
         private float stateUntil, nextAttackAt, strikeFlashUntil;
         private bool initialized;
+        private HunterAlertMemory alert = new HunterAlertMemory(1);
         private readonly RaycastHit2D[] rayHits = new RaycastHit2D[16];
 
         private void Awake() { InitializeOnce(); }
@@ -61,6 +65,7 @@ namespace BigWorld.Gameplay
         {
             InitializeOnce();
             ClearRuntimeState();
+            alert = new HunterAlertMemory(AlertForgetSeconds);
             patrolCenter = transform.position;
             direction = facing.Direction < 0 ? -1 : 1;
             facing.SetFacing(direction);
@@ -74,6 +79,7 @@ namespace BigWorld.Gameplay
             {
                 StopHorizontal();
                 Target = null;
+                alert.Forget();
                 streamed.CombatPinned = false;
                 State = PatrolEnemyState.Dead;
                 RestoreColor();
@@ -93,9 +99,25 @@ namespace BigWorld.Gameplay
                 return;
             }
 
-            bool canSeePlayer = CanDetect(player);
+            if (level.IsPlayerUndetected && (IsAlerted || State != PatrolEnemyState.Patrol)) ForgetPlayer();
+            bool canSeePlayer = !level.IsPlayerUndetected && CanDetect(player);
+            if (canSeePlayer) level.Player.NotifyCombat();
             Target = canSeePlayer ? player : null;
-            streamed.CombatPinned = canSeePlayer && State != PatrolEnemyState.Patrol;
+            streamed.CombatPinned = alert.Tick(canSeePlayer, Time.fixedDeltaTime, false);
+            if (!canSeePlayer)
+            {
+                // Keep residency and the alert pose briefly, but never track or strike an unseen target.
+                stateUntil = strikeFlashUntil = 0;
+                if (IsAlerted) { State = PatrolEnemyState.Searching; StopHorizontal(); }
+                else
+                {
+                    State = PatrolEnemyState.Patrol;
+                    if (body.position.x >= patrolCenter.x + Mathf.Max(.1f, PatrolDistance)) SetDirection(-1);
+                    else if (body.position.x <= patrolCenter.x - Mathf.Max(.1f, PatrolDistance)) SetDirection(1);
+                    MoveIfSafe(Mathf.Max(0, MoveSpeed), true);
+                }
+                UpdateColor(); return;
+            }
 
             // A strike keeps the facing chosen at the start of its visible windup.
             // At impact the current target position is checked again, so stepping away or
@@ -145,14 +167,6 @@ namespace BigWorld.Gameplay
                     }
                 }
                 else MoveIfSafe(Mathf.Max(0, ChaseSpeed), false);
-            }
-            else
-            {
-                State = PatrolEnemyState.Patrol;
-                streamed.CombatPinned = false;
-                if (body.position.x >= patrolCenter.x + Mathf.Max(.1f, PatrolDistance)) SetDirection(-1);
-                else if (body.position.x <= patrolCenter.x - Mathf.Max(.1f, PatrolDistance)) SetDirection(1);
-                MoveIfSafe(Mathf.Max(0, MoveSpeed), true);
             }
             UpdateColor();
         }
@@ -219,10 +233,13 @@ namespace BigWorld.Gameplay
             facing.SetFacing(direction);
         }
 
+        public void ForgetPlayer() { Suspend(); }
+
         private void Suspend()
         {
             StopHorizontal();
             Target = null;
+            alert.Forget();
             streamed.CombatPinned = false;
             State = PatrolEnemyState.Patrol;
             stateUntil = 0;
@@ -238,6 +255,7 @@ namespace BigWorld.Gameplay
                 visual.color = Color.Lerp(new Color(1, .72f, .12f), Color.white, progress * .55f);
             }
             else if (Time.time < strikeFlashUntil) visual.color = new Color(1, .22f, .12f);
+            else if (State == PatrolEnemyState.Searching) visual.color = new Color(1, .55f, .2f);
             else visual.color = originalColor;
         }
 
@@ -251,6 +269,7 @@ namespace BigWorld.Gameplay
         private void ClearRuntimeState()
         {
             Target = null;
+            alert.Forget();
             stateUntil = nextAttackAt = strikeFlashUntil = 0;
             State = PatrolEnemyState.Dead;
             if (streamed) streamed.CombatPinned = false;

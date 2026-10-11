@@ -83,14 +83,26 @@ public sealed class SkillProjectileMotion
     }
 
     public static bool TryLaunch(SkillProjectileEvent data, Transform actor, Transform target, Vector3? point,
-        int index, out SkillAttackShape.Pose pose, out string error, SkillSpace space = SkillSpace.ThreeD)
+        int index, out SkillAttackShape.Pose pose, out string error, SkillSpace space = SkillSpace.ThreeD, Vector2? direction2D = null,
+        float heightMultiplier2D = 1)
     {
         pose = default;
         var anchor = new AttackSphereDetectionData { UseFootOrigin = true, Anchor = data.Anchor, Facing = data.Facing, SocketPath = data.SocketPath };
         if (!SkillAttackShape.TryCapture(anchor, actor, target, point, out var origin, out error, space)) return false;
         var rotation = space == SkillSpace.TwoD || data.Facing == SkillRangeFacing.SocketForward ? origin.Rotation : SkillAttackShape.Facing(origin.Rotation);
+        float height = data.LaunchHeight;
+        if (space == SkillSpace.TwoD && data.Facing == SkillRangeFacing.CharacterForward && direction2D.HasValue)
+        {
+            var direction = direction2D.Value;
+            double length = Math.Sqrt((double)direction.x * direction.x + (double)direction.y * direction.y);
+            if (double.IsNaN(length) || double.IsInfinity(length) || length == 0) { error = "二维发射方向必须为有限非零向量。"; return false; }
+            if (float.IsNaN(heightMultiplier2D) || float.IsInfinity(heightMultiplier2D) || heightMultiplier2D <= 0)
+            { error = "二维发射高度倍率必须为有限正数。"; return false; }
+            height *= heightMultiplier2D;
+            rotation = SkillFacing2D.Look(new Vector2((float)(direction.x / length), (float)(direction.y / length)));
+        }
         var position = origin.Position + (space == SkillSpace.TwoD
-            ? rotation * Vector3.right * data.LaunchForward + Vector3.up * data.LaunchHeight
+            ? rotation * Vector3.right * data.LaunchForward + Vector3.up * height
             : rotation * new Vector3(0, data.LaunchHeight, data.LaunchForward));
         if (data.Facing == SkillRangeFacing.TowardTarget && target != null && (target.position - position).sqrMagnitude > .000001f)
             rotation = space == SkillSpace.TwoD ? SkillFacing2D.Look(target.position - position) : Quaternion.LookRotation((target.position - position).normalized, Vector3.up);

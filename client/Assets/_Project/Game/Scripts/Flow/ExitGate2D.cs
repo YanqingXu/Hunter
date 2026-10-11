@@ -10,7 +10,8 @@ namespace BigWorld.Gameplay
         private void Update()
         {
             var level = LevelSession2D.Instance;
-            if (Indicator && level) Indicator.color = level.DefeatedEnemies >= level.RequiredKills ? new Color(.25f, 1, .7f) : new Color(1, .45f, .2f);
+            if (Indicator && level) Indicator.color = (level.Hunt ? !level.Hunt.ExitContested : level.DefeatedEnemies >= level.RequiredKills)
+                ? new Color(.25f, 1, .7f) : new Color(1, .45f, .2f);
         }
         private void OnTriggerEnter2D(Collider2D other) { TryExit(other); }
         private void OnTriggerStay2D(Collider2D other) { TryExit(other); }

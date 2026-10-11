@@ -49,6 +49,8 @@ public sealed class SkillProjectile : MonoBehaviour
     private double engineTime;
     private int hitCount;
     private int rate, launchFrame;
+    private ISkillProjectileTraversal traversal;
+    public float CurrentDamage => traversal == null ? Context.AttackValue : traversal.Damage;
 
     internal static SkillProjectile Spawn(SkillProjectileEvent configured, SkillInstance source, ISkillActor caster,
         float attackValue, Transform target, SkillAttackShape.Pose launch, LayerMask targetLayers, Scene scene)
@@ -62,6 +64,7 @@ public sealed class SkillProjectile : MonoBehaviour
             projectile.data = configured.Copy();
             projectile.rate = source.FrameRate; projectile.launchFrame = source.CurrentFrame;
             projectile.Context = new SkillProjectileContext(source.Id, source.Source, caster, attackValue, projectile.data, root.scene);
+            projectile.traversal = source.ProjectileSettings?.CreateTraversal();
             projectile.Context.QueryScene = source.QueryScene;
             projectile.Context.QueryScene2D = source.QueryScene2D; projectile.Context.Space = source.Space;
             projectile.Context.AudioService = source.AudioService;
@@ -143,6 +146,11 @@ public sealed class SkillProjectile : MonoBehaviour
     }
 
     private struct Contact { public Component Collider; public float Distance; public Vector3 Point; }
+    private bool IsSolidObstacle(Component collider)
+    {
+        return collider && data.StopAtWalls && !SkillCollider.IsTrigger(collider) &&
+            (data.WallLayers.value & (1 << collider.gameObject.layer)) != 0 && collider.GetComponentInParent<ISkillHitTarget>() == null;
+    }
     private bool Sweep(SkillAttackShape.Pose from, SkillAttackShape.Pose to)
     {
         if (!Alive) return false;
@@ -168,17 +176,23 @@ public sealed class SkillProjectile : MonoBehaviour
                     contacts[hit.collider] = new Contact { Collider = hit.collider, Point = hit.point, Distance = hit.distance };
         }
         var sorted = new List<Contact>(contacts.Values);
-        sorted.Sort((a, b) => { int c = a.Distance.CompareTo(b.Distance); return c != 0 ? c : a.Collider.GetInstanceID().CompareTo(b.Collider.GetInstanceID()); });
+        sorted.Sort((a, b) => {
+            int c = a.Distance.CompareTo(b.Distance); if (c != 0) return c;
+            // A spawn overlap must resolve solid cover before an equally near target, regardless of creation order.
+            bool aWall = IsSolidObstacle(a.Collider), bWall = IsSolidObstacle(b.Collider);
+            if (aWall != bWall) return aWall ? -1 : 1;
+            return a.Collider.GetInstanceID().CompareTo(b.Collider.GetInstanceID());
+        });
         foreach (var contact in sorted)
         {
             if (!Alive) return false;
             if (contact.Collider == null) continue;
             var hitTarget = contact.Collider.GetComponentInParent<ISkillHitTarget>();
             if (data.HitRules.ExcludeSelf && ReferenceEquals(hitTarget, Context.Caster)) continue;
-            bool wall = data.StopAtWalls && !SkillCollider.IsTrigger(contact.Collider) &&
-                (data.WallLayers.value & (1 << contact.Collider.gameObject.layer)) != 0 && hitTarget == null;
+            bool wall = IsSolidObstacle(contact.Collider);
             if (wall)
             {
+                if (traversal != null && traversal.TryPass(contact.Collider)) continue;
                 transform.position = from.Position + (length > 0 ? delta / length * contact.Distance : Vector3.zero);
                 Stop(true, SkillProjectileStopReason.Wall); return false;
             }
@@ -186,7 +200,7 @@ public sealed class SkillProjectile : MonoBehaviour
                 !SkillHitRules.Accepts(data.HitRules, Context.Caster, hitTarget, from.Position, contact.Point, Context.QueryScene, Context.Space, Context.QueryScene2D) ||
                 !Context.Hits.Register(hitTarget, data.HitRules, Motion.Age)) continue;
             var attack = new SkillHitData { Projectile = Context, detectionEvent = Context.Attack, soure = Context.Caster,
-                attackValue = Context.AttackValue, hitPoint = contact.Point, DetectionOrigin = from.Position, HitLedger = Context.Hits };
+                attackValue = CurrentDamage, hitPoint = contact.Point, DetectionOrigin = from.Position, HitLedger = Context.Hits };
             hitCount++;
             onHit?.Invoke(hitTarget, attack);
             if (!Alive) return false;

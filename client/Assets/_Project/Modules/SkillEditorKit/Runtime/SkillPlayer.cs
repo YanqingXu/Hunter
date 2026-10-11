@@ -70,21 +70,41 @@ public class SkillPlayer : SerializedMonoBehaviour
 
     public void PlaySkillClip(SkillClip clip)
     {
+        TryPlaySkillClip(clip);
+    }
+
+    /// <summary>Reports whether a cast was accepted, including clips completing on their first frame.</summary>
+    public bool TryPlaySkillClip(SkillClip clip) => TryPlaySkillClip(clip, null);
+
+    public bool TryPlaySkillClip(SkillClip clip, Vector2? projectileDirection2D, float projectileHeightMultiplier2D = 1,
+        ISkillProjectileSettings projectileSettings = null)
+    {
+        if (float.IsNaN(projectileHeightMultiplier2D) || float.IsInfinity(projectileHeightMultiplier2D) || projectileHeightMultiplier2D <= 0) return false;
+        if (projectileDirection2D.HasValue)
+        {
+            var value = projectileDirection2D.Value;
+            double length = Math.Sqrt((double)value.x * value.x + (double)value.y * value.y);
+            if (!clip || clip.Space != SkillSpace.TwoD || double.IsNaN(length) || double.IsInfinity(length) || length == 0) return false;
+            projectileDirection2D = new Vector2((float)(value.x / length), (float)(value.y / length));
+        }
         SkillInstance instance;
-        try { instance = new SkillInstance(clip, skillBehaviour) { QueryScene = QueryScene, QueryScene2D = QueryScene2D, AudioService = AudioService ?? SkillUnityAudio.Instance }; }
+        try { instance = new SkillInstance(clip, skillBehaviour, projectileSettings) { QueryScene = QueryScene, QueryScene2D = QueryScene2D,
+            AudioService = AudioService ?? SkillUnityAudio.Instance, ProjectileDirection2D = projectileDirection2D,
+            ProjectileHeightMultiplier2D = projectileHeightMultiplier2D }; }
         catch (Exception ex)
         {
             StopSkillClip(false);
             Debug.LogError("无法播放技能：" + ex.Message, this);
-            return;
+            return false;
         }
         // Same-behaviour combo releases keep their existing combo/cooldown policy.
         StopSkillClip(false);
-        if (CurrentInstance != null) return; // Resource cleanup re-entered and started another clip.
+        if (CurrentInstance != null) return false; // Resource cleanup re-entered and started another clip.
         CurrentInstance = instance;
         instance.Behaviour.AttachInstance(instance);
         EvaluateFrame(instance);
         if (IsCurrent(instance) && instance.LastFrame == 0) End(instance, SkillInstanceState.Completed, true);
+        return true;
     }
 
     public void StopSkillClip(bool notifySkillBehaviour = true)
@@ -273,11 +293,13 @@ public class SkillPlayer : SerializedMonoBehaviour
             var actor = modelTransform != null ? modelTransform : transform;
             for (int index = 0; index < data.Count; index++)
             {
-                if (!SkillProjectileMotion.TryLaunch(data, actor, AimTarget, AimPoint, index, out var pose, out error, instance.Space))
+                if (!SkillProjectileMotion.TryLaunch(data, actor, AimTarget, AimPoint, index, out var pose, out error, instance.Space,
+                    instance.ProjectileDirection2D, instance.ProjectileHeightMultiplier2D))
                 { Debug.LogWarning("投射物未发射：" + error, this); break; }
                 if (data.Flight == SkillProjectileFlight.Homing && AimTarget == null)
                 { Debug.LogWarning("追踪投射物未发射：未指定目标。", this); break; }
-                float damage = owner.GetAttackValue(new SkillAttackDetectionEvent { AttackHitConfig = data.Hit });
+                float damage = instance.ProjectileSettings == null ? owner.GetAttackValue(new SkillAttackDetectionEvent { AttackHitConfig = data.Hit }) :
+                    instance.ProjectileSettings.Damage;
                 if (!IsCurrent(instance)) return;
                 var projectile = SkillProjectile.Spawn(data, instance, owner, damage, AimTarget, pose, attackDetectionLayer, gameObject.scene);
                 if (!IsCurrent(instance)) return;

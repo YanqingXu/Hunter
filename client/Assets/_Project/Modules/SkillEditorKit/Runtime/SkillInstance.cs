@@ -17,6 +17,10 @@ public sealed class SkillInstance
     public SkillBehaviourBase Behaviour { get; }
     public PhysicsScene? QueryScene { get; internal set; }
     public PhysicsScene2D? QueryScene2D { get; internal set; }
+    // Value snapshot for this cast only; omitted by legacy callers and never written into SkillClip.
+    public Vector2? ProjectileDirection2D { get; internal set; }
+    public float ProjectileHeightMultiplier2D { get; internal set; } = 1;
+    public ISkillProjectileSettings ProjectileSettings { get; }
     public SkillSpace Space { get; }
     public int FrameRate { get; }
     public int LastFrame { get; }
@@ -54,7 +58,7 @@ public sealed class SkillInstance
 
     private sealed class OwnedResource { public Action Release; public long End; }
 
-    public SkillInstance(SkillClip clip, SkillBehaviourBase behaviour)
+    public SkillInstance(SkillClip clip, SkillBehaviourBase behaviour, ISkillProjectileSettings projectileSettings = null)
     {
         if (clip == null) throw new ArgumentNullException(nameof(clip));
         if (behaviour == null) throw new ArgumentNullException(nameof(behaviour));
@@ -63,6 +67,7 @@ public sealed class SkillInstance
         if (clip.DataVersion > SkillClip.CurrentDataVersion) throw new ArgumentException("不支持的技能数据版本", nameof(clip));
         if (!Enum.IsDefined(typeof(SkillSpace), clip.Space)) throw new ArgumentException("未知的游戏空间");
         Space = clip.Space; Source = clip; Behaviour = behaviour; FrameRate = clip.FrameRote; LastFrame = clip.FrameCount;
+        ProjectileSettings = projectileSettings;
         if (!SkillTrackModel.ValidateStructure(clip, out string structuralError)) throw new ArgumentException(structuralError);
         Custom = new Dictionary<int, List<SkillCustomEvent>>();
         Animation = new Dictionary<int, SkillAnimationEvent>();
@@ -73,6 +78,7 @@ public sealed class SkillInstance
         foreach (var entry in SkillTrackModel.Read(clip, true))
         {
             var data = Copy(entry.Data);
+            if (data is SkillProjectileEvent projectile && projectileSettings != null) data = projectileSettings.Configure(projectile, FrameRate);
             SkillTrackModel.SetFrame(data, entry.Frame);
             if (!SkillMediaTiming.Validate(data, FrameRate, out string reason)) throw new ArgumentException(reason);
             if (data is SkillAttackDetectionEvent attack &&
