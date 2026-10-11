@@ -1,0 +1,12 @@
+Use case: stylized-concept. Create a CHARACTER-ONLY WALK CYCLE, eight distinct sequential poses of reference adult01 hunter, in EXACTLY4columns×2rows. Original01identityreference + character-onlysideviewreference. This is a NEW walk cycle: do NOT copy the legposes or atlas layout from secondreference. Canvas1536x1024,384x512equalcells. Fullfigure about375pixels tall, groundy470, bodyhipx180, 30pxmargin. Samecharacter size all8frames. SIDEprofileFACINGRIGHT. Preservebroadcurved strawhat curledornament/danglingcreamstrips;navy asymmetricbluecoatcreaminnerrobe/redcollar, brownwaistpouch/tallboots, simplifiedfacelessskin, mutedpalette hardpixelart.
+NO GUN anywhere: firearms are separate resource. Bothhands EMPTY butbotharmsheldforwardinrifle-readypose: smallrearclosedfist infrontofchest,frontcuppedpalm30pxfurtherright atsameheight. Armsdonotswing. No stock/barrel/trigger/magazine orplaceholdergun.
+Critical legcycle with NEAR/rightbootlighterbrown and FAR/leftbootdarker:
+TOPROW1:nearRIGHTlegstretchedFORWARDheelcontact,farLEFTlegstretchedBACKtoecontact. WideinvertedV.
+TOPROW2:nearRIGHTlegfrontbentDOWNsupport,farLEFTlegBACKfootlift. Midstride.
+TOPROW3:nearRIGHTlegstraightVERTICALunderhips;farLEFTkneebentpassesFORWARDfootoffground. Narrowlegs.
+TOPROW4:nearRIGHTlegbackheelrises;farLEFTlegreachesFORWARDpreparingcontact.
+BOTTOMROW1:farLEFTlegstretchedFORWARDheelcontact;nearRIGHTlegstretchedBACKtoecontact. OPPOSITEcontactofTOPROW1; foregroundnearRIGHTbootobviouslybehind.
+BOTTOMROW2:farLEFTlegfrontbentDOWNsupport;nearRIGHTlegBACKfootlift.
+BOTTOMROW3:farLEFTlegstraightVERTICALunderhips;nearRIGHTkneebentpassesFORWARDforegroundfootoffground. Narrowlegs.
+BOTTOMROW4:farLEFTlegbackheelrises;nearRIGHTlegreachesFORWARDpreparingTOPROW1.
+Clear alternation of which leg isforward, visible legcrossing, clearcontact/down/passing/up poses. Upperbodybobs2px; coatundulatessmallamountwithmovement. Do notrender8copiesofsameforwardlegpose. Chronologicalloop8. Exactly8fullfigures, no labels,text,borders,background,shadows,glow. Genuinealpha transparency, cleanstrongsilhouette, noantialiasblur.

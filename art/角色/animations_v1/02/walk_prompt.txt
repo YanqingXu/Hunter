@@ -1,0 +1,17 @@
+Use case: stylized-concept
+Generate a production GAME CHARACTER BODY ONLY WALK8SPRITESHEET. Gun is a separate game object. Absolutely no rifle/gun/weapon/object pixels. Emptyhands poseforgrippingan INVISIBLErifle pointingRIGHT.
+Referenceimage1 is adult character identity and original chunky pixelartstyle. Referenceimage2 is bodycostume/emptyhandrifleholdpose only; its incorrectwalkstride repetitionmustbecorrected.
+LAYOUT: exact4columns×2rows=8frames, canvas1536×1024, cells384×512. All8characterssame200pixelstandingheight withmassiveemptyspace: feather atlocaly150 andcontactfeetatlocaly430approximately, bodyheightabout280pixels. Centerbodyatlocalx170. Alllimbsandhairwithineachcell. WholecharactersallfaceRIGHT inperfectsideprofile, identicalrightpointingnose, chest, arm,hand direction throughoutall8cells. NEVERturnaround. Nevermirroranyframe. Cameraandcharacterfacingsneverchange. Frames1–4toprowthen5–8bottomrow.
+TheonlymotioniswalkingLEGS, withgentle3pixelbodybob. Headtorsoandemptyhandsstayalmostfixed. EMPTY bentarmsinthe SAMErifleholdingstanceat chestheightineveryframe: rearhandnearbodyisfistgrip, forwardhandfurtherrightiscupgrip; handsatdifferenthorizontalpositions, readytobeplacedonaseparaterifle. Nocarriedobject.
+ANIMATION: a proper 8-phase WALKLOOP. The NEARleg isbrighterpeach visiblyinfront; FARleg issubtlydarkerbehind. Theybothhavethegreenwraps. NEAR/FARrefertosidelayering ONLY, notfacingdirection. The character NEVERchangesfacingdirection.
+Frame1: NEARlegfrontstraight, heelgroundcontactandtoeraised; FARlegbackstraightwithtoegroundcontactheelhigh, widecontactstride.
+Frame2: NEARlegfrontbearingweightkneecompresses; FARlegbackkneebendsandheelriseswithfootjustlifting.
+Frame3: NEARlegverticalstraightunderhipfootflatgrounded; FARlegbentandliftedpassingdirectlybesidenearankle. Narrowpassingpose.
+Frame4: NEARlegbehindhip heelhighon toes; FARlegextendedforwardsinairtoapproachground. Thisisup/highbodyphase.
+Frame5: FARlegfrontstraight heelcontact; NEARlegclearlyBACKBEHINDhiptoeingoff. Widecontactstride withOPPOSITElegfromframe1.
+Frame6: FARlegfrontbearingweightkneecompresses; NEARlegbehindknee bends footlifts.
+Frame7: FARlegverticalunderhipfootflat; NEARlegkneebentandfootliftedpassingbesidethefarankle. Narrowpassingposeoppositelegsfromframe3.
+Frame8: FARlegbehindheelhighontoes; NEARlegextendsforwardsinairreadyfortheframe1heelcontact. Seamlessloopbacktoframe1.
+Require BOTHwidecontactposes and BOTHnarrowpassingposes, bothlegsvisiblyalternating. DoNOTmakeall8poseswithsamefrontleg. DoNOTswitchtheheadorbodyfacingtoachievelegswap.
+Characterexactidentity: adultfemale, originalblankfacewithoutaddedeyes; ornate silvergrayhelmetandbrownuprightfeather; longblackponytail; greenleafshoulders; brickredcroptop whitebibtrim; tan/ochresash/skirtpurpleornaments; greencrisscrosslegwraps;ochrebands;mutedpeachskin. Sameclothes,bodyproportions,paletteandsizeeachframe.
+Hardcrispchunkypixelart, flatcolor, minimalshading, source-like restrainedpixelblocks, nogradients/noisytexture. Genuinetransparentalpha background, solidsprites, nofaintbackgroundhaze, nolabels/numbers/text/borders/shadow/scenery/checkerboard, noweapon/stock/barrel/rifle, noextralimbs.

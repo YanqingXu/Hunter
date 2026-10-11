@@ -1,0 +1,6 @@
+Use case: precise-object-edit.
+Input image is the EDIT TARGET running8-frame4x2sprite sheet. Preserve transparent alpha.
+Change ONLY arm/forearm/emptyhand geometry in ALL8sprites. Keep every face, hair, backpack, robe, torso lean, near/far legpose, darkvsbrownshoe, sprite size, cellposition,4x2layout and coarse pixelstyle exactlyunchanged.
+The game draws rifle as separateasset. Do NOT drawANYweaponorheldobject.
+In every frame create proper twohanded rifle-holding emptyfists, ALLpointingRIGHT: REARhand is a SMALL CLOSED FIST justinfrontof upperCHEST; SUPPORThand is a SMALL CLOSED FIST clearly fartherforward, about50pixels ahead. BOTH fists restonexactlythe SAME HORIZONTAL HEIGHT nearupperchest. Their finger openings face likegripping aninvisiblehorizontalweapon. Hands separated alonghorizontalaxis, NOT stackedvertically, NOT overlapping, NOT claws. Rearfist attachedto bentelbow, supportfist attachedto moreextendedforearm; bothshoulders/armsanatomicallyconnected. Maintainoriginal lightcreamsleeves. SAME horizontalhold geometry forall8frames, trackingtorsolean. Emptyairgap betweenfists, no line/barrel/stockorweaponpixels. Every character remains facingRIGHT.
+No otherchanges. No text,labels,shadows,background,extra limbs,fingers,clipping.

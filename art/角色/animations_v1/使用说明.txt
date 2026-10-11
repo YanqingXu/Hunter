@@ -1,0 +1,59 @@
+Hunter 角色帧动画 v1
+
+本目录为依据 art/角色/01.png、02.png、03.png 生成的第一版横版动作素材。
+角色图片不包含枪械。双手保持持枪姿态，枪作为独立 Sprite 随逐帧挂点播放。
+原始三个静态图保留不变；本次未修改 Unity 客户端、场景或动画控制器。
+
+交付内容
+01/、02/、03/ 各包含：
+  frames/walk_00.png 至 walk_07.png：走，10 FPS，循环。
+  frames/run_00.png 至 run_07.png：跑，14 FPS，循环。
+  frames/jump_00.png 至 jump_07.png：跳，10 FPS，单次。
+  frames/crawl_00.png 至 crawl_07.png：匍匐，8 FPS，循环。
+  walk.png、run.png、jump.png、crawl.png：8 列动作条，1536×256。
+  spritesheet.png：8 列 ×4 行，1536×1024；行顺序为走、跑、跳、匍匐。
+  *_preview.gif：预览用，棋盘格属于预览背景；正式 PNG 保留真实 alpha。
+  contact_sheet.png：静态透明度检查图。
+  sockets.json：逐帧握把、支撑手、后手和朝向坐标。
+  socket_inspection.png：带挂点标记的检查图（如有）。
+  manifest.json：帧序、帧率、循环、画布、Pivot、源图和挂点。
+  validation.json：切帧尺寸、透明度、完整性和非重复像素检查。
+
+单帧统一为 192×256，底部中心 Pivot=(0.5,0)。默认朝右，朝左时水平翻转。
+使用 Point 过滤，关闭 Mipmap、压缩，使用 Sprite (2D and UI)。
+角色高度约224像素；PPU应按项目角色实际世界高度设定，不能直接套用当前24×24测试人物的PPU。
+
+独立枪械配合方式
+1. 人物 SpriteRenderer 播放当前帧；武器使用另一个 SpriteRenderer。
+2. 在枪图片上标定 TriggerGrip（扳机握把）Pivot，把它对齐当前帧 weaponSocket.grip。
+3. sockets 坐标以单帧左上角为(0,0)，x向右、y向下；角度以顺时针度数表示。
+   Unity使用底部中心Pivot时，武器挂点 localPosition：
+     x = (grip.x - 96) / PPU
+     y = (256 - grip.y) / PPU
+   Unity旋转角 z = -angle。
+4. front_hand 为支撑手参考点；rear_hand 为后手参考点。
+   这些坐标按当前手势估算，并在预览中核对；不同枪的握把/前握把位置、长度和Pivot需用实际枪图校准。
+   枪的实际前握把与 front_hand 不重合时，可调整枪的尺寸/角度或使用手部IK。
+5. 推荐武器放在人物前一层；需要手指遮挡枪时，另设前手覆盖层。
+   本版导出的是人物整体层，没有独立的前手遮挡层。
+6. 向左时将人物和枪挂在同一个镜像根节点下；若仅使用 SpriteRenderer.flipX，须同时镜像枪和挂点。
+   显示像素坐标的连续镜像公式为 x'=192-x，朝向向量x分量取负。
+7. 跳跃帧是起跳、上升、顶点、下落、落地的姿态序列，实际世界位移由角色控制器负责。
+
+预览
+双击 preview.html，选择角色和动作，可播放、暂停、调速、切换左右朝向。
+通过“独立枪 PNG”选择已有枪图，设置其握把Pivot和缩放；勾选“显示握把锚点”检查跟随。
+枪图只在本地浏览器中读取，不上传、不保存到项目。
+
+生成与再打包
+图片使用内置 ImageGen 生成/修正。每个角色目录中的 *prompt.txt 保存了实际提示词。
+source_sheet.png 是角色整体动作源；walk_source.png、run_source.png 是重做的动作源。
+切帧脚本 build_animations.py 仅识别轮廓以确定裁切矩形、按最近邻缩放和排版，保留源RGBA；不绘制新姿态、不抠掉颜色。
+使用带 Pillow 和 NumPy 的 Python 执行：
+  python build_animations.py --characters 01 02 03 --strict
+自动识别的图集行距可能不等；通过 layout.json 可手动指定裁切、缩放、平移。
+修改 sockets.json 后重新运行脚本，将同步更新清单和预览。
+_drafts/（如有）保存被替换的候选图，仅供制作过程参考，包含早期绘入枪械或方向错误的候选，不作为游戏资源。
+
+这是第一版AI生成动作素材。不同动作源之间的衣纹、帽饰和轮廓仍有细小变化，可用于动作验证；正式定稿建议逐帧统一像素细节。
+

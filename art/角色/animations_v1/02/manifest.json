@@ -1,0 +1,1803 @@
+{
+  "version": 1,
+  "character": "02",
+  "canvas": [
+    192,
+    256
+  ],
+  "bodyOnly": true,
+  "bodyonly": true,
+  "separateGun": true,
+  "coordinateSystem": "top-left origin; x right, y down; angle clockwise degrees",
+  "pivot": {
+    "normalized": [
+      0.5,
+      0
+    ],
+    "pixelsTopLeft": [
+      96,
+      256
+    ],
+    "unity": "bottom-center"
+  },
+  "weaponAttachment": {
+    "bodyOnly": true,
+    "separateGun": true,
+    "socketSource": "sockets.json",
+    "gunPivot": "Align the separate gun grip pivot with each frame grip socket.",
+    "facingFlip": "Mirror body and gun together. Pixel socket x becomes canvasWidth-x; muzzle_direction.x changes sign. In Unity mirror the common parent and retain local socket coordinates and angle.",
+    "gunScale": "Gun pixels must use the canonical body pixel scale; the exported frames contain no gun."
+  },
+  "sources": {
+    "walk_source.png": {
+      "sha256": "d97d6d72c3d66d1e54cd39e92d1655c6943159c22d6da0b2619efc0271518572",
+      "size": [
+        1536,
+        1024
+      ],
+      "mode": "RGBA",
+      "grid": [
+        4,
+        2
+      ]
+    },
+    "run_source.png": {
+      "sha256": "3f8a59e6a53c84bf6b2ef764f0da5e4c372c2a344396b62a26d0027d77364102",
+      "size": [
+        1536,
+        1024
+      ],
+      "mode": "RGBA",
+      "grid": [
+        4,
+        2
+      ]
+    },
+    "source_sheet.png": {
+      "sha256": "42dfb98cabf7bf1c6ce70780b3232ffb25ba101d507b155a62fcb9ab7db14166",
+      "size": [
+        1536,
+        1024
+      ],
+      "mode": "RGBA",
+      "grid": [
+        8,
+        4
+      ]
+    }
+  },
+  "actions": {
+    "walk": {
+      "fps": 10,
+      "loop": true,
+      "frameCount": 8,
+      "strip": "walk.png",
+      "preview": "walk_preview.gif",
+      "frames": [
+        {
+          "index": 0,
+          "file": "frames/walk_00.png",
+          "durationMs": 100.0,
+          "cropBox": [
+            73,
+            8,
+            324,
+            481
+          ],
+          "scale": [
+            0.4817204301075269,
+            0.4817204301075269
+          ],
+          "paste": [
+            35,
+            20
+          ],
+          "sourceVerticalOffset": 0,
+          "bounds": [
+            35,
+            20,
+            156,
+            248
+          ],
+          "pivot": [
+            0.5,
+            0
+          ],
+          "weaponSocket": {
+            "grip": [
+              115.4,
+              119.2
+            ],
+            "rear_hand": [
+              115.4,
+              119.2
+            ],
+            "front_hand": [
+              141.9,
+              115.1
+            ],
+            "angle": -8.79,
+            "muzzle_direction": [
+              0.9882,
+              -0.1529
+            ],
+            "estimated": true,
+            "angleEstimated": true,
+            "reviewStatus": "candidate",
+            "confidence": "candidate: separate fist and support palm skin components"
+          }
+        },
+        {
+          "index": 1,
+          "file": "frames/walk_01.png",
+          "durationMs": 100.0,
+          "cropBox": [
+            451,
+            8,
+            701,
+            481
+          ],
+          "scale": [
+            0.4817204301075269,
+            0.4817204301075269
+          ],
+          "paste": [
+            36,
+            20
+          ],
+          "sourceVerticalOffset": 0,
+          "bounds": [
+            36,
+            20,
+            156,
+            248
+          ],
+          "pivot": [
+            0.5,
+            0
+          ],
+          "weaponSocket": {
+            "grip": [
+              116.2,
+              119.4
+            ],
+            "rear_hand": [
+              116.2,
+              119.4
+            ],
+            "front_hand": [
+              144.5,
+              115.2
+            ],
+            "angle": -8.44,
+            "muzzle_direction": [
+              0.9892,
+              -0.1468
+            ],
+            "estimated": true,
+            "angleEstimated": true,
+            "reviewStatus": "candidate",
+            "confidence": "low: fist skin is connected to forearm; review local-window centroid"
+          }
+        },
+        {
+          "index": 2,
+          "file": "frames/walk_02.png",
+          "durationMs": 100.0,
+          "cropBox": [
+            843,
+            8,
+            1085,
+            481
+          ],
+          "scale": [
+            0.4817204301075269,
+            0.4817204301075269
+          ],
+          "paste": [
+            37,
+            20
+          ],
+          "sourceVerticalOffset": 0,
+          "bounds": [
+            37,
+            20,
+            154,
+            248
+          ],
+          "pivot": [
+            0.5,
+            0
+          ],
+          "weaponSocket": {
+            "grip": [
+              114.0,
+              119.4
+            ],
+            "rear_hand": [
+              114.0,
+              119.4
+            ],
+            "front_hand": [
+              142.5,
+              115.1
+            ],
+            "angle": -8.58,
+            "muzzle_direction": [
+              0.9888,
+              -0.1492
+            ],
+            "estimated": true,
+            "angleEstimated": true,
+            "reviewStatus": "candidate",
+            "confidence": "low: fist skin is connected to forearm; review local-window centroid"
+          }
+        },
+        {
+          "index": 3,
+          "file": "frames/walk_03.png",
+          "durationMs": 100.0,
+          "cropBox": [
+            1220,
+            8,
+            1486,
+            481
+          ],
+          "scale": [
+            0.4817204301075269,
+            0.4817204301075269
+          ],
+          "paste": [
+            32,
+            20
+          ],
+          "sourceVerticalOffset": 0,
+          "bounds": [
+            32,
+            20,
+            160,
+            248
+          ],
+          "pivot": [
+            0.5,
+            0
+          ],
+          "weaponSocket": {
+            "grip": [
+              112.0,
+              119.5
+            ],
+            "rear_hand": [
+              112.0,
+              119.5
+            ],
+            "front_hand": [
+              140.3,
+              115.1
+            ],
+            "angle": -8.84,
+            "muzzle_direction": [
+              0.9881,
+              -0.1536
+            ],
+            "estimated": true,
+            "angleEstimated": true,
+            "reviewStatus": "candidate",
+            "confidence": "low: fist skin is connected to forearm; review local-window centroid"
+          }
+        },
+        {
+          "index": 4,
+          "file": "frames/walk_04.png",
+          "durationMs": 100.0,
+          "cropBox": [
+            49,
+            521,
+            331,
+            993
+          ],
+          "scale": [
+            0.4817204301075269,
+            0.4817204301075269
+          ],
+          "paste": [
+            28,
+            21
+          ],
+          "sourceVerticalOffset": 0,
+          "bounds": [
+            28,
+            21,
+            164,
+            248
+          ],
+          "pivot": [
+            0.5,
+            0
+          ],
+          "weaponSocket": {
+            "grip": [
+              117.7,
+              118.9
+            ],
+            "rear_hand": [
+              117.7,
+              118.9
+            ],
+            "front_hand": [
+              146.4,
+              115.4
+            ],
+            "angle": -6.95,
+            "muzzle_direction": [
+              0.9926,
+              -0.1211
+            ],
+            "estimated": true,
+            "angleEstimated": true,
+            "reviewStatus": "candidate",
+            "confidence": "low: fist skin is connected to forearm; review local-window centroid"
+          }
+        },
+        {
+          "index": 5,
+          "file": "frames/walk_05.png",
+          "durationMs": 100.0,
+          "cropBox": [
+            451,
+            518,
+            701,
+            992
+          ],
+          "scale": [
+            0.4817204301075269,
+            0.4817204301075269
+          ],
+          "paste": [
+            36,
+            20
+          ],
+          "sourceVerticalOffset": 0,
+          "bounds": [
+            36,
+            20,
+            156,
+            248
+          ],
+          "pivot": [
+            0.5,
+            0
+          ],
+          "weaponSocket": {
+            "grip": [
+              116.0,
+              119.8
+            ],
+            "rear_hand": [
+              116.0,
+              119.8
+            ],
+            "front_hand": [
+              144.7,
+              115.5
+            ],
+            "angle": -8.52,
+            "muzzle_direction": [
+              0.989,
+              -0.1482
+            ],
+            "estimated": true,
+            "angleEstimated": true,
+            "reviewStatus": "candidate",
+            "confidence": "low: fist skin is connected to forearm; review local-window centroid"
+          }
+        },
+        {
+          "index": 6,
+          "file": "frames/walk_06.png",
+          "durationMs": 100.0,
+          "cropBox": [
+            837,
+            518,
+            1085,
+            992
+          ],
+          "scale": [
+            0.4817204301075269,
+            0.4817204301075269
+          ],
+          "paste": [
+            36,
+            20
+          ],
+          "sourceVerticalOffset": 0,
+          "bounds": [
+            36,
+            20,
+            155,
+            248
+          ],
+          "pivot": [
+            0.5,
+            0
+          ],
+          "weaponSocket": {
+            "grip": [
+              114.8,
+              119.6
+            ],
+            "rear_hand": [
+              114.8,
+              119.6
+            ],
+            "front_hand": [
+              143.6,
+              115.5
+            ],
+            "angle": -8.1,
+            "muzzle_direction": [
+              0.99,
+              -0.1409
+            ],
+            "estimated": true,
+            "angleEstimated": true,
+            "reviewStatus": "candidate",
+            "confidence": "low: fist skin is connected to forearm; review local-window centroid"
+          }
+        },
+        {
+          "index": 7,
+          "file": "frames/walk_07.png",
+          "durationMs": 100.0,
+          "cropBox": [
+            1213,
+            520,
+            1481,
+            993
+          ],
+          "scale": [
+            0.4817204301075269,
+            0.4817204301075269
+          ],
+          "paste": [
+            31,
+            20
+          ],
+          "sourceVerticalOffset": 0,
+          "bounds": [
+            31,
+            20,
+            160,
+            248
+          ],
+          "pivot": [
+            0.5,
+            0
+          ],
+          "weaponSocket": {
+            "grip": [
+              113.6,
+              119.1
+            ],
+            "rear_hand": [
+              113.6,
+              119.1
+            ],
+            "front_hand": [
+              142.5,
+              115.1
+            ],
+            "angle": -7.88,
+            "muzzle_direction": [
+              0.9906,
+              -0.1371
+            ],
+            "estimated": true,
+            "angleEstimated": true,
+            "reviewStatus": "candidate",
+            "confidence": "low: fist skin is connected to forearm; review local-window centroid"
+          }
+        }
+      ]
+    },
+    "run": {
+      "fps": 14,
+      "loop": true,
+      "frameCount": 8,
+      "strip": "run.png",
+      "preview": "run_preview.gif",
+      "frames": [
+        {
+          "index": 0,
+          "file": "frames/run_00.png",
+          "durationMs": 71.42857142857143,
+          "cropBox": [
+            55,
+            64,
+            338,
+            480
+          ],
+          "scale": [
+            0.5483476132190942,
+            0.5483476132190942
+          ],
+          "paste": [
+            18,
+            20
+          ],
+          "sourceVerticalOffset": 0,
+          "bounds": [
+            18,
+            21,
+            173,
+            248
+          ],
+          "pivot": [
+            0.5,
+            0
+          ],
+          "weaponSocket": {
+            "grip": [
+              126.5,
+              117.6
+            ],
+            "rear_hand": [
+              126.5,
+              117.6
+            ],
+            "front_hand": [
+              155.0,
+              113.2
+            ],
+            "angle": -8.78,
+            "muzzle_direction": [
+              0.9883,
+              -0.1526
+            ],
+            "estimated": true,
+            "angleEstimated": true,
+            "reviewStatus": "candidate",
+            "confidence": "candidate: separate fist and support palm skin components"
+          }
+        },
+        {
+          "index": 1,
+          "file": "frames/run_01.png",
+          "durationMs": 71.42857142857143,
+          "cropBox": [
+            450,
+            62,
+            707,
+            479
+          ],
+          "scale": [
+            0.5483476132190942,
+            0.5483476132190942
+          ],
+          "paste": [
+            25,
+            19
+          ],
+          "sourceVerticalOffset": 0,
+          "bounds": [
+            25,
+            20,
+            166,
+            248
+          ],
+          "pivot": [
+            0.5,
+            0
+          ],
+          "weaponSocket": {
+            "grip": [
+              123.0,
+              118.1
+            ],
+            "rear_hand": [
+              123.0,
+              118.1
+            ],
+            "front_hand": [
+              152.2,
+              114.5
+            ],
+            "angle": -7.03,
+            "muzzle_direction": [
+              0.9925,
+              -0.1224
+            ],
+            "estimated": true,
+            "angleEstimated": true,
+            "reviewStatus": "candidate",
+            "confidence": "candidate: separate fist and support palm skin components"
+          }
+        },
+        {
+          "index": 2,
+          "file": "frames/run_02.png",
+          "durationMs": 71.42857142857143,
+          "cropBox": [
+            812,
+            59,
+            1079,
+            477
+          ],
+          "scale": [
+            0.5483476132190942,
+            0.5483476132190942
+          ],
+          "paste": [
+            23,
+            19
+          ],
+          "sourceVerticalOffset": 0,
+          "bounds": [
+            23,
+            20,
+            169,
+            248
+          ],
+          "pivot": [
+            0.5,
+            0
+          ],
+          "weaponSocket": {
+            "grip": [
+              124.9,
+              117.7
+            ],
+            "rear_hand": [
+              124.9,
+              117.7
+            ],
+            "front_hand": [
+              155.1,
+              113.7
+            ],
+            "angle": -7.54,
+            "muzzle_direction": [
+              0.9913,
+              -0.1313
+            ],
+            "estimated": true,
+            "angleEstimated": true,
+            "reviewStatus": "candidate",
+            "confidence": "candidate: separate fist and support palm skin components"
+          }
+        },
+        {
+          "index": 3,
+          "file": "frames/run_03.png",
+          "durationMs": 71.42857142857143,
+          "cropBox": [
+            1196,
+            66,
+            1483,
+            465
+          ],
+          "scale": [
+            0.5483476132190942,
+            0.5483476132190942
+          ],
+          "paste": [
+            17,
+            29
+          ],
+          "sourceVerticalOffset": 0,
+          "bounds": [
+            17,
+            29,
+            174,
+            248
+          ],
+          "pivot": [
+            0.5,
+            0
+          ],
+          "weaponSocket": {
+            "grip": [
+              120.8,
+              126.8
+            ],
+            "rear_hand": [
+              120.8,
+              126.8
+            ],
+            "front_hand": [
+              149.1,
+              123.3
+            ],
+            "angle": -7.05,
+            "muzzle_direction": [
+              0.9924,
+              -0.1227
+            ],
+            "estimated": true,
+            "angleEstimated": true,
+            "reviewStatus": "candidate",
+            "confidence": "candidate: separate fist and support palm skin components"
+          }
+        },
+        {
+          "index": 4,
+          "file": "frames/run_04.png",
+          "durationMs": 71.42857142857143,
+          "cropBox": [
+            50,
+            560,
+            350,
+            976
+          ],
+          "scale": [
+            0.5483476132190942,
+            0.5483476132190942
+          ],
+          "paste": [
+            13,
+            20
+          ],
+          "sourceVerticalOffset": 0,
+          "bounds": [
+            13,
+            20,
+            178,
+            248
+          ],
+          "pivot": [
+            0.5,
+            0
+          ],
+          "weaponSocket": {
+            "grip": [
+              125.6,
+              117.2
+            ],
+            "rear_hand": [
+              125.6,
+              117.2
+            ],
+            "front_hand": [
+              153.9,
+              113.1
+            ],
+            "angle": -8.24,
+            "muzzle_direction": [
+              0.9897,
+              -0.1434
+            ],
+            "estimated": true,
+            "angleEstimated": true,
+            "reviewStatus": "candidate",
+            "confidence": "candidate: separate fist and support palm skin components"
+          }
+        },
+        {
+          "index": 5,
+          "file": "frames/run_05.png",
+          "durationMs": 71.42857142857143,
+          "cropBox": [
+            451,
+            559,
+            713,
+            972
+          ],
+          "scale": [
+            0.5483476132190942,
+            0.5483476132190942
+          ],
+          "paste": [
+            24,
+            22
+          ],
+          "sourceVerticalOffset": 0,
+          "bounds": [
+            24,
+            22,
+            168,
+            248
+          ],
+          "pivot": [
+            0.5,
+            0
+          ],
+          "weaponSocket": {
+            "grip": [
+              123.9,
+              119.2
+            ],
+            "rear_hand": [
+              123.9,
+              119.2
+            ],
+            "front_hand": [
+              153.5,
+              115.3
+            ],
+            "angle": -7.51,
+            "muzzle_direction": [
+              0.9914,
+              -0.1306
+            ],
+            "estimated": true,
+            "angleEstimated": true,
+            "reviewStatus": "candidate",
+            "confidence": "candidate: separate fist and support palm skin components"
+          }
+        },
+        {
+          "index": 6,
+          "file": "frames/run_06.png",
+          "durationMs": 71.42857142857143,
+          "cropBox": [
+            812,
+            559,
+            1082,
+            973
+          ],
+          "scale": [
+            0.5483476132190942,
+            0.5483476132190942
+          ],
+          "paste": [
+            22,
+            21
+          ],
+          "sourceVerticalOffset": 0,
+          "bounds": [
+            22,
+            21,
+            170,
+            248
+          ],
+          "pivot": [
+            0.5,
+            0
+          ],
+          "weaponSocket": {
+            "grip": [
+              126.9,
+              118.4
+            ],
+            "rear_hand": [
+              126.9,
+              118.4
+            ],
+            "front_hand": [
+              156.4,
+              114.3
+            ],
+            "angle": -7.91,
+            "muzzle_direction": [
+              0.9905,
+              -0.1377
+            ],
+            "estimated": true,
+            "angleEstimated": true,
+            "reviewStatus": "candidate",
+            "confidence": "candidate: separate fist and support palm skin components"
+          }
+        },
+        {
+          "index": 7,
+          "file": "frames/run_07.png",
+          "durationMs": 71.42857142857143,
+          "cropBox": [
+            1197,
+            559,
+            1485,
+            960
+          ],
+          "scale": [
+            0.5483476132190942,
+            0.5483476132190942
+          ],
+          "paste": [
+            17,
+            28
+          ],
+          "sourceVerticalOffset": 0,
+          "bounds": [
+            17,
+            29,
+            175,
+            248
+          ],
+          "pivot": [
+            0.5,
+            0
+          ],
+          "weaponSocket": {
+            "grip": [
+              120.5,
+              125.6
+            ],
+            "rear_hand": [
+              120.5,
+              125.6
+            ],
+            "front_hand": [
+              150.2,
+              121.6
+            ],
+            "angle": -7.67,
+            "muzzle_direction": [
+              0.9911,
+              -0.1335
+            ],
+            "estimated": true,
+            "angleEstimated": true,
+            "reviewStatus": "candidate",
+            "confidence": "candidate: separate fist and support palm skin components"
+          }
+        }
+      ]
+    },
+    "jump": {
+      "fps": 10,
+      "loop": false,
+      "frameCount": 8,
+      "strip": "jump.png",
+      "preview": "jump_preview.gif",
+      "frames": [
+        {
+          "index": 0,
+          "file": "frames/jump_00.png",
+          "durationMs": 100.0,
+          "cropBox": [
+            23,
+            636,
+            188,
+            849
+          ],
+          "scale": [
+            0.8342644320297952,
+            0.8342644320297952
+          ],
+          "paste": [
+            27,
+            70
+          ],
+          "sourceVerticalOffset": 0,
+          "bounds": [
+            27,
+            70,
+            165,
+            248
+          ],
+          "pivot": [
+            0.5,
+            0
+          ],
+          "weaponSocket": {
+            "grip": [
+              122.9,
+              165.0
+            ],
+            "rear_hand": [
+              122.9,
+              165.0
+            ],
+            "front_hand": [
+              151.7,
+              157.8
+            ],
+            "angle": -14.04,
+            "muzzle_direction": [
+              0.9701,
+              -0.2425
+            ],
+            "estimated": true,
+            "angleEstimated": true,
+            "reviewStatus": "candidate",
+            "confidence": "low: fist skin is connected to forearm; review local-window centroid"
+          }
+        },
+        {
+          "index": 1,
+          "file": "frames/jump_01.png",
+          "durationMs": 100.0,
+          "cropBox": [
+            216,
+            568,
+            375,
+            848
+          ],
+          "scale": [
+            0.8342644320297952,
+            0.8342644320297952
+          ],
+          "paste": [
+            29,
+            13
+          ],
+          "sourceVerticalOffset": 1,
+          "bounds": [
+            29,
+            13,
+            162,
+            247
+          ],
+          "pivot": [
+            0.5,
+            0
+          ],
+          "weaponSocket": {
+            "grip": [
+              120.6,
+              111.0
+            ],
+            "rear_hand": [
+              120.6,
+              111.0
+            ],
+            "front_hand": [
+              149.0,
+              103.1
+            ],
+            "angle": -15.54,
+            "muzzle_direction": [
+              0.9634,
+              -0.268
+            ],
+            "estimated": true,
+            "angleEstimated": true,
+            "reviewStatus": "candidate",
+            "confidence": "low: fist skin is connected to forearm; review local-window centroid"
+          }
+        },
+        {
+          "index": 2,
+          "file": "frames/jump_02.png",
+          "durationMs": 100.0,
+          "cropBox": [
+            403,
+            550,
+            562,
+            773
+          ],
+          "scale": [
+            0.8342644320297952,
+            0.8342644320297952
+          ],
+          "paste": [
+            29,
+            4
+          ],
+          "sourceVerticalOffset": 76,
+          "bounds": [
+            29,
+            4,
+            162,
+            190
+          ],
+          "pivot": [
+            0.5,
+            0
+          ],
+          "weaponSocket": {
+            "grip": [
+              120.3,
+              96.1
+            ],
+            "rear_hand": [
+              120.3,
+              96.1
+            ],
+            "front_hand": [
+              148.9,
+              88.6
+            ],
+            "angle": -14.69,
+            "muzzle_direction": [
+              0.9673,
+              -0.2537
+            ],
+            "estimated": true,
+            "angleEstimated": true,
+            "reviewStatus": "candidate",
+            "confidence": "low: fist skin is connected to forearm; review local-window centroid"
+          }
+        },
+        {
+          "index": 3,
+          "file": "frames/jump_03.png",
+          "durationMs": 100.0,
+          "cropBox": [
+            587,
+            527,
+            742,
+            740
+          ],
+          "scale": [
+            0.8342644320297952,
+            0.8342644320297952
+          ],
+          "paste": [
+            31,
+            4
+          ],
+          "sourceVerticalOffset": 109,
+          "bounds": [
+            31,
+            4,
+            160,
+            182
+          ],
+          "pivot": [
+            0.5,
+            0
+          ],
+          "weaponSocket": {
+            "grip": [
+              124.4,
+              95.0
+            ],
+            "rear_hand": [
+              124.4,
+              95.0
+            ],
+            "front_hand": [
+              148.0,
+              87.2
+            ],
+            "angle": -18.29,
+            "muzzle_direction": [
+              0.9495,
+              -0.3138
+            ],
+            "estimated": true,
+            "angleEstimated": true,
+            "reviewStatus": "candidate",
+            "confidence": "candidate: separate fist and support palm skin components"
+          }
+        },
+        {
+          "index": 4,
+          "file": "frames/jump_04.png",
+          "durationMs": 100.0,
+          "cropBox": [
+            769,
+            566,
+            929,
+            820
+          ],
+          "scale": [
+            0.8342644320297952,
+            0.8342644320297952
+          ],
+          "paste": [
+            29,
+            12
+          ],
+          "sourceVerticalOffset": 29,
+          "bounds": [
+            29,
+            12,
+            162,
+            224
+          ],
+          "pivot": [
+            0.5,
+            0
+          ],
+          "weaponSocket": {
+            "grip": [
+              120.5,
+              105.3
+            ],
+            "rear_hand": [
+              120.5,
+              105.3
+            ],
+            "front_hand": [
+              149.0,
+              96.7
+            ],
+            "angle": -16.79,
+            "muzzle_direction": [
+              0.9574,
+              -0.2889
+            ],
+            "estimated": true,
+            "angleEstimated": true,
+            "reviewStatus": "candidate",
+            "confidence": "low: fist skin is connected to forearm; review local-window centroid"
+          }
+        },
+        {
+          "index": 5,
+          "file": "frames/jump_05.png",
+          "durationMs": 100.0,
+          "cropBox": [
+            961,
+            583,
+            1120,
+            849
+          ],
+          "scale": [
+            0.8342644320297952,
+            0.8342644320297952
+          ],
+          "paste": [
+            29,
+            26
+          ],
+          "sourceVerticalOffset": 0,
+          "bounds": [
+            29,
+            26,
+            162,
+            248
+          ],
+          "pivot": [
+            0.5,
+            0
+          ],
+          "weaponSocket": {
+            "grip": [
+              120.0,
+              122.3
+            ],
+            "rear_hand": [
+              120.0,
+              122.3
+            ],
+            "front_hand": [
+              148.4,
+              115.4
+            ],
+            "angle": -13.66,
+            "muzzle_direction": [
+              0.9717,
+              -0.2361
+            ],
+            "estimated": true,
+            "angleEstimated": true,
+            "reviewStatus": "candidate",
+            "confidence": "low: fist skin is connected to forearm; review local-window centroid"
+          }
+        },
+        {
+          "index": 6,
+          "file": "frames/jump_06.png",
+          "durationMs": 100.0,
+          "cropBox": [
+            1154,
+            627,
+            1325,
+            849
+          ],
+          "scale": [
+            0.8342644320297952,
+            0.8342644320297952
+          ],
+          "paste": [
+            24,
+            63
+          ],
+          "sourceVerticalOffset": 0,
+          "bounds": [
+            24,
+            63,
+            167,
+            248
+          ],
+          "pivot": [
+            0.5,
+            0
+          ],
+          "weaponSocket": {
+            "grip": [
+              125.6,
+              166.2
+            ],
+            "rear_hand": [
+              125.6,
+              166.2
+            ],
+            "front_hand": [
+              153.9,
+              159.2
+            ],
+            "angle": -13.89,
+            "muzzle_direction": [
+              0.9707,
+              -0.2401
+            ],
+            "estimated": true,
+            "angleEstimated": true,
+            "reviewStatus": "candidate",
+            "confidence": "low: fist skin is connected to forearm; review local-window centroid"
+          }
+        },
+        {
+          "index": 7,
+          "file": "frames/jump_07.png",
+          "durationMs": 100.0,
+          "cropBox": [
+            1362,
+            562,
+            1510,
+            848
+          ],
+          "scale": [
+            0.8342644320297952,
+            0.8342644320297952
+          ],
+          "paste": [
+            34,
+            8
+          ],
+          "sourceVerticalOffset": 1,
+          "bounds": [
+            34,
+            8,
+            157,
+            247
+          ],
+          "pivot": [
+            0.5,
+            0
+          ],
+          "weaponSocket": {
+            "grip": [
+              115.2,
+              112.3
+            ],
+            "rear_hand": [
+              115.2,
+              112.3
+            ],
+            "front_hand": [
+              143.9,
+              104.2
+            ],
+            "angle": -15.76,
+            "muzzle_direction": [
+              0.9624,
+              -0.2716
+            ],
+            "estimated": true,
+            "angleEstimated": true,
+            "reviewStatus": "candidate",
+            "confidence": "low: fist skin is connected to forearm; review local-window centroid"
+          }
+        }
+      ]
+    },
+    "crawl": {
+      "fps": 8,
+      "loop": true,
+      "frameCount": 8,
+      "strip": "crawl.png",
+      "preview": "crawl_preview.gif",
+      "frames": [
+        {
+          "index": 0,
+          "file": "frames/crawl_00.png",
+          "durationMs": 125.0,
+          "cropBox": [
+            6,
+            870,
+            192,
+            983
+          ],
+          "scale": [
+            0.8342644320297952,
+            0.8342644320297952
+          ],
+          "paste": [
+            18,
+            154
+          ],
+          "sourceVerticalOffset": 0,
+          "bounds": [
+            18,
+            154,
+            173,
+            248
+          ],
+          "pivot": [
+            0.5,
+            0
+          ],
+          "weaponSocket": {
+            "grip": [
+              144.7,
+              227.3
+            ],
+            "rear_hand": [
+              144.7,
+              227.3
+            ],
+            "front_hand": [
+              164.8,
+              229.7
+            ],
+            "angle": 6.81,
+            "muzzle_direction": [
+              0.9929,
+              0.1186
+            ],
+            "estimated": true,
+            "angleEstimated": true,
+            "reviewStatus": "candidate",
+            "confidence": "low: nearby crawl palms share a skin component"
+          }
+        },
+        {
+          "index": 1,
+          "file": "frames/crawl_01.png",
+          "durationMs": 125.0,
+          "cropBox": [
+            192,
+            870,
+            384,
+            984
+          ],
+          "scale": [
+            0.8342644320297952,
+            0.8342644320297952
+          ],
+          "paste": [
+            16,
+            153
+          ],
+          "sourceVerticalOffset": 0,
+          "bounds": [
+            16,
+            153,
+            176,
+            248
+          ],
+          "pivot": [
+            0.5,
+            0
+          ],
+          "weaponSocket": {
+            "grip": [
+              146.7,
+              226.0
+            ],
+            "rear_hand": [
+              146.7,
+              226.0
+            ],
+            "front_hand": [
+              167.1,
+              228.3
+            ],
+            "angle": 6.43,
+            "muzzle_direction": [
+              0.9937,
+              0.112
+            ],
+            "estimated": true,
+            "angleEstimated": true,
+            "reviewStatus": "candidate",
+            "confidence": "low: nearby crawl palms share a skin component"
+          }
+        },
+        {
+          "index": 2,
+          "file": "frames/crawl_02.png",
+          "durationMs": 125.0,
+          "cropBox": [
+            387,
+            870,
+            576,
+            983
+          ],
+          "scale": [
+            0.8342644320297952,
+            0.8342644320297952
+          ],
+          "paste": [
+            17,
+            154
+          ],
+          "sourceVerticalOffset": 0,
+          "bounds": [
+            17,
+            154,
+            175,
+            248
+          ],
+          "pivot": [
+            0.5,
+            0
+          ],
+          "weaponSocket": {
+            "grip": [
+              140.8,
+              225.1
+            ],
+            "rear_hand": [
+              140.8,
+              225.1
+            ],
+            "front_hand": [
+              150.1,
+              230.2
+            ],
+            "angle": 28.74,
+            "muzzle_direction": [
+              0.8768,
+              0.4808
+            ],
+            "estimated": true,
+            "angleEstimated": true,
+            "reviewStatus": "candidate",
+            "confidence": "low: nearby crawl palms share a skin component"
+          }
+        },
+        {
+          "index": 3,
+          "file": "frames/crawl_03.png",
+          "durationMs": 125.0,
+          "cropBox": [
+            576,
+            869,
+            768,
+            983
+          ],
+          "scale": [
+            0.8342644320297952,
+            0.8342644320297952
+          ],
+          "paste": [
+            16,
+            153
+          ],
+          "sourceVerticalOffset": 0,
+          "bounds": [
+            16,
+            153,
+            176,
+            248
+          ],
+          "pivot": [
+            0.5,
+            0
+          ],
+          "weaponSocket": {
+            "grip": [
+              144.7,
+              226.3
+            ],
+            "rear_hand": [
+              144.7,
+              226.3
+            ],
+            "front_hand": [
+              164.8,
+              229.4
+            ],
+            "angle": 8.77,
+            "muzzle_direction": [
+              0.9883,
+              0.1524
+            ],
+            "estimated": true,
+            "angleEstimated": true,
+            "reviewStatus": "candidate",
+            "confidence": "low: nearby crawl palms share a skin component"
+          }
+        },
+        {
+          "index": 4,
+          "file": "frames/crawl_04.png",
+          "durationMs": 125.0,
+          "cropBox": [
+            768,
+            871,
+            960,
+            984
+          ],
+          "scale": [
+            0.8342644320297952,
+            0.8342644320297952
+          ],
+          "paste": [
+            16,
+            154
+          ],
+          "sourceVerticalOffset": 0,
+          "bounds": [
+            16,
+            154,
+            176,
+            248
+          ],
+          "pivot": [
+            0.5,
+            0
+          ],
+          "weaponSocket": {
+            "grip": [
+              141.4,
+              224.9
+            ],
+            "rear_hand": [
+              141.4,
+              224.9
+            ],
+            "front_hand": [
+              151.1,
+              231.5
+            ],
+            "angle": 34.23,
+            "muzzle_direction": [
+              0.8268,
+              0.5625
+            ],
+            "estimated": true,
+            "angleEstimated": true,
+            "reviewStatus": "candidate",
+            "confidence": "low: nearby crawl palms share a skin component"
+          }
+        },
+        {
+          "index": 5,
+          "file": "frames/crawl_05.png",
+          "durationMs": 125.0,
+          "cropBox": [
+            960,
+            870,
+            1152,
+            986
+          ],
+          "scale": [
+            0.8342644320297952,
+            0.8342644320297952
+          ],
+          "paste": [
+            16,
+            151
+          ],
+          "sourceVerticalOffset": 0,
+          "bounds": [
+            16,
+            151,
+            176,
+            248
+          ],
+          "pivot": [
+            0.5,
+            0
+          ],
+          "weaponSocket": {
+            "grip": [
+              145.2,
+              224.2
+            ],
+            "rear_hand": [
+              145.2,
+              224.2
+            ],
+            "front_hand": [
+              165.5,
+              226.6
+            ],
+            "angle": 6.74,
+            "muzzle_direction": [
+              0.9931,
+              0.1174
+            ],
+            "estimated": true,
+            "angleEstimated": true,
+            "reviewStatus": "candidate",
+            "confidence": "low: nearby crawl palms share a skin component"
+          }
+        },
+        {
+          "index": 6,
+          "file": "frames/crawl_06.png",
+          "durationMs": 125.0,
+          "cropBox": [
+            1152,
+            870,
+            1344,
+            983
+          ],
+          "scale": [
+            0.8342644320297952,
+            0.8342644320297952
+          ],
+          "paste": [
+            16,
+            154
+          ],
+          "sourceVerticalOffset": 0,
+          "bounds": [
+            16,
+            154,
+            176,
+            248
+          ],
+          "pivot": [
+            0.5,
+            0
+          ],
+          "weaponSocket": {
+            "grip": [
+              141.5,
+              226.0
+            ],
+            "rear_hand": [
+              141.5,
+              226.0
+            ],
+            "front_hand": [
+              150.1,
+              228.5
+            ],
+            "angle": 16.21,
+            "muzzle_direction": [
+              0.9602,
+              0.2791
+            ],
+            "estimated": true,
+            "angleEstimated": true,
+            "reviewStatus": "candidate",
+            "confidence": "low: nearby crawl palms share a skin component"
+          }
+        },
+        {
+          "index": 7,
+          "file": "frames/crawl_07.png",
+          "durationMs": 125.0,
+          "cropBox": [
+            1344,
+            870,
+            1528,
+            986
+          ],
+          "scale": [
+            0.8342644320297952,
+            0.8342644320297952
+          ],
+          "paste": [
+            19,
+            151
+          ],
+          "sourceVerticalOffset": 0,
+          "bounds": [
+            19,
+            151,
+            173,
+            248
+          ],
+          "pivot": [
+            0.5,
+            0
+          ],
+          "weaponSocket": {
+            "grip": [
+              137.7,
+              223.2
+            ],
+            "rear_hand": [
+              137.7,
+              223.2
+            ],
+            "front_hand": [
+              148.0,
+              230.1
+            ],
+            "angle": 33.82,
+            "muzzle_direction": [
+              0.8308,
+              0.5566
+            ],
+            "estimated": true,
+            "angleEstimated": true,
+            "reviewStatus": "candidate",
+            "confidence": "low: nearby crawl palms share a skin component"
+          }
+        }
+      ]
+    }
+  }
+}
