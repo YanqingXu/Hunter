@@ -1,0 +1,28 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5127604332bf9c545b8c3dc80a440d7c, type: 3}
+  m_Name: Shell0A
+  m_EditorClassIdentifier: 
+  id: hunter.referencecitadel.shell0a
+  displayName: "\u57CE\u5821\u58F3\u5899 / \u533A\u57DF 0 / 0"
+  layer: 0
+  tint: {r: 0.9, g: 0.85, b: 0.96, a: 1}
+  sprite: {fileID: 4119566078607981566, guid: 671b7a74b8674f640904585a5b02cb21, type: 3}
+  prefab: {fileID: 0}
+  collision: 1
+  walkable: 0
+  movementCost: 1
+  description: "\u76F4\u63A5\u5F15\u7528 Sliced \u539F\u59CB\u5B8C\u6574\u7816\u5757\uFF1B\u6BCF\u683C\u4E00\u5355\u4F4D\uFF0C\u5B9E\u4F53\u58F3\u5899\uFF0C\u4E0D\u4FEE\u6539\u6E90\u7D20\u6750\u3002"
+  tags:
+  - ground
+  propertySchema: {fileID: 11400000, guid: b8575992aec43e942a09074550034eb3, type: 2}
+  propertyOverrides: []
