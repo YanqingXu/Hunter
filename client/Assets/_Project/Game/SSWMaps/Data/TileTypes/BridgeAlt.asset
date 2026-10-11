@@ -1,0 +1,28 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5127604332bf9c545b8c3dc80a440d7c, type: 3}
+  m_Name: BridgeAlt
+  m_EditorClassIdentifier: 
+  id: hunter.ssw.bridgealt
+  displayName: "\u6728\u6865\u5E73\u53F0 B"
+  layer: 0
+  tint: {r: 1, g: 1, b: 1, a: 1}
+  sprite: {fileID: -2129059684614892935, guid: e6cd787b04733fc46bc008237f673344, type: 3}
+  prefab: {fileID: 0}
+  collision: 2
+  walkable: 0
+  movementCost: 1
+  description: "\u6728\u6865\u5355\u5411\u5E73\u53F0\uFF1A\u53EF\u4ECE\u4E0B\u65B9\u8DF3\u4E0A\uFF0C\u5E73\u53F0\u4E0A\u6CBF\u6709\u78B0\u649E\u3002"
+  tags:
+  - platform
+  propertySchema: {fileID: 11400000, guid: b8575992aec43e942a09074550034eb3, type: 2}
+  propertyOverrides: []
