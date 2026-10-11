@@ -1,0 +1,16 @@
+Use case: stylized-concept.
+Asset type: CHARACTER ONLY walking animation sprites, weapon drawn separately in the game.
+Create a transparent PNG 1536x1024 with exactly8 full-body character sprites in4columns x2rows, equal384x512cells. Each body has padding, approximately320pxstandingheight. Original03.png is identity/style reference; keep seafoam/mint long robe, gold sash and palegoldembroideredmotifs, cream widesleeves/hem, charcoalshoes, white socks, dark topknot/longhair/goldpin, blankcreamface NO eyesmouth, brownpack attached onback. Original hardedge pixelstyle and flat muted colors.
+ABSOLUTELY NO WEAPON, NO GUN, NO HELD OBJECT, NO LINES JOINING HANDS. Both EMPTY hands posed for separate horizontal rifle: triggergrip at chest, supportgrip ahead, emptyhands at same height, arms pointing RIGHT.
+CRITICAL: ALL8 characters are RIGHT-FACING SIDE PROFILE, including ALL bottomrow frames. Face, chest, forearms and both emptyhands faceRIGHT in EACH cell. Identity and bodysize fixed. Only walking legs/body bob changes. Backpack onback, samepatternedrobe. Use NEAR boot slightly darker than FAR boot for visible limb identity. Robe hem bends to reveal both whitewrapped shins and shoes during opposing leg phases.
+Order top4thenbottom4:
+1 NEAR LEG is forward: its heel contacts ahead; FAR LEG is far behind with toe on floor. Long split stance.
+2 NEAR LEG forward foot flat, its knee slightly compressed; FAR LEG behind heel raised. Slight bob down.
+3 NEAR LEG straightvertical beneathhip; FAR knee swings ahead with FAR boot raised. Passingphase, feetnearbeneathbody.
+4 NEAR LEG trails diagonally backward at toeoff; FAR leg now reaches forward, FAR heel hovering beforecontact.
+5 FAR LEG is forward: its heel contacts ahead; NEAR LEG is farbehind with toeonfloor. Opposite longsplitstance toframe1, SAME RIGHT-FACING torso.
+6 FAR LEG forwardfootflat, its kneeslightlycompressed; NEAR LEG behindheelraised. Opposite toframe2, SAME RIGHT-FACING torso.
+7 FAR LEG straightvertical beneathhip; NEAR knee swingsahead with NEAR bootraised. Opposite passingphase, SAME RIGHT-FACING torso.
+8 FAR LEG trailsbackward attoeoff; NEAR legreachesforward NEARheelhovering beforecontact. SAME RIGHT-FACING torso.
+The eight phases are distinct proper heel/toe locomotion, NOT eight same leading footposes. Preserve near/far limbidentity to visibly alternate forwardcontact. All8 emptyholdinghandposes pointRIGHT.
+No labels/text/numbers/gridlines/borders/shadow/background/scenery/groundline. Genuine transparent alpha outside bodies. No facefeatures, extra limbs, clipping, directionchange, weaponpixels.

@@ -1,0 +1,16 @@
+Use case: precise-object-edit.
+Input4x2sheet is EDIT TARGET. Make ONLY foot/shinshading corrections to show which legleads in a correct8framewalkcycle; preserve every silhouette and everyupperbody, face, hair, costume, backpack, emptyholdinghands, cellposition andscale exactlyunchanged. ALL8frames remainRIGHT-facing.
+No visible gun, heldobject ornew prop. Emptyhands heldin2handholdingpose stayunchanged.
+NEARshoe always DARKCHARCOAL, FARshoe lighter mutedGRAYBROWN. FARwhite socks slightlyshadedthanNEARwhite socks. Longrobe unchanged.
+Toprow4frames:
+Cell1: forwardshoe DARKCHARCOAL and rearshoeGRAYBROWN.
+Cell2: forwardplantedshoe DARKCHARCOAL and rearheelraisedshoeGRAYBROWN.
+Cell3: verticalunderhipplantedshoe DARKCHARCOAL and forwardraisedshoeGRAYBROWN.
+Cell4: trailingbacktoeoffshoe DARKCHARCOAL and forwardreachingshoeGRAYBROWN.
+Bottomrow4frames:
+Cell5: forwardshoe GRAYBROWN and rearshoeDARKCHARCOAL.
+Cell6: forwardplantedshoe GRAYBROWN and rearheelraisedshoeDARKCHARCOAL.
+Cell7: verticalunderhipplantedshoe GRAYBROWN and forwardraisedshoeDARKCHARCOAL.
+Cell8: trailingbacktoeoffshoe GRAYBROWN and forwardreachingshoeDARKCHARCOAL.
+The opposite darker/lightercontact proves near/farlegalternation. Do NOT mirrorupperbodies or turnanything tootherdirection. ALL blankfaceprofiles andemptyhands stayRIGHT.
+No otherchanges. Preserve transparentalpha, pixelart, longrobe. No labels, numbers, scene, grid,border,newlines/objects orweaponpixels.

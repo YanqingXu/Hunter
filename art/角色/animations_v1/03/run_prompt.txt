@@ -1,0 +1,16 @@
+Use case: stylized-concept.
+Asset type: CHARACTER ONLY sprint/running sprite cycle; game weapon is a SEPARATE resource.
+Create transparent1536x1024PNG with exactly8fullbodyframes in4columns x2rows. Equal384x512cells, generouspadding. Characterbodyheight approximately360pixelsstanding, fixedscale, maxfullwidth330pixels for wide strides. Full figures containedincells.
+Use original03.png for identity and coarse stepped flatcolor pixelart style. Keep unchanged mint/seafoam long traditional robe withpalegoldembroidery andsash, lightcreambroad sleeves/hem, whitesocks, charcoalfootwear, palecream blankfacelessskin, charcoal longhair/topknot/goldpin, attached brownbackpack. Robe remains longsamecostume but folds/blowsaround legs allowing kneeandfootpositionstoberead. No new facefeatures.
+NO GUN or WEAPON or HELD OBJECT anywhere. Both hands EMPTY and clearly separated in two-handedholdingstance: one emptygrip atchestlevel; second emptygrip ahead atsameheight. Curvedfingers grasp AIR. No line, barrel orstockjoininghands. Hold arms forwardpointingRIGHT withforwardbody lean.
+ALL8frames sideprofile FACINGRIGHT, including each BOTTOMROW cell; facechestemptyhands pointRIGHT ineveryframe. SAME upperbodydirectionforALL8sprites.
+Actual8-phaseRUNcycle with strongwide strides and airborneflight, distinct fromwalking. For limbidentity: NEARSHOE always nearblack/darkcharcoal, FARSHOE visibly lightermutedgraybrown. NEARshin creamsock lightlyshaded, FARshin more shaded. Top4 phases andbottom4 oppositelegphases:
+FRAME1 top1: NEARdarkshoe extendsforward toeupheelcontact, FARgraybrownshoe extendsbehind. Broadstride.
+FRAME2 top2: NEARdarkshoe plantedunderfront hip withnearkneecompressed; FARgraybrownshoe liftedbehindwithfarkneebent. Torso dips.
+FRAME3 top3: NEARdarkshoe backontiptoe atpush-off; FARgraybrownshoe forward raisedwithhighfarknee.
+FRAME4 top4: AIRBORNE neitherfoottouchesground. FARgraybrownshoe extendsforward; NEARdarkshoe extendsbehind. Torso rises, widesplit.
+FRAME5 bottom1: FARgraybrownshoe extendsforward toeupheelcontact; NEARdarkshoe extendsbehind. Broadstride. RIGHT-FACINGupperbody.
+FRAME6 bottom2: FARgraybrownshoe plantedunderfront hip withfarkneecompressed; NEARdarkshoe liftedbehindwithnearkneebent. Torso dips. RIGHT-FACINGupperbody.
+FRAME7 bottom3: FARgraybrownshoe backontiptoe atpush-off; NEARdarkshoe forwardraisedwithhighnearknee. RIGHT-FACINGupperbody.
+FRAME8 bottom4: AIRBORNE neitherfoottouchesground. NEARdarkshoe extendsforward; FARgraybrownshoe extendsbehind. Torso rises, widesplit. RIGHT-FACINGupperbody.
+Make footcolor andnear/faroverlap prove opposite phases, NOT4posesduplicated. Stableemptyhands geometryforeachframe. Backpack attachedandmovingnaturally. No labels,text,numbers,grid,border,watermark,shadow,ground,scenery,weaponpixels,clipping,extraslimbs orfacefeatures. Realtransparentalphaoutsidebody.

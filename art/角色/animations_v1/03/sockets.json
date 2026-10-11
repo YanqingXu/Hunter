@@ -1,0 +1,753 @@
+{
+  "version": 1,
+  "character": "03",
+  "estimated": true,
+  "coordinateSystem": "192x256 canonical pixels, top-left origin; clockwise angle degrees",
+  "gunPivot": "Use the separate gun grip pivot at grip; front_hand is the support point.",
+  "actions": {
+    "walk": [
+      {
+        "grip": [
+          122.9,
+          99.4
+        ],
+        "rear_hand": [
+          122.9,
+          99.4
+        ],
+        "front_hand": [
+          158.4,
+          100.1
+        ],
+        "angle": 1.13,
+        "muzzle_direction": [
+          0.9998,
+          0.0197
+        ],
+        "estimated": true,
+        "angleEstimated": true,
+        "reviewStatus": "candidate",
+        "confidence": "candidate: separate fist and support palm skin components"
+      },
+      {
+        "grip": [
+          115.1,
+          104.2
+        ],
+        "rear_hand": [
+          115.1,
+          104.2
+        ],
+        "front_hand": [
+          151.0,
+          105.3
+        ],
+        "angle": 1.76,
+        "muzzle_direction": [
+          0.9995,
+          0.0306
+        ],
+        "estimated": true,
+        "angleEstimated": true,
+        "reviewStatus": "candidate",
+        "confidence": "candidate: separate fist and support palm skin components"
+      },
+      {
+        "grip": [
+          113.4,
+          96.8
+        ],
+        "rear_hand": [
+          113.4,
+          96.8
+        ],
+        "front_hand": [
+          150.1,
+          96.9
+        ],
+        "angle": 0.16,
+        "muzzle_direction": [
+          1.0,
+          0.0027
+        ],
+        "estimated": true,
+        "angleEstimated": true,
+        "reviewStatus": "candidate",
+        "confidence": "candidate: separate fist and support palm skin components"
+      },
+      {
+        "grip": [
+          116.3,
+          101.8
+        ],
+        "rear_hand": [
+          116.3,
+          101.8
+        ],
+        "front_hand": [
+          152.2,
+          103.0
+        ],
+        "angle": 1.91,
+        "muzzle_direction": [
+          0.9994,
+          0.0334
+        ],
+        "estimated": true,
+        "angleEstimated": true,
+        "reviewStatus": "candidate",
+        "confidence": "candidate: separate fist and support palm skin components"
+      },
+      {
+        "grip": [
+          121.7,
+          102.9
+        ],
+        "rear_hand": [
+          121.7,
+          102.9
+        ],
+        "front_hand": [
+          157.9,
+          103.9
+        ],
+        "angle": 1.58,
+        "muzzle_direction": [
+          0.9996,
+          0.0276
+        ],
+        "estimated": true,
+        "angleEstimated": true,
+        "reviewStatus": "candidate",
+        "confidence": "candidate: separate fist and support palm skin components"
+      },
+      {
+        "grip": [
+          119.3,
+          102.1
+        ],
+        "rear_hand": [
+          119.3,
+          102.1
+        ],
+        "front_hand": [
+          155.0,
+          103.8
+        ],
+        "angle": 2.73,
+        "muzzle_direction": [
+          0.9989,
+          0.0476
+        ],
+        "estimated": true,
+        "angleEstimated": true,
+        "reviewStatus": "candidate",
+        "confidence": "candidate: separate fist and support palm skin components"
+      },
+      {
+        "grip": [
+          113.1,
+          99.7
+        ],
+        "rear_hand": [
+          113.1,
+          99.7
+        ],
+        "front_hand": [
+          148.8,
+          101.2
+        ],
+        "angle": 2.41,
+        "muzzle_direction": [
+          0.9991,
+          0.042
+        ],
+        "estimated": true,
+        "angleEstimated": true,
+        "reviewStatus": "candidate",
+        "confidence": "candidate: separate fist and support palm skin components"
+      },
+      {
+        "grip": [
+          120.6,
+          98.7
+        ],
+        "rear_hand": [
+          120.6,
+          98.7
+        ],
+        "front_hand": [
+          156.9,
+          100.5
+        ],
+        "angle": 2.84,
+        "muzzle_direction": [
+          0.9988,
+          0.0495
+        ],
+        "estimated": true,
+        "angleEstimated": true,
+        "reviewStatus": "candidate",
+        "confidence": "candidate: separate fist and support palm skin components"
+      }
+    ],
+    "run": [
+      {
+        "grip": [
+          139.8,
+          103.0
+        ],
+        "rear_hand": [
+          139.8,
+          103.0
+        ],
+        "front_hand": [
+          175.6,
+          106.8
+        ],
+        "angle": 6.06,
+        "muzzle_direction": [
+          0.9944,
+          0.1056
+        ],
+        "estimated": true,
+        "angleEstimated": true,
+        "reviewStatus": "candidate",
+        "confidence": "candidate: separate fist and support palm skin components"
+      },
+      {
+        "grip": [
+          133.4,
+          106.8
+        ],
+        "rear_hand": [
+          133.4,
+          106.8
+        ],
+        "front_hand": [
+          170.0,
+          111.3
+        ],
+        "angle": 7.01,
+        "muzzle_direction": [
+          0.9925,
+          0.122
+        ],
+        "estimated": true,
+        "angleEstimated": true,
+        "reviewStatus": "candidate",
+        "confidence": "candidate: separate fist and support palm skin components"
+      },
+      {
+        "grip": [
+          130.2,
+          106.7
+        ],
+        "rear_hand": [
+          130.2,
+          106.7
+        ],
+        "front_hand": [
+          168.6,
+          111.6
+        ],
+        "angle": 7.27,
+        "muzzle_direction": [
+          0.992,
+          0.1266
+        ],
+        "estimated": true,
+        "angleEstimated": true,
+        "reviewStatus": "candidate",
+        "confidence": "candidate: separate fist and support palm skin components"
+      },
+      {
+        "grip": [
+          138.0,
+          127.2
+        ],
+        "rear_hand": [
+          138.0,
+          127.2
+        ],
+        "front_hand": [
+          172.1,
+          132.9
+        ],
+        "angle": 9.49,
+        "muzzle_direction": [
+          0.9863,
+          0.1649
+        ],
+        "estimated": true,
+        "angleEstimated": true,
+        "reviewStatus": "candidate",
+        "confidence": "candidate: separate fist and support palm skin components"
+      },
+      {
+        "grip": [
+          129.6,
+          104.0
+        ],
+        "rear_hand": [
+          129.6,
+          104.0
+        ],
+        "front_hand": [
+          166.4,
+          109.7
+        ],
+        "angle": 8.8,
+        "muzzle_direction": [
+          0.9882,
+          0.1531
+        ],
+        "estimated": true,
+        "angleEstimated": true,
+        "reviewStatus": "candidate",
+        "confidence": "candidate: separate fist and support palm skin components"
+      },
+      {
+        "grip": [
+          128.9,
+          109.4
+        ],
+        "rear_hand": [
+          128.9,
+          109.4
+        ],
+        "front_hand": [
+          166.4,
+          114.8
+        ],
+        "angle": 8.19,
+        "muzzle_direction": [
+          0.9898,
+          0.1425
+        ],
+        "estimated": true,
+        "angleEstimated": true,
+        "reviewStatus": "candidate",
+        "confidence": "candidate: separate fist and support palm skin components"
+      },
+      {
+        "grip": [
+          131.2,
+          109.2
+        ],
+        "rear_hand": [
+          131.2,
+          109.2
+        ],
+        "front_hand": [
+          170.5,
+          114.7
+        ],
+        "angle": 7.97,
+        "muzzle_direction": [
+          0.9903,
+          0.1386
+        ],
+        "estimated": true,
+        "angleEstimated": true,
+        "reviewStatus": "candidate",
+        "confidence": "candidate: separate fist and support palm skin components"
+      },
+      {
+        "grip": [
+          136.9,
+          128.2
+        ],
+        "rear_hand": [
+          136.9,
+          128.2
+        ],
+        "front_hand": [
+          173.3,
+          134.8
+        ],
+        "angle": 10.28,
+        "muzzle_direction": [
+          0.984,
+          0.1784
+        ],
+        "estimated": true,
+        "angleEstimated": true,
+        "reviewStatus": "candidate",
+        "confidence": "candidate: separate fist and support palm skin components"
+      }
+    ],
+    "jump": [
+      {
+        "grip": [
+          116.9,
+          163.6
+        ],
+        "rear_hand": [
+          116.9,
+          163.6
+        ],
+        "front_hand": [
+          161.2,
+          162.9
+        ],
+        "angle": -0.91,
+        "muzzle_direction": [
+          0.9999,
+          -0.0158
+        ],
+        "estimated": true,
+        "angleEstimated": true,
+        "reviewStatus": "candidate",
+        "confidence": "candidate: separate fist and support palm skin components"
+      },
+      {
+        "grip": [
+          112.0,
+          114.7
+        ],
+        "rear_hand": [
+          112.0,
+          114.7
+        ],
+        "front_hand": [
+          155.4,
+          114.4
+        ],
+        "angle": -0.4,
+        "muzzle_direction": [
+          1.0,
+          -0.0069
+        ],
+        "estimated": true,
+        "angleEstimated": true,
+        "reviewStatus": "candidate",
+        "confidence": "candidate: separate fist and support palm skin components"
+      },
+      {
+        "grip": [
+          123.1,
+          91.1
+        ],
+        "rear_hand": [
+          123.1,
+          91.1
+        ],
+        "front_hand": [
+          161.7,
+          93.4
+        ],
+        "angle": 3.41,
+        "muzzle_direction": [
+          0.9982,
+          0.0595
+        ],
+        "estimated": true,
+        "angleEstimated": true,
+        "reviewStatus": "candidate",
+        "confidence": "candidate: separate fist and support palm skin components"
+      },
+      {
+        "grip": [
+          111.7,
+          87.2
+        ],
+        "rear_hand": [
+          111.7,
+          87.2
+        ],
+        "front_hand": [
+          152.3,
+          86.8
+        ],
+        "angle": -0.56,
+        "muzzle_direction": [
+          1.0,
+          -0.0099
+        ],
+        "estimated": true,
+        "angleEstimated": true,
+        "reviewStatus": "candidate",
+        "confidence": "candidate: separate fist and support palm skin components"
+      },
+      {
+        "grip": [
+          107.7,
+          89.2
+        ],
+        "rear_hand": [
+          107.7,
+          89.2
+        ],
+        "front_hand": [
+          149.8,
+          89.8
+        ],
+        "angle": 0.82,
+        "muzzle_direction": [
+          0.9999,
+          0.0143
+        ],
+        "estimated": true,
+        "angleEstimated": true,
+        "reviewStatus": "candidate",
+        "confidence": "candidate: separate fist and support palm skin components"
+      },
+      {
+        "grip": [
+          110.3,
+          105.0
+        ],
+        "rear_hand": [
+          110.3,
+          105.0
+        ],
+        "front_hand": [
+          151.2,
+          106.8
+        ],
+        "angle": 2.52,
+        "muzzle_direction": [
+          0.999,
+          0.044
+        ],
+        "estimated": true,
+        "angleEstimated": true,
+        "reviewStatus": "candidate",
+        "confidence": "candidate: separate fist and support palm skin components"
+      },
+      {
+        "grip": [
+          112.1,
+          148.2
+        ],
+        "rear_hand": [
+          112.1,
+          148.2
+        ],
+        "front_hand": [
+          154.3,
+          148.5
+        ],
+        "angle": 0.41,
+        "muzzle_direction": [
+          1.0,
+          0.0071
+        ],
+        "estimated": true,
+        "angleEstimated": true,
+        "reviewStatus": "candidate",
+        "confidence": "candidate: separate fist and support palm skin components"
+      },
+      {
+        "grip": [
+          105.3,
+          98.6
+        ],
+        "rear_hand": [
+          105.3,
+          98.6
+        ],
+        "front_hand": [
+          146.4,
+          98.3
+        ],
+        "angle": -0.42,
+        "muzzle_direction": [
+          1.0,
+          -0.0073
+        ],
+        "estimated": true,
+        "angleEstimated": true,
+        "reviewStatus": "candidate",
+        "confidence": "candidate: separate fist and support palm skin components"
+      }
+    ],
+    "crawl": [
+      {
+        "grip": [
+          165.9,
+          223.4
+        ],
+        "rear_hand": [
+          165.9,
+          223.4
+        ],
+        "front_hand": [
+          177.4,
+          218.5
+        ],
+        "angle": -23.08,
+        "muzzle_direction": [
+          0.92,
+          -0.392
+        ],
+        "estimated": true,
+        "angleEstimated": true,
+        "reviewStatus": "candidate",
+        "confidence": "low: nearby crawl palms share a skin component"
+      },
+      {
+        "grip": [
+          160.7,
+          225.2
+        ],
+        "rear_hand": [
+          160.7,
+          225.2
+        ],
+        "front_hand": [
+          175.3,
+          221.2
+        ],
+        "angle": -15.32,
+        "muzzle_direction": [
+          0.9645,
+          -0.2642
+        ],
+        "estimated": true,
+        "angleEstimated": true,
+        "reviewStatus": "candidate",
+        "confidence": "low: nearby crawl palms share a skin component"
+      },
+      {
+        "grip": [
+          163.7,
+          224.0
+        ],
+        "rear_hand": [
+          163.7,
+          224.0
+        ],
+        "front_hand": [
+          175.5,
+          220.6
+        ],
+        "angle": -16.07,
+        "muzzle_direction": [
+          0.9609,
+          -0.2769
+        ],
+        "estimated": true,
+        "angleEstimated": true,
+        "reviewStatus": "candidate",
+        "confidence": "low: nearby crawl palms share a skin component"
+      },
+      {
+        "grip": [
+          163.8,
+          223.6
+        ],
+        "rear_hand": [
+          163.8,
+          223.6
+        ],
+        "front_hand": [
+          175.2,
+          218.8
+        ],
+        "angle": -22.83,
+        "muzzle_direction": [
+          0.9216,
+          -0.3881
+        ],
+        "estimated": true,
+        "angleEstimated": true,
+        "reviewStatus": "candidate",
+        "confidence": "low: nearby crawl palms share a skin component"
+      },
+      {
+        "grip": [
+          167.7,
+          224.0
+        ],
+        "rear_hand": [
+          167.7,
+          224.0
+        ],
+        "front_hand": [
+          179.0,
+          221.1
+        ],
+        "angle": -14.39,
+        "muzzle_direction": [
+          0.9686,
+          -0.2486
+        ],
+        "estimated": true,
+        "angleEstimated": true,
+        "reviewStatus": "candidate",
+        "confidence": "low: nearby crawl palms share a skin component"
+      },
+      {
+        "grip": [
+          168.4,
+          224.5
+        ],
+        "rear_hand": [
+          168.4,
+          224.5
+        ],
+        "front_hand": [
+          178.4,
+          222.1
+        ],
+        "angle": -13.5,
+        "muzzle_direction": [
+          0.9724,
+          -0.2334
+        ],
+        "estimated": true,
+        "angleEstimated": true,
+        "reviewStatus": "candidate",
+        "confidence": "low: nearby crawl palms share a skin component"
+      },
+      {
+        "grip": [
+          165.7,
+          224.5
+        ],
+        "rear_hand": [
+          165.7,
+          224.5
+        ],
+        "front_hand": [
+          177.1,
+          221.2
+        ],
+        "angle": -16.14,
+        "muzzle_direction": [
+          0.9606,
+          -0.2781
+        ],
+        "estimated": true,
+        "angleEstimated": true,
+        "reviewStatus": "candidate",
+        "confidence": "low: nearby crawl palms share a skin component"
+      },
+      {
+        "grip": [
+          162.4,
+          223.9
+        ],
+        "rear_hand": [
+          162.4,
+          223.9
+        ],
+        "front_hand": [
+          174.1,
+          220.5
+        ],
+        "angle": -16.2,
+        "muzzle_direction": [
+          0.9603,
+          -0.2791
+        ],
+        "estimated": true,
+        "angleEstimated": true,
+        "reviewStatus": "candidate",
+        "confidence": "low: nearby crawl palms share a skin component"
+      }
+    ]
+  }
+}
