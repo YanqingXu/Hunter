@@ -8,3 +8,4 @@ __pycache__/
 
 # 临时输出和生成的交付文件不进入源码库。
 /outputs/
+/art/角色/animations_v1/armed_preview/
